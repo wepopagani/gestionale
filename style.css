@@ -57,6 +57,12 @@ body {
     align-items: center;
 }
 
+.sidebar-header .logo {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+}
+
 .sidebar-header h1 {
     font-size: 24px;
     font-weight: 700;
@@ -1207,6 +1213,10 @@ body {
         padding: 16px 20px;
     }
 
+    .sidebar-header .logo {
+        height: 28px;
+    }
+    
     .sidebar-header h1 {
         font-size: 20px;
     }
@@ -1474,6 +1484,10 @@ body {
 
 /* Small mobile devices */
 @media (max-width: 480px) {
+    .sidebar-header .logo {
+        height: 24px;
+    }
+    
     .sidebar-header h1 {
         font-size: 18px;
     }
