@@ -113,11 +113,12 @@ Integrazione Firebase per sincronizzazione cloud:
 - 🔒 Sicurezza enterprise-grade
 
 **Come Attivare Firebase:**
-1. Crea un progetto su [Firebase Console](https://console.firebase.google.com/)
-2. Abilita **Realtime Database**
-3. Copia le tue credenziali Firebase
-4. Sostituisci la configurazione in `app.js` (righe 2-10)
-5. Decommmenta le righe di inizializzazione Firebase (righe 41-43)
+1. Leggi la guida completa: **[FIREBASE_SETUP.md](FIREBASE_SETUP.md)** 📖
+2. Crea un progetto su [Firebase Console](https://console.firebase.google.com/)
+3. Abilita **Realtime Database**
+4. Copia le tue credenziali Firebase
+5. Modifica il file **`firebase-config.js`** con le tue credenziali
+6. Ricarica l'app - Firebase si attiverà automaticamente! ✅
 
 **⚠️ Note importanti**:
 - Limite di 5MB per file singolo (limite localStorage)

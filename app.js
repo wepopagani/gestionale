@@ -1,16 +1,8 @@
-// ===== FIREBASE CONFIGURATION =====
-const firebaseConfig = {
-    apiKey: "AIzaSyDEMOKEY-placeholder",
-    authDomain: "gestionale-demo.firebaseapp.com",
-    databaseURL: "https://gestionale-demo-default-rtdb.firebaseio.com",
-    projectId: "gestionale-demo",
-    storageBucket: "gestionale-demo.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456"
-};
-
+// ===== FIREBASE SETUP =====
+// Configurazione caricata da firebase-config.js
 let firebaseDb = null;
 let cloudSyncEnabled = false;
+let userId = null;
 
 // ===== STATO DELL'APPLICAZIONE =====
 let state = {
@@ -37,13 +29,40 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== FIREBASE FUNCTIONS =====
 function initFirebase() {
     try {
-        // Nota: Per produzione, sostituire con le proprie credenziali Firebase
-        // firebase.initializeApp(firebaseConfig);
-        // firebaseDb = firebase.database();
-        // setupCloudSync();
-        updateCloudStatus(false);
+        // Verifica se Firebase è configurato correttamente
+        if (typeof firebaseConfig === 'undefined') {
+            console.log('Firebase config non trovato. Modifica firebase-config.js con le tue credenziali.');
+            updateCloudStatus(false);
+            return;
+        }
+        
+        // Verifica se la config è quella di default (placeholder)
+        if (firebaseConfig.apiKey === 'TUA_API_KEY' || firebaseConfig.apiKey.includes('placeholder')) {
+            console.log('⚠️ Firebase non configurato. Inserisci le tue credenziali in firebase-config.js');
+            updateCloudStatus(false);
+            return;
+        }
+        
+        // Inizializza Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        firebaseDb = firebase.database();
+        
+        // Genera o recupera user ID unico
+        userId = localStorage.getItem('gestionale_user_id');
+        if (!userId) {
+            userId = 'user_' + generateId();
+            localStorage.setItem('gestionale_user_id', userId);
+        }
+        
+        console.log('✅ Firebase inizializzato con successo!');
+        setupCloudSync();
+        
     } catch (error) {
-        console.log('Firebase non configurato:', error);
+        console.error('❌ Errore inizializzazione Firebase:', error);
+        console.log('Verifica le credenziali in firebase-config.js');
         updateCloudStatus(false);
     }
 }
@@ -64,31 +83,112 @@ function updateCloudStatus(connected) {
 }
 
 function setupCloudSync() {
-    if (!firebaseDb) return;
+    if (!firebaseDb || !userId) return;
     
-    // Sincronizza dati in tempo reale
-    const userId = 'user_' + generateId().substr(0, 8);
     const ref = firebaseDb.ref('clients/' + userId);
     
-    ref.on('value', (snapshot) => {
+    // Prima sincronizzazione: carica dati dal cloud
+    ref.once('value', (snapshot) => {
         const cloudData = snapshot.val();
-        if (cloudData && Array.isArray(cloudData)) {
-            state.clients = cloudData;
-            renderClients();
-            if (state.currentClientId) {
-                selectClient(state.currentClientId);
+        
+        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+            // Chiedi all'utente se vuole usare i dati cloud o locali
+            const localCount = state.clients.length;
+            const cloudCount = cloudData.length;
+            
+            if (localCount > 0) {
+                const useCloud = confirm(
+                    `Trovati dati sia in locale che nel cloud:\n\n` +
+                    `📱 Locale: ${localCount} clienti\n` +
+                    `☁️ Cloud: ${cloudCount} clienti\n\n` +
+                    `Vuoi usare i dati del cloud? (Annulla per usare quelli locali)`
+                );
+                
+                if (useCloud) {
+                    state.clients = cloudData;
+                    saveToStorage(); // Salva anche in locale
+                    renderClients();
+                } else {
+                    // Salva i dati locali nel cloud
+                    ref.set(state.clients);
+                }
+            } else {
+                // Nessun dato locale, usa cloud
+                state.clients = cloudData;
+                saveToStorage();
+                renderClients();
             }
+        } else if (state.clients.length > 0) {
+            // Nessun dato nel cloud, carica quello locale
+            ref.set(state.clients);
         }
+        
+        // Attiva sincronizzazione real-time
+        ref.on('value', (snapshot) => {
+            const cloudData = snapshot.val();
+            if (cloudData && Array.isArray(cloudData)) {
+                // Solo se i dati sono diversi (evita loop)
+                if (JSON.stringify(cloudData) !== JSON.stringify(state.clients)) {
+                    state.clients = cloudData;
+                    saveToStorage();
+                    renderClients();
+                    if (state.currentClientId) {
+                        const client = state.clients.find(c => c.id === state.currentClientId);
+                        if (client) {
+                            selectClient(state.currentClientId);
+                        }
+                    }
+                }
+            }
+        });
+        
+        updateCloudStatus(true);
+        console.log('✅ Sincronizzazione cloud attiva!');
+        
+        // Mostra notifica successo
+        showNotification('☁️ Connesso al cloud!', 'success');
+    }, (error) => {
+        console.error('Errore sincronizzazione:', error);
+        updateCloudStatus(false);
+        showNotification('❌ Errore connessione cloud', 'error');
     });
-    
-    updateCloudStatus(true);
 }
 
 function saveToCloud() {
-    if (!firebaseDb || !cloudSyncEnabled) return;
+    if (!firebaseDb || !cloudSyncEnabled || !userId) return;
     
-    const userId = 'user_' + generateId().substr(0, 8);
-    firebaseDb.ref('clients/' + userId).set(state.clients);
+    try {
+        firebaseDb.ref('clients/' + userId).set(state.clients);
+    } catch (error) {
+        console.error('Errore salvataggio cloud:', error);
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Crea notifica temporanea
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6366f1'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-weight: 500;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // ===== STORAGE =====
