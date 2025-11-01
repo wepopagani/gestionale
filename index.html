@@ -6,6 +6,10 @@
     <title>Gestionale Clienti</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="app">
@@ -13,6 +17,10 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1>📊 Gestionale</h1>
+                <div class="cloud-status" id="cloudStatus">
+                    <span class="cloud-icon" title="Sincronizzazione cloud">☁️</span>
+                    <span class="cloud-text">Locale</span>
+                </div>
             </div>
             
             <div class="sidebar-section">
@@ -20,6 +28,7 @@
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
+                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📊 Report Ordini</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -34,6 +43,120 @@
                 <h2>Benvenuto nel tuo Gestionale</h2>
                 <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
+            </div>
+
+            <!-- Report View -->
+            <div class="report-view" id="reportView" style="display: none;">
+                <div class="report-header">
+                    <div>
+                        <h2>📊 Report Ordini</h2>
+                        <p>Analisi e statistiche degli ordini per periodo</p>
+                    </div>
+                    <button class="btn-secondary" id="closeReportBtn">✕ Chiudi</button>
+                </div>
+
+                <div class="report-filters">
+                    <div class="filter-group">
+                        <label>Periodo</label>
+                        <select id="reportPeriod">
+                            <option value="week">📅 Questa Settimana</option>
+                            <option value="month" selected>📅 Questo Mese</option>
+                            <option value="quarter">📅 Questo Trimestre</option>
+                            <option value="year">📅 Quest'Anno</option>
+                            <option value="all">📅 Tutti i Periodi</option>
+                            <option value="custom">📅 Periodo Personalizzato</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group custom-dates" id="customDates" style="display: none;">
+                        <label>Da</label>
+                        <input type="date" id="reportDateFrom">
+                        <label>A</label>
+                        <input type="date" id="reportDateTo">
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Cliente</label>
+                        <select id="reportClient">
+                            <option value="all">Tutti i Clienti</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Stato</label>
+                        <select id="reportStatus">
+                            <option value="all">Tutti gli Stati</option>
+                            <option value="in_lavorazione">In Lavorazione</option>
+                            <option value="completato">Completato</option>
+                            <option value="in_attesa">In Attesa</option>
+                            <option value="annullato">Annullato</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-primary" id="generateReportBtn">🔄 Genera Report</button>
+                </div>
+
+                <!-- Report Summary -->
+                <div class="report-summary" id="reportSummary">
+                    <div class="summary-card">
+                        <div class="summary-icon">📦</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Totale Ordini</div>
+                            <div class="summary-value" id="totalOrders">0</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">💰</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Valore Totale</div>
+                            <div class="summary-value" id="totalRevenue">€ 0,00</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">✅</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Completati</div>
+                            <div class="summary-value" id="completedOrders">0</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">📈</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Media Ordine</div>
+                            <div class="summary-value" id="avgOrderValue">€ 0,00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Table -->
+                <div class="report-table-container">
+                    <div class="report-actions">
+                        <h3>Dettaglio Ordini</h3>
+                        <div>
+                            <button class="btn-small" id="exportCSVBtn">📄 Esporta CSV</button>
+                            <button class="btn-small" id="printReportBtn">🖨️ Stampa</button>
+                        </div>
+                    </div>
+                    <div class="report-table-wrapper">
+                        <table class="report-table" id="reportTable">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Cliente</th>
+                                    <th>N° Ordine</th>
+                                    <th>Descrizione</th>
+                                    <th>Stato</th>
+                                    <th>Importo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportTableBody">
+                                <tr>
+                                    <td colspan="6" class="empty-report">Seleziona i filtri e genera il report</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div class="client-detail" id="clientDetail" style="display: none;">

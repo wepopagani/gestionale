@@ -1,13 +1,29 @@
+// ===== FIREBASE CONFIGURATION =====
+const firebaseConfig = {
+    apiKey: "AIzaSyDEMOKEY-placeholder",
+    authDomain: "gestionale-demo.firebaseapp.com",
+    databaseURL: "https://gestionale-demo-default-rtdb.firebaseio.com",
+    projectId: "gestionale-demo",
+    storageBucket: "gestionale-demo.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
+};
+
+let firebaseDb = null;
+let cloudSyncEnabled = false;
+
 // ===== STATO DELL'APPLICAZIONE =====
 let state = {
     clients: [],
     currentClientId: null,
     editMode: false,
-    editItemId: null
+    editItemId: null,
+    reportData: []
 };
 
 // ===== INIZIALIZZAZIONE =====
 document.addEventListener('DOMContentLoaded', () => {
+    initFirebase();
     loadFromStorage();
     renderClients();
     setupEventListeners();
@@ -18,9 +34,67 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ===== FIREBASE FUNCTIONS =====
+function initFirebase() {
+    try {
+        // Nota: Per produzione, sostituire con le proprie credenziali Firebase
+        // firebase.initializeApp(firebaseConfig);
+        // firebaseDb = firebase.database();
+        // setupCloudSync();
+        updateCloudStatus(false);
+    } catch (error) {
+        console.log('Firebase non configurato:', error);
+        updateCloudStatus(false);
+    }
+}
+
+function updateCloudStatus(connected) {
+    const statusEl = document.getElementById('cloudStatus');
+    const textEl = statusEl.querySelector('.cloud-text');
+    
+    cloudSyncEnabled = connected;
+    
+    if (connected) {
+        statusEl.classList.add('connected');
+        textEl.textContent = 'Cloud';
+    } else {
+        statusEl.classList.remove('connected');
+        textEl.textContent = 'Locale';
+    }
+}
+
+function setupCloudSync() {
+    if (!firebaseDb) return;
+    
+    // Sincronizza dati in tempo reale
+    const userId = 'user_' + generateId().substr(0, 8);
+    const ref = firebaseDb.ref('clients/' + userId);
+    
+    ref.on('value', (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData && Array.isArray(cloudData)) {
+            state.clients = cloudData;
+            renderClients();
+            if (state.currentClientId) {
+                selectClient(state.currentClientId);
+            }
+        }
+    });
+    
+    updateCloudStatus(true);
+}
+
+function saveToCloud() {
+    if (!firebaseDb || !cloudSyncEnabled) return;
+    
+    const userId = 'user_' + generateId().substr(0, 8);
+    firebaseDb.ref('clients/' + userId).set(state.clients);
+}
+
 // ===== STORAGE =====
 function saveToStorage() {
     localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
+    saveToCloud();
 }
 
 function loadFromStorage() {
@@ -84,6 +158,14 @@ function setupEventListeners() {
     document.getElementById('addFileBtn').addEventListener('click', openAddFileModal);
     document.getElementById('saveFileBtn').addEventListener('click', saveFile);
     document.getElementById('modalFileInput').addEventListener('change', handleFileSelect);
+
+    // Bottoni report
+    document.getElementById('viewReportsBtn').addEventListener('click', openReportView);
+    document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
+    document.getElementById('generateReportBtn').addEventListener('click', generateReport);
+    document.getElementById('reportPeriod').addEventListener('change', handlePeriodChange);
+    document.getElementById('exportCSVBtn').addEventListener('click', exportToCSV);
+    document.getElementById('printReportBtn').addEventListener('click', printReport);
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -760,5 +842,393 @@ function deleteFile(fileId) {
     
     saveToStorage();
     renderFiles();
+}
+
+// ===== REPORT SYSTEM =====
+function openReportView() {
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('reportView').style.display = 'block';
+    
+    // Popola dropdown clienti
+    const clientSelect = document.getElementById('reportClient');
+    clientSelect.innerHTML = '<option value="all">Tutti i Clienti</option>';
+    state.clients.forEach(client => {
+        const option = document.createElement('option');
+        option.value = client.id;
+        option.textContent = client.name;
+        clientSelect.appendChild(option);
+    });
+    
+    // Reset filtri
+    document.getElementById('reportPeriod').value = 'month';
+    document.getElementById('reportStatus').value = 'all';
+}
+
+function closeReportView() {
+    document.getElementById('reportView').style.display = 'none';
+    
+    if (state.clients.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+    } else if (state.currentClientId) {
+        document.getElementById('clientDetail').style.display = 'block';
+    } else {
+        document.getElementById('emptyState').style.display = 'block';
+    }
+}
+
+function handlePeriodChange() {
+    const period = document.getElementById('reportPeriod').value;
+    const customDates = document.getElementById('customDates');
+    
+    if (period === 'custom') {
+        customDates.style.display = 'grid';
+        document.getElementById('reportDateFrom').value = new Date().toISOString().split('T')[0];
+        document.getElementById('reportDateTo').value = new Date().toISOString().split('T')[0];
+    } else {
+        customDates.style.display = 'none';
+    }
+}
+
+function getDateRange(period) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let from, to;
+    
+    switch(period) {
+        case 'week':
+            const dayOfWeek = today.getDay();
+            const monday = new Date(today);
+            monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            from = monday;
+            to = new Date();
+            break;
+            
+        case 'month':
+            from = new Date(now.getFullYear(), now.getMonth(), 1);
+            to = new Date();
+            break;
+            
+        case 'quarter':
+            const quarter = Math.floor(now.getMonth() / 3);
+            from = new Date(now.getFullYear(), quarter * 3, 1);
+            to = new Date();
+            break;
+            
+        case 'year':
+            from = new Date(now.getFullYear(), 0, 1);
+            to = new Date();
+            break;
+            
+        case 'custom':
+            from = new Date(document.getElementById('reportDateFrom').value);
+            to = new Date(document.getElementById('reportDateTo').value);
+            break;
+            
+        case 'all':
+        default:
+            from = new Date(2000, 0, 1);
+            to = new Date();
+            break;
+    }
+    
+    return { from, to };
+}
+
+function generateReport() {
+    const period = document.getElementById('reportPeriod').value;
+    const clientFilter = document.getElementById('reportClient').value;
+    const statusFilter = document.getElementById('reportStatus').value;
+    
+    const dateRange = getDateRange(period);
+    
+    // Raccolta ordini da tutti i clienti
+    const allOrders = [];
+    
+    state.clients.forEach(client => {
+        if (!client.orders) return;
+        
+        // Filtra per cliente se selezionato
+        if (clientFilter !== 'all' && client.id !== clientFilter) return;
+        
+        client.orders.forEach(order => {
+            const orderDate = new Date(order.date);
+            
+            // Filtra per periodo
+            if (orderDate >= dateRange.from && orderDate <= dateRange.to) {
+                // Filtra per stato
+                if (statusFilter === 'all' || order.status === statusFilter) {
+                    allOrders.push({
+                        ...order,
+                        clientId: client.id,
+                        clientName: client.name
+                    });
+                }
+            }
+        });
+    });
+    
+    // Ordina per data (più recenti prima)
+    allOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    state.reportData = allOrders;
+    
+    // Calcola statistiche
+    const totalOrders = allOrders.length;
+    const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+    const completedOrders = allOrders.filter(o => o.status === 'completato').length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    
+    // Aggiorna summary
+    document.getElementById('totalOrders').textContent = totalOrders;
+    document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('completedOrders').textContent = completedOrders;
+    document.getElementById('avgOrderValue').textContent = formatCurrency(avgOrderValue);
+    
+    // Renderizza tabella
+    renderReportTable(allOrders);
+}
+
+function renderReportTable(orders) {
+    const tbody = document.getElementById('reportTableBody');
+    
+    if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
+        return;
+    }
+    
+    const statusLabels = {
+        'in_lavorazione': 'In Lavorazione',
+        'completato': 'Completato',
+        'in_attesa': 'In Attesa',
+        'annullato': 'Annullato'
+    };
+    
+    tbody.innerHTML = orders.map(order => `
+        <tr>
+            <td>${formatDate(order.date)}</td>
+            <td><strong>${order.clientName}</strong></td>
+            <td>${order.number}</td>
+            <td>${order.description}</td>
+            <td><span class="report-status-badge ${order.status}">${statusLabels[order.status]}</span></td>
+            <td class="report-amount">${formatCurrency(order.amount)}</td>
+        </tr>
+    `).join('');
+}
+
+function exportToCSV() {
+    if (state.reportData.length === 0) {
+        alert('Genera prima un report per esportarlo');
+        return;
+    }
+    
+    // Intestazioni CSV
+    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Importo\n';
+    
+    // Righe dati
+    state.reportData.forEach(order => {
+        const row = [
+            formatDate(order.date),
+            `"${order.clientName}"`,
+            `"${order.number}"`,
+            `"${order.description}"`,
+            order.status,
+            order.amount || 0
+        ].join(',');
+        csv += row + '\n';
+    });
+    
+    // Aggiungi totali
+    const totalRevenue = state.reportData.reduce((sum, o) => sum + (o.amount || 0), 0);
+    csv += '\n';
+    csv += `TOTALE ORDINI,${state.reportData.length},,,,\n`;
+    csv += `TOTALE FATTURATO,,,,,${totalRevenue}\n`;
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const period = document.getElementById('reportPeriod').value;
+    const date = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `report_ordini_${period}_${date}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function printReport() {
+    if (state.reportData.length === 0) {
+        alert('Genera prima un report per stamparlo');
+        return;
+    }
+    
+    // Crea finestra di stampa
+    const printWindow = window.open('', '', 'height=600,width=800');
+    
+    const period = document.getElementById('reportPeriod').value;
+    const periodLabels = {
+        'week': 'Questa Settimana',
+        'month': 'Questo Mese',
+        'quarter': 'Questo Trimestre',
+        'year': 'Quest\'Anno',
+        'all': 'Tutti i Periodi',
+        'custom': 'Periodo Personalizzato'
+    };
+    
+    const totalOrders = state.reportData.length;
+    const totalRevenue = state.reportData.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const completedOrders = state.reportData.filter(o => o.status === 'completato').length;
+    
+    const statusLabels = {
+        'in_lavorazione': 'In Lavorazione',
+        'completato': 'Completato',
+        'in_attesa': 'In Attesa',
+        'annullato': 'Annullato'
+    };
+    
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Report Ordini - ${periodLabels[period]}</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    color: #333;
+                }
+                h1 {
+                    color: #6366f1;
+                    margin-bottom: 10px;
+                }
+                .meta {
+                    color: #666;
+                    margin-bottom: 30px;
+                    font-size: 14px;
+                }
+                .summary {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                .summary-box {
+                    border: 1px solid #e2e8f0;
+                    padding: 15px;
+                    border-radius: 8px;
+                }
+                .summary-label {
+                    font-size: 12px;
+                    color: #666;
+                    margin-bottom: 5px;
+                }
+                .summary-value {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #333;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }
+                th {
+                    background: #f1f5f9;
+                    padding: 12px;
+                    text-align: left;
+                    border-bottom: 2px solid #e2e8f0;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    color: #666;
+                }
+                td {
+                    padding: 12px;
+                    border-bottom: 1px solid #e2e8f0;
+                }
+                tr:last-child td {
+                    border-bottom: none;
+                }
+                .status-badge {
+                    padding: 4px 10px;
+                    border-radius: 12px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                .status-completato { background: #d1fae5; color: #065f46; }
+                .status-in_lavorazione { background: #dbeafe; color: #1e40af; }
+                .status-in_attesa { background: #fef3c7; color: #92400e; }
+                .status-annullato { background: #fee2e2; color: #991b1b; }
+                @media print {
+                    body { padding: 10px; }
+                    .summary { page-break-inside: avoid; }
+                    table { page-break-inside: auto; }
+                    tr { page-break-inside: avoid; page-break-after: auto; }
+                }
+            </style>
+        </head>
+        <body>
+            <h1>📊 Report Ordini</h1>
+            <div class="meta">
+                Periodo: ${periodLabels[period]} | Generato il: ${new Date().toLocaleDateString('it-IT')}
+            </div>
+            
+            <div class="summary">
+                <div class="summary-box">
+                    <div class="summary-label">Totale Ordini</div>
+                    <div class="summary-value">${totalOrders}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Valore Totale</div>
+                    <div class="summary-value">${formatCurrency(totalRevenue)}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Completati</div>
+                    <div class="summary-value">${completedOrders}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Media Ordine</div>
+                    <div class="summary-value">${formatCurrency(totalRevenue / totalOrders)}</div>
+                </div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Cliente</th>
+                        <th>N° Ordine</th>
+                        <th>Descrizione</th>
+                        <th>Stato</th>
+                        <th>Importo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${state.reportData.map(order => `
+                        <tr>
+                            <td>${formatDate(order.date)}</td>
+                            <td><strong>${order.clientName}</strong></td>
+                            <td>${order.number}</td>
+                            <td>${order.description}</td>
+                            <td><span class="status-badge status-${order.status}">${statusLabels[order.status]}</span></td>
+                            <td><strong>${formatCurrency(order.amount)}</strong></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
 }
 

@@ -1,11 +1,12 @@
 # 📊 Gestionale Clienti
 
-Un software gestionale web moderno e minimal per la gestione dei tuoi clienti, documenti, note e ordini.
+Un software gestionale web moderno e minimal per la gestione completa di clienti, documenti, ordini e report analitici.
 
 ## 🚀 Come Utilizzarlo
 
 1. **Apri il file `index.html`** nel tuo browser (doppio click sul file)
 2. Inizia ad aggiungere i tuoi clienti e gestire i loro dati!
+3. **Bonus**: Configura Firebase per il salvataggio cloud (opzionale)
 
 ## ✨ Funzionalità
 
@@ -68,18 +69,60 @@ Per ogni ordine puoi salvare:
 - Data
 - Stato di avanzamento
 
-## 💾 Salvataggio Dati
+### 📊 Sistema Report Avanzato
+**Nuovo!** Analisi completa degli ordini con filtri multipli:
 
+**Periodi Disponibili:**
+- 📅 Settimana corrente
+- 📅 Mese corrente
+- 📅 Trimestre corrente
+- 📅 Anno corrente
+- 📅 Tutti i periodi
+- 📅 Periodo personalizzato (data da/a)
+
+**Filtri:**
+- Filtra per cliente specifico
+- Filtra per stato ordine
+- Combinazione di filtri multipli
+
+**Statistiche Automatiche:**
+- 📦 Totale ordini nel periodo
+- 💰 Valore totale fatturato
+- ✅ Numero ordini completati
+- 📈 Valore medio per ordine
+
+**Export e Stampa:**
+- 📄 Esporta in CSV (compatibile Excel)
+- 🖨️ Stampa report formattato
+- 📋 Tabella dettagliata con tutti gli ordini
+
+## ☁️ Salvataggio Cloud + Locale
+
+### **Salvataggio Locale (Default)**
 Tutti i dati vengono salvati automaticamente nel **localStorage** del browser:
 - ✅ Nessun server necessario
 - ✅ Dati sempre disponibili offline
 - ✅ Salvataggio automatico ad ogni modifica
+- ✅ Privacy totale - nessun dato su server esterni
+
+### **Salvataggio Cloud (Opzionale)**
+Integrazione Firebase per sincronizzazione cloud:
+- ☁️ **Backup automatico** su Google Firebase
+- 🔄 **Sincronizzazione real-time** tra dispositivi
+- 📱 Accedi ai dati da qualsiasi dispositivo
+- 🔒 Sicurezza enterprise-grade
+
+**Come Attivare Firebase:**
+1. Crea un progetto su [Firebase Console](https://console.firebase.google.com/)
+2. Abilita **Realtime Database**
+3. Copia le tue credenziali Firebase
+4. Sostituisci la configurazione in `app.js` (righe 2-10)
+5. Decommmenta le righe di inizializzazione Firebase (righe 41-43)
 
 **⚠️ Note importanti**:
-- I dati sono salvati localmente nel tuo browser
-- Limite di 5MB per file (limite tipico del localStorage)
-- Se cancelli i dati del browser, perderai tutti i file e dati
-- I dati non sono sincronizzati tra dispositivi diversi
+- Limite di 5MB per file singolo (limite localStorage)
+- Se cancelli i dati del browser, rimangono comunque nel cloud (se configurato)
+- Firebase piano gratuito: 1GB storage + 10GB trasferimento/mese
 
 ## 🎨 Design
 
@@ -111,7 +154,9 @@ Funziona su tutti i browser moderni:
 3. **Tracking ordini**: Aggiorna lo stato degli ordini per tenere traccia dei progressi
 4. **Documenti**: Salva i riferimenti a fatture e preventivi per avere tutto sotto controllo
 5. **File**: Carica contratti, documenti firmati, immagini o qualsiasi file necessario (max 5MB)
-6. **Backup**: Periodicamente esporta i dati del localStorage per sicurezza
+6. **Report**: Genera report periodici per analizzare l'andamento del business
+7. **Export CSV**: Usa l'export CSV per importare i dati in Excel o altri software
+8. **Backup Cloud**: Configura Firebase per non perdere mai i tuoi dati
 
 ## 🔒 Privacy
 
