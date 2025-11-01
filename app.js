@@ -1330,50 +1330,66 @@ function handlePeriodChange() {
     } else {
         customDates.style.display = 'none';
     }
+    
+    // Rigenera automaticamente il report quando cambia il periodo
+    generateReport();
 }
 
 function getDateRange(period) {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     let from, to;
     
     switch(period) {
         case 'week':
-            const dayOfWeek = today.getDay();
-            const monday = new Date(today);
-            monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            // Inizio settimana (lunedì)
+            const dayOfWeek = now.getDay();
+            const monday = new Date(now);
+            monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            monday.setHours(0, 0, 0, 0);
             from = monday;
-            to = new Date();
+            to = new Date(now);
+            to.setHours(23, 59, 59, 999);
             break;
             
         case 'month':
-            from = new Date(now.getFullYear(), now.getMonth(), 1);
-            to = new Date();
+            // Primo giorno del mese corrente
+            from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            to = new Date(now);
+            to.setHours(23, 59, 59, 999);
             break;
             
         case 'quarter':
+            // Primo giorno del trimestre corrente
             const quarter = Math.floor(now.getMonth() / 3);
-            from = new Date(now.getFullYear(), quarter * 3, 1);
-            to = new Date();
+            from = new Date(now.getFullYear(), quarter * 3, 1, 0, 0, 0, 0);
+            to = new Date(now);
+            to.setHours(23, 59, 59, 999);
             break;
             
         case 'year':
-            from = new Date(now.getFullYear(), 0, 1);
-            to = new Date();
+            // 1 Gennaio dell'anno corrente
+            from = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+            to = new Date(now);
+            to.setHours(23, 59, 59, 999);
             break;
             
         case 'custom':
             from = new Date(document.getElementById('reportDateFrom').value);
+            from.setHours(0, 0, 0, 0);
             to = new Date(document.getElementById('reportDateTo').value);
+            to.setHours(23, 59, 59, 999);
             break;
             
         case 'all':
         default:
-            from = new Date(2000, 0, 1);
-            to = new Date();
+            // Tutti i periodi
+            from = new Date(2000, 0, 1, 0, 0, 0, 0);
+            to = new Date(now);
+            to.setHours(23, 59, 59, 999);
             break;
     }
     
+    console.log(`📅 Range periodo '${period}': da ${from.toLocaleDateString('it-IT')} a ${to.toLocaleDateString('it-IT')}`);
     return { from, to };
 }
 
@@ -1382,19 +1398,24 @@ function generateReport() {
     const clientFilter = document.getElementById('reportClient').value;
     const statusFilter = document.getElementById('reportStatus').value;
     
+    console.log('🔄 Generazione report...', { period, clientFilter, statusFilter });
+    
     const dateRange = getDateRange(period);
     
     // ===== RACCOLTA ORDINI =====
     const allOrders = [];
     
     state.clients.forEach(client => {
-        if (!client.orders) return;
+        if (!client.orders || client.orders.length === 0) return;
         
         // Filtra per cliente se selezionato
         if (clientFilter !== 'all' && client.id !== clientFilter) return;
         
         client.orders.forEach(order => {
+            if (!order.date) return;
+            
             const orderDate = new Date(order.date);
+            orderDate.setHours(12, 0, 0, 0); // Normalizza a mezzogiorno per evitare problemi timezone
             
             // Filtra per periodo
             if (orderDate >= dateRange.from && orderDate <= dateRange.to) {
@@ -1415,24 +1436,47 @@ function generateReport() {
     
     state.reportData = allOrders;
     
+    console.log(`📦 Ordini trovati: ${allOrders.length}`);
+    
     // ===== RACCOLTA CLIENTI ACQUISITI =====
-    const newClients = state.clients.filter(client => {
+    const newClients = [];
+    
+    state.clients.forEach(client => {
         // Usa acquisitionDate se esiste, altrimenti createdAt come fallback
         const dateToUse = client.acquisitionDate || client.createdAt;
-        if (!dateToUse) return false;
+        
+        if (!dateToUse) {
+            console.warn('⚠️ Cliente senza data:', client.name);
+            return;
+        }
         
         const clientDate = new Date(dateToUse);
-        return clientDate >= dateRange.from && clientDate <= dateRange.to;
+        clientDate.setHours(12, 0, 0, 0); // Normalizza
+        
+        // Filtra per cliente se selezionato
+        if (clientFilter !== 'all' && client.id !== clientFilter) return;
+        
+        if (clientDate >= dateRange.from && clientDate <= dateRange.to) {
+            newClients.push(client);
+        }
     });
     
-    // Ordina per data registrazione
-    newClients.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Ordina per data acquisizione (più recenti prima)
+    newClients.sort((a, b) => {
+        const dateA = new Date(a.acquisitionDate || a.createdAt);
+        const dateB = new Date(b.acquisitionDate || b.createdAt);
+        return dateB - dateA;
+    });
+    
+    console.log(`👥 Clienti acquisiti trovati: ${newClients.length}`);
     
     // ===== CALCOLA STATISTICHE =====
     const totalOrders = allOrders.length;
     const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
     const completedOrders = allOrders.filter(o => o.status === 'completato').length;
     const totalNewClients = newClients.length;
+    
+    console.log('📊 Statistiche:', { totalNewClients, totalOrders, totalRevenue, completedOrders });
     
     // Aggiorna summary
     document.getElementById('totalNewClients').textContent = totalNewClients;
@@ -1443,6 +1487,8 @@ function generateReport() {
     // Renderizza tabelle
     renderClientsAcquiredTable(newClients, dateRange);
     renderReportTable(allOrders);
+    
+    console.log('✅ Report generato!');
 }
 
 function renderClientsAcquiredTable(clients, dateRange) {

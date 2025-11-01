@@ -78,14 +78,14 @@
 
                     <div class="filter-group">
                         <label>Cliente</label>
-                        <select id="reportClient">
+                        <select id="reportClient" onchange="generateReport()">
                             <option value="all">Tutti i Clienti</option>
                         </select>
                     </div>
 
                     <div class="filter-group">
                         <label>Stato</label>
-                        <select id="reportStatus">
+                        <select id="reportStatus" onchange="generateReport()">
                             <option value="all">Tutti gli Stati</option>
                             <option value="in_lavorazione">In Lavorazione</option>
                             <option value="completato">Completato</option>
@@ -93,8 +93,6 @@
                             <option value="annullato">Annullato</option>
                         </select>
                     </div>
-
-                    <button class="btn-primary" id="generateReportBtn">🔄 Genera Report</button>
                 </div>
 
                 <!-- Report Summary -->
