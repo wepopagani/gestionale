@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionale Clienti</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>📊 Gestionale</h1>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
+                </div>
+                <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
+            </div>
+
+            <div class="clients-list" id="clientsList">
+                <!-- Clienti verranno inseriti qui dinamicamente -->
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-state-icon">👋</div>
+                <h2>Benvenuto nel tuo Gestionale</h2>
+                <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
+                <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
+            </div>
+
+            <div class="client-detail" id="clientDetail" style="display: none;">
+                <!-- Header Cliente -->
+                <div class="client-header">
+                    <div class="client-header-info">
+                        <h2 id="clientName"></h2>
+                        <p id="clientInfo"></p>
+                    </div>
+                    <div class="client-header-actions">
+                        <button class="btn-secondary" id="editClientBtn">✏️ Modifica</button>
+                        <button class="btn-danger" id="deleteClientBtn">🗑️ Elimina</button>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="documents">📄 Documenti</button>
+                    <button class="tab-btn" data-tab="files">📎 File</button>
+                    <button class="tab-btn" data-tab="notes">📝 Note</button>
+                    <button class="tab-btn" data-tab="orders">🛒 Ordini</button>
+                </div>
+
+                <!-- Tab Content: Documenti -->
+                <div class="tab-content active" id="documentsTab">
+                    <div class="section-header">
+                        <h3>Documenti</h3>
+                        <button class="btn-small" id="addDocumentBtn">+ Aggiungi Documento</button>
+                    </div>
+                    <div class="documents-grid" id="documentsList">
+                        <div class="empty-section">
+                            <p>Nessun documento caricato</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Note -->
+                <div class="tab-content" id="notesTab">
+                    <div class="section-header">
+                        <h3>Note</h3>
+                        <button class="btn-small" id="addNoteBtn">+ Nuova Nota</button>
+                    </div>
+                    <div class="notes-list" id="notesList">
+                        <div class="empty-section">
+                            <p>Nessuna nota presente</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: File -->
+                <div class="tab-content" id="filesTab">
+                    <div class="section-header">
+                        <h3>File</h3>
+                        <button class="btn-small" id="addFileBtn">+ Carica File</button>
+                    </div>
+                    <div class="files-grid" id="filesList">
+                        <div class="empty-section">
+                            <p>Nessun file caricato</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Note -->
+                <div class="tab-content" id="notesTab">
+                    <div class="section-header">
+                        <h3>Note</h3>
+                        <button class="btn-small" id="addNoteBtn">+ Nuova Nota</button>
+                    </div>
+                    <div class="notes-list" id="notesList">
+                        <div class="empty-section">
+                            <p>Nessuna nota presente</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Ordini -->
+                <div class="tab-content" id="ordersTab">
+                    <div class="section-header">
+                        <h3>Ordini</h3>
+                        <button class="btn-small" id="addOrderBtn">+ Nuovo Ordine</button>
+                    </div>
+                    <div class="orders-list" id="ordersList">
+                        <div class="empty-section">
+                            <p>Nessun ordine presente</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Cliente -->
+    <div class="modal" id="clientModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalClientTitle">Nuovo Cliente</h3>
+                <button class="modal-close" onclick="closeModal('clientModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nome/Ragione Sociale *</label>
+                    <input type="text" id="modalClientName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="modalClientEmail">
+                </div>
+                <div class="form-group">
+                    <label>Telefono</label>
+                    <input type="tel" id="modalClientPhone">
+                </div>
+                <div class="form-group">
+                    <label>Indirizzo</label>
+                    <input type="text" id="modalClientAddress">
+                </div>
+                <div class="form-group">
+                    <label>P.IVA / Codice Fiscale</label>
+                    <input type="text" id="modalClientVat">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('clientModal')">Annulla</button>
+                <button class="btn-primary" id="saveClientBtn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Documento -->
+    <div class="modal" id="documentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Aggiungi Documento</h3>
+                <button class="modal-close" onclick="closeModal('documentModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Tipo Documento *</label>
+                    <select id="modalDocType">
+                        <option value="fattura">📄 Fattura</option>
+                        <option value="preventivo">📋 Preventivo</option>
+                        <option value="contratto">📝 Contratto</option>
+                        <option value="altro">📁 Altro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Numero/Riferimento *</label>
+                    <input type="text" id="modalDocNumber" placeholder="es. FT-2025-001">
+                </div>
+                <div class="form-group">
+                    <label>Importo (€)</label>
+                    <input type="number" id="modalDocAmount" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Data</label>
+                    <input type="date" id="modalDocDate">
+                </div>
+                <div class="form-group">
+                    <label>Note</label>
+                    <textarea id="modalDocNotes" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('documentModal')">Annulla</button>
+                <button class="btn-primary" id="saveDocumentBtn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nota -->
+    <div class="modal" id="noteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalNoteTitle">Nuova Nota</h3>
+                <button class="modal-close" onclick="closeModal('noteModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Titolo</label>
+                    <input type="text" id="modalNoteTitle-input" placeholder="Titolo della nota">
+                </div>
+                <div class="form-group">
+                    <label>Contenuto *</label>
+                    <textarea id="modalNoteContent" rows="8" required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('noteModal')">Annulla</button>
+                <button class="btn-primary" id="saveNoteBtn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ordine -->
+    <div class="modal" id="orderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalOrderTitle">Nuovo Ordine</h3>
+                <button class="modal-close" onclick="closeModal('orderModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Numero Ordine *</label>
+                    <input type="text" id="modalOrderNumber" placeholder="es. ORD-2025-001">
+                </div>
+                <div class="form-group">
+                    <label>Descrizione *</label>
+                    <textarea id="modalOrderDescription" rows="3" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Importo (€)</label>
+                    <input type="number" id="modalOrderAmount" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Data Ordine</label>
+                    <input type="date" id="modalOrderDate">
+                </div>
+                <div class="form-group">
+                    <label>Stato *</label>
+                    <select id="modalOrderStatus">
+                        <option value="in_lavorazione">🔨 In Lavorazione</option>
+                        <option value="completato">✅ Completato</option>
+                        <option value="in_attesa">⏳ In Attesa</option>
+                        <option value="annullato">❌ Annullato</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('orderModal')">Annulla</button>
+                <button class="btn-primary" id="saveOrderBtn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal File -->
+    <div class="modal" id="fileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Carica File</h3>
+                <button class="modal-close" onclick="closeModal('fileModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Seleziona File *</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="modalFileInput" accept="*/*">
+                        <div class="file-input-display" id="fileInputDisplay">
+                            <span class="file-input-icon">📁</span>
+                            <span class="file-input-text">Clicca per scegliere un file o trascinalo qui</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descrizione</label>
+                    <input type="text" id="modalFileDescription" placeholder="Descrizione opzionale del file">
+                </div>
+                <div id="fileInfoDisplay" class="file-info-display" style="display: none;">
+                    <div class="file-info-item">
+                        <strong>Nome:</strong> <span id="fileInfoName"></span>
+                    </div>
+                    <div class="file-info-item">
+                        <strong>Tipo:</strong> <span id="fileInfoType"></span>
+                    </div>
+                    <div class="file-info-item">
+                        <strong>Dimensione:</strong> <span id="fileInfoSize"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('fileModal')">Annulla</button>
+                <button class="btn-primary" id="saveFileBtn">Carica</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
