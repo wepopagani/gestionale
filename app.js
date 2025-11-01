@@ -514,8 +514,9 @@ function selectClient(clientId) {
     
     if (!client) return;
 
-    // Nascondi empty state, mostra dettagli
+    // Nascondi TUTTO tranne il client detail
     document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('reportView').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'block';
     
     // Su mobile, nascondi la sidebar quando si apre un cliente
