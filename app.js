@@ -142,6 +142,11 @@ function setupCloudSync() {
         updateCloudStatus(true);
         console.log('✅ Sincronizzazione cloud attiva in modalità condivisa!');
         
+        // Carica il counter dal cloud
+        loadCounterFromCloud().then(() => {
+            console.log('✅ Setup completo con counter sincronizzato');
+        });
+        
         // Mostra notifica successo
         showNotification('☁️ Database condiviso attivo!', 'success');
     }, (error) => {
@@ -159,6 +164,76 @@ function saveToCloud() {
     } catch (error) {
         console.error('Errore salvataggio cloud:', error);
     }
+}
+
+function saveCounterToCloud() {
+    if (!firebaseDb || !cloudSyncEnabled || !userId) return;
+    
+    try {
+        firebaseDb.ref('counter/' + userId).set(state.orderCounter);
+    } catch (error) {
+        console.error('Errore salvataggio counter cloud:', error);
+    }
+}
+
+function loadCounterFromCloud() {
+    if (!firebaseDb || !userId) return Promise.resolve();
+    
+    return firebaseDb.ref('counter/' + userId).once('value')
+        .then(snapshot => {
+            const cloudCounter = snapshot.val();
+            
+            if (cloudCounter !== null && cloudCounter !== undefined) {
+                // Usa il counter del cloud (è la fonte di verità condivisa)
+                state.orderCounter = parseInt(cloudCounter);
+                localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+                console.log(`📋 Counter ordini caricato dal cloud: ${state.orderCounter}`);
+            } else {
+                // Nessun counter nel cloud, carica il counter locale o calcola
+                const localCounter = localStorage.getItem('gestionale_order_counter');
+                if (localCounter) {
+                    state.orderCounter = parseInt(localCounter);
+                } else {
+                    state.orderCounter = calculateNextOrderNumber();
+                }
+                // Salva nel cloud per la prossima volta
+                saveCounterToCloud();
+                console.log(`📋 Counter ordini inizializzato: ${state.orderCounter}`);
+            }
+            
+            // Sincronizza il counter in tempo reale
+            setupCounterSync();
+        })
+        .catch(error => {
+            console.error('Errore caricamento counter:', error);
+            // Fallback a localStorage
+            const localCounter = localStorage.getItem('gestionale_order_counter');
+            if (localCounter) {
+                state.orderCounter = parseInt(localCounter);
+            } else {
+                state.orderCounter = calculateNextOrderNumber();
+            }
+        });
+}
+
+function setupCounterSync() {
+    if (!firebaseDb || !userId) return;
+    
+    // Ascolta modifiche al counter in tempo reale
+    firebaseDb.ref('counter/' + userId).on('value', (snapshot) => {
+        const cloudCounter = snapshot.val();
+        
+        if (cloudCounter !== null && cloudCounter !== undefined) {
+            const newCounter = parseInt(cloudCounter);
+            
+            // Aggiorna solo se il counter cloud è maggiore (per evitare conflitti)
+            if (newCounter > state.orderCounter) {
+                state.orderCounter = newCounter;
+                localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+                console.log(`🔄 Counter aggiornato dal cloud: ${state.orderCounter}`);
+            }
+        }
+    });
 }
 
 function showNotification(message, type = 'info') {
@@ -227,6 +302,7 @@ function saveToStorage() {
     localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
     localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
     saveToCloud();
+    saveCounterToCloud(); // Salva anche il counter nel cloud
 }
 
 function loadFromStorage() {
@@ -235,7 +311,8 @@ function loadFromStorage() {
         state.clients = JSON.parse(data);
     }
     
-    // Carica il counter degli ordini
+    // Il counter verrà caricato dal cloud in setupCloudSync
+    // Se non c'è cloud, usa localStorage come fallback
     const counter = localStorage.getItem('gestionale_order_counter');
     if (counter) {
         state.orderCounter = parseInt(counter);
@@ -294,7 +371,18 @@ function generateOrderNumber() {
 
 function incrementOrderCounter() {
     state.orderCounter++;
-    saveToStorage();
+    localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+    
+    // Salva immediatamente nel cloud per sincronizzare con altri dispositivi
+    if (firebaseDb && cloudSyncEnabled && userId) {
+        firebaseDb.ref('counter/' + userId).set(state.orderCounter)
+            .then(() => {
+                console.log(`✅ Counter incrementato nel cloud: ${state.orderCounter}`);
+            })
+            .catch(error => {
+                console.error('Errore incremento counter cloud:', error);
+            });
+    }
 }
 
 function closeModal(modalId) {
