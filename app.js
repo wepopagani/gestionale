@@ -51,14 +51,11 @@ function initFirebase() {
         
         firebaseDb = firebase.database();
         
-        // Genera o recupera user ID unico
-        userId = localStorage.getItem('gestionale_user_id');
-        if (!userId) {
-            userId = 'user_' + generateId();
-            localStorage.setItem('gestionale_user_id', userId);
-        }
+        // Usa un ID condiviso per tutti gli utenti
+        userId = 'shared_gestionale';
         
         console.log('✅ Firebase inizializzato con successo!');
+        console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
         setupCloudSync();
         
     } catch (error) {
@@ -93,34 +90,22 @@ function setupCloudSync() {
         const cloudData = snapshot.val();
         
         if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-            // Chiedi all'utente se vuole usare i dati cloud o locali
-            const localCount = state.clients.length;
-            const cloudCount = cloudData.length;
+            // Usa sempre i dati del cloud (database condiviso)
+            console.log(`📥 Caricati ${cloudData.length} clienti dal cloud`);
+            state.clients = cloudData;
+            saveToStorage(); // Salva anche in locale
+            renderClients();
             
-            if (localCount > 0) {
-                const useCloud = confirm(
-                    `Trovati dati sia in locale che nel cloud:\n\n` +
-                    `📱 Locale: ${localCount} clienti\n` +
-                    `☁️ Cloud: ${cloudCount} clienti\n\n` +
-                    `Vuoi usare i dati del cloud? (Annulla per usare quelli locali)`
-                );
-                
-                if (useCloud) {
-                    state.clients = cloudData;
-                    saveToStorage(); // Salva anche in locale
-                    renderClients();
-                } else {
-                    // Salva i dati locali nel cloud
-                    ref.set(state.clients);
+            // Riseleziona il cliente se c'era
+            if (state.currentClientId) {
+                const client = state.clients.find(c => c.id === state.currentClientId);
+                if (client) {
+                    selectClient(state.currentClientId);
                 }
-            } else {
-                // Nessun dato locale, usa cloud
-                state.clients = cloudData;
-                saveToStorage();
-                renderClients();
             }
         } else if (state.clients.length > 0) {
             // Nessun dato nel cloud, carica quello locale
+            console.log(`📤 Caricamento ${state.clients.length} clienti locali nel cloud`);
             ref.set(state.clients);
         }
         
@@ -130,13 +115,24 @@ function setupCloudSync() {
             if (cloudData && Array.isArray(cloudData)) {
                 // Solo se i dati sono diversi (evita loop)
                 if (JSON.stringify(cloudData) !== JSON.stringify(state.clients)) {
+                    console.log('🔄 Aggiornamento automatico dal cloud');
                     state.clients = cloudData;
                     saveToStorage();
                     renderClients();
+                    
+                    // Mantieni la vista corrente se possibile
                     if (state.currentClientId) {
                         const client = state.clients.find(c => c.id === state.currentClientId);
                         if (client) {
                             selectClient(state.currentClientId);
+                        } else {
+                            // Cliente eliminato, torna alla lista
+                            if (state.clients.length > 0) {
+                                selectClient(state.clients[0].id);
+                            } else {
+                                document.getElementById('clientDetail').style.display = 'none';
+                                document.getElementById('emptyState').style.display = 'block';
+                            }
                         }
                     }
                 }
@@ -144,10 +140,10 @@ function setupCloudSync() {
         });
         
         updateCloudStatus(true);
-        console.log('✅ Sincronizzazione cloud attiva!');
+        console.log('✅ Sincronizzazione cloud attiva in modalità condivisa!');
         
         // Mostra notifica successo
-        showNotification('☁️ Connesso al cloud!', 'success');
+        showNotification('☁️ Database condiviso attivo!', 'success');
     }, (error) => {
         console.error('Errore sincronizzazione:', error);
         updateCloudStatus(false);
@@ -194,9 +190,8 @@ function showNotification(message, type = 'info') {
 
 // ===== CLOUD SETTINGS =====
 function showCloudSettings() {
-    // Mostra User ID attuale
-    const currentId = localStorage.getItem('gestionale_user_id') || 'Non impostato';
-    document.getElementById('currentUserId').value = currentId;
+    // Mostra info database condiviso
+    document.getElementById('currentUserId').value = 'shared_gestionale (Database Condiviso)';
     
     // Mostra stato sincronizzazione
     updateCloudSyncStatusDisplay();
@@ -208,7 +203,8 @@ function updateCloudSyncStatusDisplay() {
     const statusEl = document.getElementById('cloudSyncStatus');
     
     if (cloudSyncEnabled && firebaseDb) {
-        statusEl.innerHTML = '✅ <strong>Connesso al cloud</strong><br><small>I dati vengono sincronizzati automaticamente</small>';
+        const clientsCount = state.clients.length;
+        statusEl.innerHTML = `✅ <strong>Database Condiviso Attivo</strong><br><small>Tutti vedono gli stessi ${clientsCount} clienti • Sync real-time</small>`;
         statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
         statusEl.style.color = 'var(--success)';
     } else {
@@ -219,90 +215,11 @@ function updateCloudSyncStatusDisplay() {
 }
 
 function copyUserId() {
-    const userIdInput = document.getElementById('currentUserId');
-    userIdInput.select();
-    userIdInput.setSelectionRange(0, 99999); // Per mobile
-    
-    try {
-        document.execCommand('copy');
-        showNotification('✅ User ID copiato! Incollalo nell\'altro dispositivo', 'success');
-    } catch (err) {
-        // Fallback per browser moderni
-        navigator.clipboard.writeText(userIdInput.value).then(() => {
-            showNotification('✅ User ID copiato! Incollalo nell\'altro dispositivo', 'success');
-        }).catch(() => {
-            alert('User ID: ' + userIdInput.value + '\n\nCopialo manualmente');
-        });
-    }
+    showNotification('ℹ️ Database condiviso: tutti vedono gli stessi dati!', 'info');
 }
 
 function changeUserId() {
-    const newUserId = document.getElementById('importUserId').value.trim();
-    
-    if (!newUserId) {
-        alert('Inserisci un User ID valido');
-        return;
-    }
-    
-    if (!newUserId.startsWith('user_')) {
-        alert('User ID non valido. Deve iniziare con "user_"');
-        return;
-    }
-    
-    const confirm = window.confirm(
-        '⚠️ ATTENZIONE!\n\n' +
-        'Cambiando User ID, questo dispositivo userà i dati dell\'altro dispositivo.\n\n' +
-        'I dati locali attuali verranno SOSTITUITI con quelli del cloud.\n\n' +
-        'Vuoi continuare?'
-    );
-    
-    if (!confirm) return;
-    
-    // Salva il nuovo user ID
-    const oldUserId = userId;
-    userId = newUserId;
-    localStorage.setItem('gestionale_user_id', newUserId);
-    
-    // Ricarica i dati dal cloud con il nuovo user ID
-    if (firebaseDb) {
-        const ref = firebaseDb.ref('clients/' + userId);
-        
-        ref.once('value', (snapshot) => {
-            const cloudData = snapshot.val();
-            
-            if (cloudData && Array.isArray(cloudData)) {
-                state.clients = cloudData;
-                saveToStorage();
-                renderClients();
-                
-                showNotification('✅ Sincronizzazione completata!', 'success');
-                closeModal('cloudSettingsModal');
-                
-                // Ricarica la pagina per applicare le modifiche
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            } else {
-                alert('⚠️ Nessun dato trovato nel cloud per questo User ID.\n\nI tuoi dati locali verranno caricati nel cloud.');
-                
-                // Carica i dati locali nel nuovo percorso cloud
-                ref.set(state.clients).then(() => {
-                    showNotification('✅ Dati caricati nel cloud!', 'success');
-                    closeModal('cloudSettingsModal');
-                });
-            }
-        }, (error) => {
-            alert('❌ Errore: ' + error.message);
-            // Ripristina old user ID in caso di errore
-            userId = oldUserId;
-            localStorage.setItem('gestionale_user_id', oldUserId);
-        });
-    } else {
-        // Nessuna connessione cloud, solo aggiorna locale
-        showNotification('✅ User ID aggiornato localmente', 'success');
-        closeModal('cloudSettingsModal');
-        location.reload();
-    }
+    alert('ℹ️ Database Condiviso\n\nTutti gli utenti vedono automaticamente gli stessi dati.\nNon serve cambiare User ID!');
 }
 
 // ===== STORAGE =====
