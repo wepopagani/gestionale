@@ -555,6 +555,7 @@ function openAddClientModal() {
     state.editMode = false;
     document.getElementById('modalClientTitle').textContent = 'Nuovo Cliente';
     document.getElementById('modalClientName').value = '';
+    document.getElementById('modalClientAcquisitionDate').value = new Date().toISOString().split('T')[0]; // Data di oggi
     document.getElementById('modalClientEmail').value = '';
     document.getElementById('modalClientPhone').value = '';
     document.getElementById('modalClientAddress').value = '';
@@ -569,6 +570,11 @@ function openEditClientModal() {
     state.editMode = true;
     document.getElementById('modalClientTitle').textContent = 'Modifica Cliente';
     document.getElementById('modalClientName').value = client.name;
+    
+    // Data acquisizione: usa acquisitionDate se esiste, altrimenti createdAt, altrimenti oggi
+    const acquisitionDate = client.acquisitionDate || client.createdAt || new Date().toISOString();
+    document.getElementById('modalClientAcquisitionDate').value = acquisitionDate.split('T')[0];
+    
     document.getElementById('modalClientEmail').value = client.email || '';
     document.getElementById('modalClientPhone').value = client.phone || '';
     document.getElementById('modalClientAddress').value = client.address || '';
@@ -590,6 +596,7 @@ function saveClient() {
         
         // Aggiorna SOLO i campi del form, mantieni tutto il resto
         state.clients[clientIndex].name = name;
+        state.clients[clientIndex].acquisitionDate = document.getElementById('modalClientAcquisitionDate').value;
         state.clients[clientIndex].email = document.getElementById('modalClientEmail').value.trim();
         state.clients[clientIndex].phone = document.getElementById('modalClientPhone').value.trim();
         state.clients[clientIndex].address = document.getElementById('modalClientAddress').value.trim();
@@ -602,6 +609,7 @@ function saveClient() {
         const newClient = {
             id: generateId(),
             name,
+            acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
             email: document.getElementById('modalClientEmail').value.trim(),
             phone: document.getElementById('modalClientPhone').value.trim(),
             address: document.getElementById('modalClientAddress').value.trim(),
@@ -616,7 +624,7 @@ function saveClient() {
         state.clients.push(newClient);
         state.currentClientId = newClient.id;
         
-        console.log('✅ Nuovo cliente creato');
+        console.log('✅ Nuovo cliente creato con data acquisizione: ' + newClient.acquisitionDate);
     }
 
     saveToStorage();
@@ -1409,8 +1417,11 @@ function generateReport() {
     
     // ===== RACCOLTA CLIENTI ACQUISITI =====
     const newClients = state.clients.filter(client => {
-        if (!client.createdAt) return false;
-        const clientDate = new Date(client.createdAt);
+        // Usa acquisitionDate se esiste, altrimenti createdAt come fallback
+        const dateToUse = client.acquisitionDate || client.createdAt;
+        if (!dateToUse) return false;
+        
+        const clientDate = new Date(dateToUse);
         return clientDate >= dateRange.from && clientDate <= dateRange.to;
     });
     
@@ -1452,9 +1463,12 @@ function renderClientsAcquiredTable(clients, dateRange) {
         // Contatti
         const contacts = [client.email, client.phone].filter(Boolean).join(' • ') || '-';
         
+        // Usa acquisitionDate se esiste, altrimenti createdAt
+        const displayDate = client.acquisitionDate || client.createdAt;
+        
         return `
             <tr onclick="selectClient('${client.id}'); closeReportView();" style="cursor: pointer;">
-                <td><strong>${formatDate(client.createdAt)}</strong></td>
+                <td><strong>${formatDate(displayDate)}</strong></td>
                 <td><strong>${client.name}</strong></td>
                 <td>${contacts}</td>
                 <td>${ordersCount}</td>
