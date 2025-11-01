@@ -1,23 +1,16 @@
 // ===== CONFIGURAZIONE FIREBASE =====
-// Sostituisci questi valori con le tue credenziali Firebase
-// 
-// COME OTTENERE LE CREDENZIALI:
-// 1. Vai su https://console.firebase.google.com/
-// 2. Seleziona il tuo progetto (o creane uno nuovo)
-// 3. Vai su Impostazioni Progetto (icona ingranaggio) > Generali
-// 4. Scorri in basso fino a "Le tue app"
-// 5. Se non hai ancora un'app web, click su "Aggiungi app" > Web (icona </>)
-// 6. Registra l'app (nome: "Gestionale")
-// 7. Copia i valori da "firebaseConfig" e incollali qui sotto
+// Credenziali del progetto: gestionale-a0cb6
+// Database: europe-west1
 
 const firebaseConfig = {
-    apiKey: "TUA_API_KEY",                          // es: "AIzaSyC..."
-    authDomain: "TUO_PROGETTO.firebaseapp.com",    // es: "mio-gestionale.firebaseapp.com"
-    databaseURL: "https://TUO_PROGETTO.firebaseio.com", // o "...europe-west1.firebasedatabase.app"
-    projectId: "TUO_PROGETTO_ID",                   // es: "mio-gestionale"
-    storageBucket: "TUO_PROGETTO.appspot.com",     // es: "mio-gestionale.appspot.com"
-    messagingSenderId: "123456789012",              // Numero di 12 cifre
-    appId: "1:123456789012:web:abcdef123456"       // ID app completo
+  apiKey: "AIzaSyCBUMEwdWXnPKaMdkhtPSMwouMFeyDlsH0",
+  authDomain: "gestionale-a0cb6.firebaseapp.com",
+  databaseURL: "https://gestionale-a0cb6-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "gestionale-a0cb6",
+  storageBucket: "gestionale-a0cb6.firebasestorage.app",
+  messagingSenderId: "138577304711",
+  appId: "1:138577304711:web:7c93e1fc4b62c5447dac22",
+  measurementId: "G-T0BGZHM5E4"
 };
 
 // IMPORTANTE: Abilita Realtime Database
