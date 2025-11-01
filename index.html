@@ -320,8 +320,29 @@
                     <input type="date" id="modalDocDate">
                 </div>
                 <div class="form-group">
+                    <label>Carica File (opzionale)</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="modalDocFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+                        <div class="file-input-display" id="docFileInputDisplay">
+                            <span class="file-input-icon">📁</span>
+                            <span class="file-input-text">Carica PDF, Word, Excel o immagine</span>
+                        </div>
+                    </div>
+                    <small style="color: var(--text-secondary); font-size: 12px;">
+                        💡 Carica il file del documento (fattura PDF, preventivo Word, etc.)
+                    </small>
+                </div>
+                <div class="form-group">
                     <label>Note</label>
                     <textarea id="modalDocNotes" rows="3"></textarea>
+                </div>
+                <div id="docFileInfo" class="file-info-display" style="display: none;">
+                    <div class="file-info-item">
+                        <strong>File:</strong> <span id="docFileInfoName"></span>
+                    </div>
+                    <div class="file-info-item">
+                        <strong>Dimensione:</strong> <span id="docFileInfoSize"></span>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

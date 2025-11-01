@@ -410,6 +410,7 @@ function setupEventListeners() {
     // Bottoni documenti
     document.getElementById('addDocumentBtn').addEventListener('click', openAddDocumentModal);
     document.getElementById('saveDocumentBtn').addEventListener('click', saveDocument);
+    document.getElementById('modalDocFileInput').addEventListener('change', handleDocFileSelect);
 
     // Bottoni note
     document.getElementById('addNoteBtn').addEventListener('click', openAddNoteModal);
@@ -657,30 +658,62 @@ function renderDocuments() {
     };
 
     documentsList.innerHTML = client.documents.map(doc => `
-        <div class="document-card">
+        <div class="document-card" ${doc.fileData ? 'onclick="downloadDocument(\'' + doc.id + '\')"' : ''} style="${doc.fileData ? 'cursor: pointer;' : ''}">
             <div class="document-card-header">
                 <div class="document-type">${docIcons[doc.type]}</div>
-                <button class="document-card-menu" onclick="deleteDocument('${doc.id}')">🗑️</button>
+                <button class="document-card-menu" onclick="event.stopPropagation(); deleteDocument('${doc.id}')">🗑️</button>
             </div>
             <div class="document-card-title">${docTypes[doc.type]}</div>
             <div class="document-card-number">${doc.number}</div>
+            ${doc.fileName ? `<p style="font-size: 12px; color: var(--primary); margin-top: 6px;">📎 ${doc.fileName}</p>` : ''}
             ${doc.notes ? `<p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">${doc.notes}</p>` : ''}
             <div class="document-card-footer">
                 <div class="document-card-amount">${formatCurrency(doc.amount)}</div>
                 <div class="document-card-date">${formatDate(doc.date)}</div>
             </div>
+            ${doc.fileData ? '<div style="position: absolute; top: 8px; right: 40px; background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">FILE</div>' : ''}
         </div>
     `).join('');
 }
 
 function openAddDocumentModal() {
     state.editMode = false;
+    state.selectedDocFile = null;
     document.getElementById('modalDocType').value = 'fattura';
     document.getElementById('modalDocNumber').value = '';
     document.getElementById('modalDocAmount').value = '';
     document.getElementById('modalDocDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('modalDocNotes').value = '';
+    document.getElementById('modalDocFileInput').value = '';
+    document.getElementById('docFileInputDisplay').classList.remove('has-file');
+    document.getElementById('docFileInputDisplay').querySelector('.file-input-text').textContent = 'Carica PDF, Word, Excel o immagine';
+    document.getElementById('docFileInfo').style.display = 'none';
     openModal('documentModal');
+}
+
+function handleDocFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Controllo dimensione (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('Il file è troppo grande! Dimensione massima: 5MB');
+        document.getElementById('modalDocFileInput').value = '';
+        return;
+    }
+
+    state.selectedDocFile = file;
+
+    // Aggiorna visualizzazione
+    const display = document.getElementById('docFileInputDisplay');
+    display.classList.add('has-file');
+    display.querySelector('.file-input-text').textContent = `✓ ${file.name} selezionato`;
+
+    // Mostra informazioni file
+    document.getElementById('docFileInfoName').textContent = file.name;
+    document.getElementById('docFileInfoSize').textContent = formatFileSize(file.size);
+    document.getElementById('docFileInfo').style.display = 'block';
 }
 
 function saveDocument() {
@@ -691,25 +724,74 @@ function saveDocument() {
         return;
     }
 
-    const document = {
-        id: generateId(),
-        type: document.getElementById('modalDocType').value,
-        number,
-        amount: parseFloat(document.getElementById('modalDocAmount').value) || 0,
-        date: document.getElementById('modalDocDate').value,
-        notes: document.getElementById('modalDocNotes').value.trim(),
-        createdAt: new Date().toISOString()
+    const saveDocumentData = (fileData = null, fileName = null, fileSize = null, fileMimeType = null) => {
+        const documentData = {
+            id: generateId(),
+            type: document.getElementById('modalDocType').value,
+            number,
+            amount: parseFloat(document.getElementById('modalDocAmount').value) || 0,
+            date: document.getElementById('modalDocDate').value,
+            notes: document.getElementById('modalDocNotes').value.trim(),
+            fileData: fileData,
+            fileName: fileName,
+            fileSize: fileSize,
+            fileMimeType: fileMimeType,
+            createdAt: new Date().toISOString()
+        };
+
+        const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+        if (!state.clients[clientIndex].documents) {
+            state.clients[clientIndex].documents = [];
+        }
+        state.clients[clientIndex].documents.push(documentData);
+
+        saveToStorage();
+        renderDocuments();
+        closeModal('documentModal');
+        
+        state.selectedDocFile = null;
     };
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
-    if (!state.clients[clientIndex].documents) {
-        state.clients[clientIndex].documents = [];
-    }
-    state.clients[clientIndex].documents.push(document);
+    // Se c'è un file selezionato, caricalo
+    if (state.selectedDocFile) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            saveDocumentData(
+                e.target.result, 
+                state.selectedDocFile.name,
+                state.selectedDocFile.size,
+                state.selectedDocFile.type
+            );
+        };
 
-    saveToStorage();
-    renderDocuments();
-    closeModal('documentModal');
+        reader.onerror = function() {
+            alert('Errore durante la lettura del file');
+        };
+
+        reader.readAsDataURL(state.selectedDocFile);
+    } else {
+        // Nessun file, salva solo i dati del documento
+        saveDocumentData();
+    }
+}
+
+function downloadDocument(docId) {
+    const client = state.clients.find(c => c.id === state.currentClientId);
+    const doc = client.documents.find(d => d.id === docId);
+    
+    if (!doc || !doc.fileData) {
+        alert('Nessun file associato a questo documento');
+        return;
+    }
+
+    // Crea link per download
+    const link = document.createElement('a');
+    link.href = doc.fileData;
+    link.download = doc.fileName || 'documento';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 function deleteDocument(docId) {
