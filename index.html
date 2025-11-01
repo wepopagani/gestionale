@@ -18,7 +18,7 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1>📊 Gestionale</h1>
-                <div class="cloud-status" id="cloudStatus">
+                <div class="cloud-status" id="cloudStatus" onclick="showCloudSettings()">
                     <span class="cloud-icon" title="Sincronizzazione cloud">☁️</span>
                     <span class="cloud-text">Locale</span>
                 </div>
@@ -387,6 +387,52 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeModal('orderModal')">Annulla</button>
                 <button class="btn-primary" id="saveOrderBtn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Impostazioni Cloud -->
+    <div class="modal" id="cloudSettingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>☁️ Impostazioni Cloud</h3>
+                <button class="modal-close" onclick="closeModal('cloudSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>User ID Attuale</label>
+                    <input type="text" id="currentUserId" readonly style="background: #f1f5f9;">
+                    <small style="color: var(--text-secondary); font-size: 12px;">
+                        ℹ️ Questo ID identifica i tuoi dati nel cloud
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label>📱 Sincronizza con altro dispositivo</label>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Per usare gli stessi dati su più dispositivi, copia questo User ID e incollalo nell'altro dispositivo.
+                    </p>
+                    <button class="btn-secondary" onclick="copyUserId()" style="width: 100%;">📋 Copia User ID</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>🔄 Importa User ID da altro dispositivo</label>
+                    <input type="text" id="importUserId" placeholder="Incolla User ID qui">
+                    <small style="color: var(--text-secondary); font-size: 12px;">
+                        ⚠️ Attenzione: Questo cambierà quale account cloud usi
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Stato Sincronizzazione</label>
+                    <div id="cloudSyncStatus" style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; font-size: 13px;">
+                        Caricamento...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('cloudSettingsModal')">Chiudi</button>
+                <button class="btn-primary" onclick="changeUserId()">💾 Cambia User ID</button>
             </div>
         </div>
     </div>

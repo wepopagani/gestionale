@@ -71,6 +71,13 @@ body {
     padding: 4px 10px;
     border-radius: 12px;
     background: var(--bg-tertiary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cloud-status:hover {
+    background: var(--border);
+    transform: scale(1.05);
 }
 
 .cloud-status.connected {

@@ -192,6 +192,119 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// ===== CLOUD SETTINGS =====
+function showCloudSettings() {
+    // Mostra User ID attuale
+    const currentId = localStorage.getItem('gestionale_user_id') || 'Non impostato';
+    document.getElementById('currentUserId').value = currentId;
+    
+    // Mostra stato sincronizzazione
+    updateCloudSyncStatusDisplay();
+    
+    openModal('cloudSettingsModal');
+}
+
+function updateCloudSyncStatusDisplay() {
+    const statusEl = document.getElementById('cloudSyncStatus');
+    
+    if (cloudSyncEnabled && firebaseDb) {
+        statusEl.innerHTML = '✅ <strong>Connesso al cloud</strong><br><small>I dati vengono sincronizzati automaticamente</small>';
+        statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
+        statusEl.style.color = 'var(--success)';
+    } else {
+        statusEl.innerHTML = '⚠️ <strong>Solo locale</strong><br><small>I dati sono salvati solo su questo dispositivo</small>';
+        statusEl.style.background = 'rgba(255, 170, 0, 0.1)';
+        statusEl.style.color = 'var(--warning)';
+    }
+}
+
+function copyUserId() {
+    const userIdInput = document.getElementById('currentUserId');
+    userIdInput.select();
+    userIdInput.setSelectionRange(0, 99999); // Per mobile
+    
+    try {
+        document.execCommand('copy');
+        showNotification('✅ User ID copiato! Incollalo nell\'altro dispositivo', 'success');
+    } catch (err) {
+        // Fallback per browser moderni
+        navigator.clipboard.writeText(userIdInput.value).then(() => {
+            showNotification('✅ User ID copiato! Incollalo nell\'altro dispositivo', 'success');
+        }).catch(() => {
+            alert('User ID: ' + userIdInput.value + '\n\nCopialo manualmente');
+        });
+    }
+}
+
+function changeUserId() {
+    const newUserId = document.getElementById('importUserId').value.trim();
+    
+    if (!newUserId) {
+        alert('Inserisci un User ID valido');
+        return;
+    }
+    
+    if (!newUserId.startsWith('user_')) {
+        alert('User ID non valido. Deve iniziare con "user_"');
+        return;
+    }
+    
+    const confirm = window.confirm(
+        '⚠️ ATTENZIONE!\n\n' +
+        'Cambiando User ID, questo dispositivo userà i dati dell\'altro dispositivo.\n\n' +
+        'I dati locali attuali verranno SOSTITUITI con quelli del cloud.\n\n' +
+        'Vuoi continuare?'
+    );
+    
+    if (!confirm) return;
+    
+    // Salva il nuovo user ID
+    const oldUserId = userId;
+    userId = newUserId;
+    localStorage.setItem('gestionale_user_id', newUserId);
+    
+    // Ricarica i dati dal cloud con il nuovo user ID
+    if (firebaseDb) {
+        const ref = firebaseDb.ref('clients/' + userId);
+        
+        ref.once('value', (snapshot) => {
+            const cloudData = snapshot.val();
+            
+            if (cloudData && Array.isArray(cloudData)) {
+                state.clients = cloudData;
+                saveToStorage();
+                renderClients();
+                
+                showNotification('✅ Sincronizzazione completata!', 'success');
+                closeModal('cloudSettingsModal');
+                
+                // Ricarica la pagina per applicare le modifiche
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert('⚠️ Nessun dato trovato nel cloud per questo User ID.\n\nI tuoi dati locali verranno caricati nel cloud.');
+                
+                // Carica i dati locali nel nuovo percorso cloud
+                ref.set(state.clients).then(() => {
+                    showNotification('✅ Dati caricati nel cloud!', 'success');
+                    closeModal('cloudSettingsModal');
+                });
+            }
+        }, (error) => {
+            alert('❌ Errore: ' + error.message);
+            // Ripristina old user ID in caso di errore
+            userId = oldUserId;
+            localStorage.setItem('gestionale_user_id', oldUserId);
+        });
+    } else {
+        // Nessuna connessione cloud, solo aggiorna locale
+        showNotification('✅ User ID aggiornato localmente', 'success');
+        closeModal('cloudSettingsModal');
+        location.reload();
+    }
+}
+
 // ===== STORAGE =====
 function saveToStorage() {
     localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
