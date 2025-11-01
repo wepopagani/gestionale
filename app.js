@@ -1289,6 +1289,9 @@ function openReportView() {
     // Reset filtri
     document.getElementById('reportPeriod').value = 'month';
     document.getElementById('reportStatus').value = 'all';
+    
+    // GENERA AUTOMATICAMENTE IL REPORT
+    generateReport();
 }
 
 function closeReportView() {
