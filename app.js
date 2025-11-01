@@ -10,7 +10,8 @@ let state = {
     currentClientId: null,
     editMode: false,
     editItemId: null,
-    reportData: []
+    reportData: [],
+    orderCounter: 1 // Counter per numeri ordine sequenziali
 };
 
 // ===== INIZIALIZZAZIONE =====
@@ -194,6 +195,7 @@ function showNotification(message, type = 'info') {
 // ===== STORAGE =====
 function saveToStorage() {
     localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
+    localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
     saveToCloud();
 }
 
@@ -202,6 +204,40 @@ function loadFromStorage() {
     if (data) {
         state.clients = JSON.parse(data);
     }
+    
+    // Carica il counter degli ordini
+    const counter = localStorage.getItem('gestionale_order_counter');
+    if (counter) {
+        state.orderCounter = parseInt(counter);
+    } else {
+        // Se non esiste, calcola il counter basato sugli ordini esistenti
+        state.orderCounter = calculateNextOrderNumber();
+    }
+}
+
+// Calcola il prossimo numero ordine basato sugli ordini esistenti
+function calculateNextOrderNumber() {
+    let maxNumber = 0;
+    const currentYear = new Date().getFullYear();
+    
+    state.clients.forEach(client => {
+        if (client.orders) {
+            client.orders.forEach(order => {
+                // Cerca pattern ORD-YYYY-XXX
+                const match = order.number.match(/ORD-(\d{4})-(\d+)/);
+                if (match) {
+                    const year = parseInt(match[1]);
+                    const num = parseInt(match[2]);
+                    // Solo ordini dell'anno corrente
+                    if (year === currentYear && num > maxNumber) {
+                        maxNumber = num;
+                    }
+                }
+            });
+        }
+    });
+    
+    return maxNumber + 1;
 }
 
 // ===== UTILITIES =====
@@ -218,6 +254,17 @@ function formatDate(date) {
 function formatCurrency(amount) {
     if (!amount) return '€ 0,00';
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount);
+}
+
+function generateOrderNumber() {
+    const year = new Date().getFullYear();
+    const paddedNumber = state.orderCounter.toString().padStart(3, '0');
+    return `ORD-${year}-${paddedNumber}`;
+}
+
+function incrementOrderCounter() {
+    state.orderCounter++;
+    saveToStorage();
 }
 
 function closeModal(modalId) {
@@ -687,7 +734,13 @@ function openAddOrderModal() {
     state.editMode = false;
     state.editItemId = null;
     document.getElementById('modalOrderTitle').textContent = 'Nuovo Ordine';
-    document.getElementById('modalOrderNumber').value = '';
+    
+    // Auto-compila numero ordine sequenziale
+    document.getElementById('modalOrderNumber').value = generateOrderNumber();
+    document.getElementById('modalOrderNumber').setAttribute('readonly', true);
+    document.getElementById('modalOrderNumber').style.background = '#f1f5f9';
+    document.getElementById('modalOrderNumber').style.cursor = 'not-allowed';
+    
     document.getElementById('modalOrderDescription').value = '';
     document.getElementById('modalOrderAmount').value = '';
     document.getElementById('modalOrderDate').value = new Date().toISOString().split('T')[0];
@@ -704,7 +757,13 @@ function editOrder(orderId) {
     state.editMode = true;
     state.editItemId = orderId;
     document.getElementById('modalOrderTitle').textContent = 'Modifica Ordine';
+    
+    // In modifica, permetti di modificare il numero ordine
     document.getElementById('modalOrderNumber').value = order.number;
+    document.getElementById('modalOrderNumber').removeAttribute('readonly');
+    document.getElementById('modalOrderNumber').style.background = '';
+    document.getElementById('modalOrderNumber').style.cursor = '';
+    
     document.getElementById('modalOrderDescription').value = order.description;
     document.getElementById('modalOrderAmount').value = order.amount;
     document.getElementById('modalOrderDate').value = order.date;
@@ -751,6 +810,9 @@ function saveOrder() {
             state.clients[clientIndex].orders = [];
         }
         state.clients[clientIndex].orders.push(order);
+        
+        // Incrementa il counter per il prossimo ordine
+        incrementOrderCounter();
     }
 
     saveToStorage();
