@@ -655,6 +655,32 @@ body {
     color: #991b1b;
 }
 
+/* Payment status */
+.payment-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.payment-status.pagato {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.payment-status.non_pagato {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.payment-status.parziale {
+    background: #fef3c7;
+    color: #92400e;
+}
+
 .order-card-footer {
     display: flex;
     justify-content: space-between;
@@ -687,6 +713,25 @@ body {
     background: var(--bg-primary);
     border: 2px dashed var(--border);
     border-radius: 12px;
+}
+
+/* Bottone indietro mobile */
+.btn-back-mobile {
+    display: none;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+    color: var(--text-primary);
+}
+
+.btn-back-mobile:hover {
+    background: var(--bg-tertiary);
 }
 
 /* Report View */
@@ -1140,13 +1185,22 @@ body {
 @media (max-width: 768px) {
     .app {
         flex-direction: column;
+        position: relative;
     }
 
     .sidebar {
         width: 100%;
-        max-height: 40vh;
+        height: 100vh;
         border-right: none;
         border-bottom: 1px solid var(--border);
+        transition: transform 0.3s ease;
+    }
+    
+    /* Nascondi sidebar quando si visualizza un cliente */
+    .sidebar.hidden-mobile {
+        transform: translateX(-100%);
+        position: absolute;
+        z-index: -1;
     }
 
     .sidebar-header {
@@ -1167,8 +1221,27 @@ body {
 
     .main-content {
         padding: 16px;
-        height: 60vh;
+        height: 100vh;
         overflow-y: auto;
+        transition: all 0.3s ease;
+    }
+    
+    /* Schermo intero su mobile quando si visualizza un cliente */
+    .main-content.fullscreen-mobile {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100vh;
+        z-index: 100;
+        background: var(--bg-secondary);
+    }
+    
+    /* Mostra bottone indietro su mobile */
+    .btn-back-mobile {
+        display: block;
     }
 
     .empty-state {

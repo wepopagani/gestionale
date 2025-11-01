@@ -161,6 +161,11 @@
             </div>
 
             <div class="client-detail" id="clientDetail" style="display: none;">
+                <!-- Bottone Indietro Mobile -->
+                <button class="btn-back-mobile" id="backToListBtn" onclick="backToClientList()">
+                    ← Torna alla Lista
+                </button>
+                
                 <!-- Header Cliente -->
                 <div class="client-header">
                     <div class="client-header-info">
@@ -307,7 +312,7 @@
                     <input type="text" id="modalDocNumber" placeholder="es. FT-2025-001">
                 </div>
                 <div class="form-group">
-                    <label>Importo (€)</label>
+                    <label>Importo (CHF)</label>
                     <input type="number" id="modalDocAmount" step="0.01" placeholder="0.00">
                 </div>
                 <div class="form-group">
@@ -367,7 +372,7 @@
                     <textarea id="modalOrderDescription" rows="3" required></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Importo (€)</label>
+                    <label>Importo (CHF)</label>
                     <input type="number" id="modalOrderAmount" step="0.01" placeholder="0.00">
                 </div>
                 <div class="form-group">
@@ -381,6 +386,26 @@
                         <option value="completato">✅ Completato</option>
                         <option value="in_attesa">⏳ In Attesa</option>
                         <option value="annullato">❌ Annullato</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>💳 Stato Pagamento *</label>
+                    <select id="modalOrderPaymentStatus">
+                        <option value="non_pagato">❌ Non Pagato</option>
+                        <option value="parziale">⏳ Pagamento Parziale</option>
+                        <option value="pagato">✅ Pagato</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Metodo Pagamento</label>
+                    <select id="modalOrderPaymentMethod">
+                        <option value="">-- Seleziona --</option>
+                        <option value="contanti">💵 Contanti</option>
+                        <option value="bonifico">🏦 Bonifico</option>
+                        <option value="carta">💳 Carta</option>
+                        <option value="twint">📱 TWINT</option>
+                        <option value="paypal">🅿️ PayPal</option>
+                        <option value="altro">📋 Altro</option>
                     </select>
                 </div>
             </div>

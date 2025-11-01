@@ -359,8 +359,8 @@ function formatDate(date) {
 }
 
 function formatCurrency(amount) {
-    if (!amount) return '€ 0,00';
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount);
+    if (!amount) return 'CHF 0.00';
+    return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' }).format(amount);
 }
 
 function generateOrderNumber() {
@@ -511,6 +511,12 @@ function selectClient(clientId) {
     // Nascondi empty state, mostra dettagli
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'block';
+    
+    // Su mobile, nascondi la sidebar quando si apre un cliente
+    if (window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.add('hidden-mobile');
+        document.querySelector('.main-content').classList.add('fullscreen-mobile');
+    }
 
     // Aggiorna header
     document.getElementById('clientName').textContent = client.name;
@@ -525,6 +531,17 @@ function selectClient(clientId) {
     renderFiles();
     renderNotes();
     renderOrders();
+}
+
+function backToClientList() {
+    // Mostra sidebar, nascondi dettagli (solo su mobile)
+    document.querySelector('.sidebar').classList.remove('hidden-mobile');
+    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
+    document.getElementById('clientDetail').style.display = 'none';
+    
+    if (state.clients.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+    }
 }
 
 function openAddClientModal() {
@@ -826,15 +843,36 @@ function renderOrders() {
         'in_attesa': '⏳ In Attesa',
         'annullato': '❌ Annullato'
     };
+    
+    const paymentLabels = {
+        'pagato': '✅ Pagato',
+        'non_pagato': '❌ Non Pagato',
+        'parziale': '⏳ Parziale'
+    };
 
-    ordersList.innerHTML = client.orders.map(order => `
+    ordersList.innerHTML = client.orders.map(order => {
+        const paymentStatus = order.paymentStatus || 'non_pagato';
+        const paymentMethod = order.paymentMethod || '';
+        const methodLabels = {
+            'contanti': '💵',
+            'bonifico': '🏦',
+            'carta': '💳',
+            'twint': '📱',
+            'paypal': '🅿️',
+            'altro': '📋'
+        };
+        
+        return `
         <div class="order-card">
             <div class="order-card-header">
                 <div class="order-card-info">
                     <h4>${order.number}</h4>
                     <div class="order-card-description">${order.description}</div>
                 </div>
-                <span class="order-status ${order.status}">${statusLabels[order.status]}</span>
+                <div style="display: flex; gap: 8px; flex-direction: column; align-items: flex-end;">
+                    <span class="order-status ${order.status}">${statusLabels[order.status]}</span>
+                    <span class="payment-status ${paymentStatus}">${paymentLabels[paymentStatus]}${paymentMethod ? ' ' + methodLabels[paymentMethod] : ''}</span>
+                </div>
             </div>
             <div class="order-card-footer">
                 <div class="order-card-amount">${formatCurrency(order.amount)}</div>
@@ -845,7 +883,8 @@ function renderOrders() {
                 </div>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function openAddOrderModal() {
@@ -863,6 +902,8 @@ function openAddOrderModal() {
     document.getElementById('modalOrderAmount').value = '';
     document.getElementById('modalOrderDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('modalOrderStatus').value = 'in_lavorazione';
+    document.getElementById('modalOrderPaymentStatus').value = 'non_pagato';
+    document.getElementById('modalOrderPaymentMethod').value = '';
     openModal('orderModal');
 }
 
@@ -886,6 +927,8 @@ function editOrder(orderId) {
     document.getElementById('modalOrderAmount').value = order.amount;
     document.getElementById('modalOrderDate').value = order.date;
     document.getElementById('modalOrderStatus').value = order.status;
+    document.getElementById('modalOrderPaymentStatus').value = order.paymentStatus || 'non_pagato';
+    document.getElementById('modalOrderPaymentMethod').value = order.paymentMethod || '';
     openModal('orderModal');
 }
 
@@ -900,27 +943,29 @@ function saveOrder() {
 
     const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
     
+    const orderData = {
+        number,
+        description,
+        amount: parseFloat(document.getElementById('modalOrderAmount').value) || 0,
+        date: document.getElementById('modalOrderDate').value,
+        status: document.getElementById('modalOrderStatus').value,
+        paymentStatus: document.getElementById('modalOrderPaymentStatus').value,
+        paymentMethod: document.getElementById('modalOrderPaymentMethod').value
+    };
+    
     if (state.editMode && state.editItemId) {
         // Modifica ordine esistente
         const orderIndex = state.clients[clientIndex].orders.findIndex(o => o.id === state.editItemId);
         state.clients[clientIndex].orders[orderIndex] = {
             ...state.clients[clientIndex].orders[orderIndex],
-            number,
-            description,
-            amount: parseFloat(document.getElementById('modalOrderAmount').value) || 0,
-            date: document.getElementById('modalOrderDate').value,
-            status: document.getElementById('modalOrderStatus').value,
+            ...orderData,
             updatedAt: new Date().toISOString()
         };
     } else {
         // Nuovo ordine
         const order = {
             id: generateId(),
-            number,
-            description,
-            amount: parseFloat(document.getElementById('modalOrderAmount').value) || 0,
-            date: document.getElementById('modalOrderDate').value,
-            status: document.getElementById('modalOrderStatus').value,
+            ...orderData,
             createdAt: new Date().toISOString()
         };
 
