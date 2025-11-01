@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestionale Clienti</title>
-    <link rel="stylesheet" href="style.css">
+    <title>3DMAKES - Gestionale Clienti</title>
+    <link rel="stylesheet" href="style.css?v=2.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Firebase -->
@@ -17,7 +17,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="logo.svg" alt="3DMAKES" class="logo">
+                <img src="logo.png" alt="3DMAKES" class="logo">
                 <div class="cloud-status" id="cloudStatus" onclick="showCloudSettings()">
                     <span class="cloud-icon" title="Sincronizzazione cloud">☁️</span>
                     <span class="cloud-text">Locale</span>
@@ -29,7 +29,7 @@
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
-                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📊 Report Ordini</button>
+                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📊 Report Completo</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -46,12 +46,12 @@
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
             </div>
 
-            <!-- Report View -->
+            <!-- Report View Unificato -->
             <div class="report-view" id="reportView" style="display: none;">
                 <div class="report-header">
                     <div>
-                        <h2>📊 Report Ordini</h2>
-                        <p>Analisi e statistiche degli ordini per periodo</p>
+                        <h2>📊 Report Completo</h2>
+                        <p>Analisi ordini e clienti acquisiti per periodo</p>
                     </div>
                     <button class="btn-secondary" id="closeReportBtn">✕ Chiudi</button>
                 </div>
@@ -100,6 +100,13 @@
                 <!-- Report Summary -->
                 <div class="report-summary" id="reportSummary">
                     <div class="summary-card">
+                        <div class="summary-icon">👥</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Nuovi Clienti</div>
+                            <div class="summary-value" id="totalNewClients">0</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
                         <div class="summary-icon">📦</div>
                         <div class="summary-content">
                             <div class="summary-label">Totale Ordini</div>
@@ -110,7 +117,7 @@
                         <div class="summary-icon">💰</div>
                         <div class="summary-content">
                             <div class="summary-label">Valore Totale</div>
-                            <div class="summary-value" id="totalRevenue">€ 0,00</div>
+                            <div class="summary-value" id="totalRevenue">CHF 0.00</div>
                         </div>
                     </div>
                     <div class="summary-card">
@@ -120,11 +127,29 @@
                             <div class="summary-value" id="completedOrders">0</div>
                         </div>
                     </div>
-                    <div class="summary-card">
-                        <div class="summary-icon">📈</div>
-                        <div class="summary-content">
-                            <div class="summary-label">Media Ordine</div>
-                            <div class="summary-value" id="avgOrderValue">€ 0,00</div>
+                </div>
+                
+                <!-- Sezione Clienti Acquisiti -->
+                <div class="report-section">
+                    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 16px;">👥 Clienti Acquisiti</h3>
+                    <div class="report-table-container" style="margin-bottom: 32px;">
+                        <div class="report-table-wrapper">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data Registrazione</th>
+                                        <th>Cliente</th>
+                                        <th>Contatti</th>
+                                        <th>N° Ordini</th>
+                                        <th>Valore Totale</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientsAcquiredTableBody">
+                                    <tr>
+                                        <td colspan="5" class="empty-report">Nessun nuovo cliente in questo periodo</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -525,7 +550,7 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2.1"></script>
 </body>
 </html>
 

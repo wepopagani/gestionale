@@ -1,3 +1,8 @@
+// Versione 2.1 - CHF currency + Reports + Payments
+// Ultimo aggiornamento: Sat Nov  1 19:02:58 CET 2025
+console.log('✅ Gestionale 3DMAKES v2.1 caricato');
+console.log('💰 Valuta: CHF (Franchi Svizzeri)');
+
 // ===== FIREBASE SETUP =====
 // Configurazione caricata da firebase-config.js
 let firebaseDb = null;
@@ -1261,9 +1266,14 @@ function deleteFile(fileId) {
 
 // ===== REPORT SYSTEM =====
 function openReportView() {
+    // Nascondo TUTTO tranne il report
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('reportView').style.display = 'block';
+    
+    // Su mobile, rimuovi classi fullscreen
+    document.querySelector('.sidebar').classList.remove('hidden-mobile');
+    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
     
     // Popola dropdown clienti
     const clientSelect = document.getElementById('reportClient');
@@ -1287,6 +1297,11 @@ function closeReportView() {
         document.getElementById('emptyState').style.display = 'block';
     } else if (state.currentClientId) {
         document.getElementById('clientDetail').style.display = 'block';
+        // Ripristina fullscreen mobile se necessario
+        if (window.innerWidth <= 768) {
+            document.querySelector('.sidebar').classList.add('hidden-mobile');
+            document.querySelector('.main-content').classList.add('fullscreen-mobile');
+        }
     } else {
         document.getElementById('emptyState').style.display = 'block';
     }
@@ -1357,7 +1372,7 @@ function generateReport() {
     
     const dateRange = getDateRange(period);
     
-    // Raccolta ordini da tutti i clienti
+    // ===== RACCOLTA ORDINI =====
     const allOrders = [];
     
     state.clients.forEach(client => {
@@ -1388,20 +1403,61 @@ function generateReport() {
     
     state.reportData = allOrders;
     
-    // Calcola statistiche
+    // ===== RACCOLTA CLIENTI ACQUISITI =====
+    const newClients = state.clients.filter(client => {
+        if (!client.createdAt) return false;
+        const clientDate = new Date(client.createdAt);
+        return clientDate >= dateRange.from && clientDate <= dateRange.to;
+    });
+    
+    // Ordina per data registrazione
+    newClients.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // ===== CALCOLA STATISTICHE =====
     const totalOrders = allOrders.length;
     const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
     const completedOrders = allOrders.filter(o => o.status === 'completato').length;
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const totalNewClients = newClients.length;
     
     // Aggiorna summary
+    document.getElementById('totalNewClients').textContent = totalNewClients;
     document.getElementById('totalOrders').textContent = totalOrders;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('completedOrders').textContent = completedOrders;
-    document.getElementById('avgOrderValue').textContent = formatCurrency(avgOrderValue);
     
-    // Renderizza tabella
+    // Renderizza tabelle
+    renderClientsAcquiredTable(newClients, dateRange);
     renderReportTable(allOrders);
+}
+
+function renderClientsAcquiredTable(clients, dateRange) {
+    const tbody = document.getElementById('clientsAcquiredTableBody');
+    
+    if (clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-report">Nessun nuovo cliente in questo periodo</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = clients.map(client => {
+        // Conta ordini del cliente
+        const ordersCount = client.orders ? client.orders.length : 0;
+        
+        // Calcola valore totale ordini
+        const totalValue = client.orders ? client.orders.reduce((sum, o) => sum + (o.amount || 0), 0) : 0;
+        
+        // Contatti
+        const contacts = [client.email, client.phone].filter(Boolean).join(' • ') || '-';
+        
+        return `
+            <tr onclick="selectClient('${client.id}'); closeReportView();" style="cursor: pointer;">
+                <td><strong>${formatDate(client.createdAt)}</strong></td>
+                <td><strong>${client.name}</strong></td>
+                <td>${contacts}</td>
+                <td>${ordersCount}</td>
+                <td class="report-amount">${formatCurrency(totalValue)}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function renderReportTable(orders) {
