@@ -578,31 +578,39 @@ function saveClient() {
         return;
     }
 
-    const clientData = {
-        name,
-        email: document.getElementById('modalClientEmail').value.trim(),
-        phone: document.getElementById('modalClientPhone').value.trim(),
-        address: document.getElementById('modalClientAddress').value.trim(),
-        vat: document.getElementById('modalClientVat').value.trim(),
-        documents: [],
-        files: [],
-        notes: [],
-        orders: []
-    };
-
     if (state.editMode) {
-        // Modifica cliente esistente
+        // Modifica cliente esistente - PRESERVA i dati esistenti!
         const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
-        state.clients[clientIndex] = { ...state.clients[clientIndex], ...clientData };
+        
+        // Aggiorna SOLO i campi del form, mantieni tutto il resto
+        state.clients[clientIndex].name = name;
+        state.clients[clientIndex].email = document.getElementById('modalClientEmail').value.trim();
+        state.clients[clientIndex].phone = document.getElementById('modalClientPhone').value.trim();
+        state.clients[clientIndex].address = document.getElementById('modalClientAddress').value.trim();
+        state.clients[clientIndex].vat = document.getElementById('modalClientVat').value.trim();
+        state.clients[clientIndex].updatedAt = new Date().toISOString();
+        
+        console.log('✅ Cliente aggiornato - dati preservati');
     } else {
-        // Nuovo cliente
+        // Nuovo cliente - inizializza con array vuoti
         const newClient = {
             id: generateId(),
-            ...clientData,
+            name,
+            email: document.getElementById('modalClientEmail').value.trim(),
+            phone: document.getElementById('modalClientPhone').value.trim(),
+            address: document.getElementById('modalClientAddress').value.trim(),
+            vat: document.getElementById('modalClientVat').value.trim(),
+            documents: [],
+            files: [],
+            notes: [],
+            orders: [],
             createdAt: new Date().toISOString()
         };
+        
         state.clients.push(newClient);
         state.currentClientId = newClient.id;
+        
+        console.log('✅ Nuovo cliente creato');
     }
 
     saveToStorage();
