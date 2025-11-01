@@ -711,6 +711,25 @@ body {
     gap: 8px;
 }
 
+/* Expense cards */
+.expense-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s;
+}
+
+.expense-card:hover {
+    box-shadow: var(--shadow);
+}
+
+.expense-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
 /* Empty section */
 .empty-section {
     text-align: center;

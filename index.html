@@ -30,6 +30,7 @@
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
                 <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📊 Report Completo</button>
+                <button class="btn-secondary" id="viewExpensesBtn" style="margin-top: 8px; width: 100%;">💸 Gestione Uscite</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -44,6 +45,26 @@
                 <h2>Benvenuto nel tuo Gestionale</h2>
                 <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
+            </div>
+
+            <!-- Expenses View -->
+            <div class="report-view" id="expensesView" style="display: none;">
+                <div class="report-header">
+                    <div>
+                        <h2>💸 Gestione Uscite</h2>
+                        <p>Registra tutte le spese aziendali</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-primary" id="addExpenseBtn">+ Nuova Uscita</button>
+                        <button class="btn-secondary" id="closeExpensesBtn">✕ Chiudi</button>
+                    </div>
+                </div>
+
+                <div class="expenses-list" id="expensesList">
+                    <div class="empty-section">
+                        <p>Nessuna uscita registrata</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Report View Unificato -->
@@ -114,8 +135,22 @@
                     <div class="summary-card">
                         <div class="summary-icon">💰</div>
                         <div class="summary-content">
-                            <div class="summary-label">Valore Totale</div>
+                            <div class="summary-label">Incassi Totali</div>
                             <div class="summary-value" id="totalRevenue">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">💸</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Uscite Totali</div>
+                            <div class="summary-value" id="totalExpenses">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon">📊</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Bilancio</div>
+                            <div class="summary-value" id="totalBalance">CHF 0.00</div>
                         </div>
                     </div>
                     <div class="summary-card">
@@ -145,6 +180,30 @@
                                 <tbody id="clientsAcquiredTableBody">
                                     <tr>
                                         <td colspan="5" class="empty-report">Nessun nuovo cliente in questo periodo</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sezione Uscite/Spese -->
+                <div class="report-section">
+                    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 16px;">💸 Uscite/Spese</h3>
+                    <div class="report-table-container" style="margin-bottom: 32px;">
+                        <div class="report-table-wrapper">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Descrizione</th>
+                                        <th>Categoria</th>
+                                        <th>Importo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expensesTableBody">
+                                    <tr>
+                                        <td colspan="4" class="empty-report">Nessuna uscita in questo periodo</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -510,6 +569,52 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeModal('cloudSettingsModal')">Chiudi</button>
                 <button class="btn-primary" onclick="changeUserId()">💾 Cambia User ID</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Uscita/Spesa -->
+    <div class="modal" id="expenseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalExpenseTitle">Nuova Uscita</h3>
+                <button class="modal-close" onclick="closeModal('expenseModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Data *</label>
+                    <input type="date" id="modalExpenseDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Descrizione *</label>
+                    <textarea id="modalExpenseDescription" rows="3" required placeholder="Descrivi la spesa..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Categoria *</label>
+                    <select id="modalExpenseCategory">
+                        <option value="materiali">🔧 Materiali</option>
+                        <option value="fornitori">🏭 Fornitori</option>
+                        <option value="stipendi">👤 Stipendi</option>
+                        <option value="affitto">🏢 Affitto/Utenze</option>
+                        <option value="trasporti">🚗 Trasporti</option>
+                        <option value="marketing">📢 Marketing</option>
+                        <option value="software">💻 Software/Abbonamenti</option>
+                        <option value="tasse">📋 Tasse/Imposte</option>
+                        <option value="altro">📁 Altro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Importo (CHF) *</label>
+                    <input type="number" id="modalExpenseAmount" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label>Note</label>
+                    <textarea id="modalExpenseNotes" rows="2" placeholder="Note aggiuntive..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('expenseModal')">Annulla</button>
+                <button class="btn-primary" id="saveExpenseBtn">Salva</button>
             </div>
         </div>
     </div>

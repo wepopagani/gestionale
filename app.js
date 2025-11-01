@@ -16,7 +16,8 @@ let state = {
     editMode: false,
     editItemId: null,
     reportData: [],
-    orderCounter: 1 // Counter per numeri ordine sequenziali
+    orderCounter: 1, // Counter per numeri ordine sequenziali
+    expenses: [] // Uscite/Spese aziendali
 };
 
 // ===== INIZIALIZZAZIONE =====
@@ -305,6 +306,7 @@ function changeUserId() {
 // ===== STORAGE =====
 function saveToStorage() {
     localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
+    localStorage.setItem('gestionale_expenses', JSON.stringify(state.expenses));
     localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
     saveToCloud();
     saveCounterToCloud(); // Salva anche il counter nel cloud
@@ -314,6 +316,12 @@ function loadFromStorage() {
     const data = localStorage.getItem('gestionale_data');
     if (data) {
         state.clients = JSON.parse(data);
+    }
+    
+    // Carica uscite
+    const expenses = localStorage.getItem('gestionale_expenses');
+    if (expenses) {
+        state.expenses = JSON.parse(expenses);
     }
     
     // Il counter verrà caricato dal cloud in setupCloudSync
@@ -433,10 +441,15 @@ function setupEventListeners() {
     // Bottoni report
     document.getElementById('viewReportsBtn').addEventListener('click', openReportView);
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
-    document.getElementById('generateReportBtn').addEventListener('click', generateReport);
     document.getElementById('reportPeriod').addEventListener('change', handlePeriodChange);
     document.getElementById('exportCSVBtn').addEventListener('click', exportToCSV);
     document.getElementById('printReportBtn').addEventListener('click', printReport);
+    
+    // Bottoni uscite
+    document.getElementById('viewExpensesBtn').addEventListener('click', openExpensesView);
+    document.getElementById('closeExpensesBtn').addEventListener('click', closeExpensesView);
+    document.getElementById('addExpenseBtn').addEventListener('click', openAddExpenseModal);
+    document.getElementById('saveExpenseBtn').addEventListener('click', saveExpense);
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1273,6 +1286,160 @@ function deleteFile(fileId) {
     renderFiles();
 }
 
+// ===== USCITE/SPESE =====
+function openExpensesView() {
+    // Nascondo tutto tranne expenses view
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('reportView').style.display = 'none';
+    document.getElementById('expensesView').style.display = 'block';
+    
+    // Su mobile, rimuovi classi fullscreen
+    document.querySelector('.sidebar').classList.remove('hidden-mobile');
+    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
+    
+    renderExpenses();
+}
+
+function closeExpensesView() {
+    document.getElementById('expensesView').style.display = 'none';
+    
+    if (state.clients.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+    } else if (state.currentClientId) {
+        document.getElementById('clientDetail').style.display = 'block';
+        if (window.innerWidth <= 768) {
+            document.querySelector('.sidebar').classList.add('hidden-mobile');
+            document.querySelector('.main-content').classList.add('fullscreen-mobile');
+        }
+    } else {
+        document.getElementById('emptyState').style.display = 'block';
+    }
+}
+
+function renderExpenses() {
+    const expensesList = document.getElementById('expensesList');
+    
+    if (state.expenses.length === 0) {
+        expensesList.innerHTML = '<div class="empty-section"><p>Nessuna uscita registrata</p></div>';
+        return;
+    }
+    
+    const categoryLabels = {
+        'materiali': '🔧 Materiali',
+        'fornitori': '🏭 Fornitori',
+        'stipendi': '👤 Stipendi',
+        'affitto': '🏢 Affitto/Utenze',
+        'trasporti': '🚗 Trasporti',
+        'marketing': '📢 Marketing',
+        'software': '💻 Software',
+        'tasse': '📋 Tasse',
+        'altro': '📁 Altro'
+    };
+    
+    // Ordina per data (più recenti prima)
+    const sortedExpenses = [...state.expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    expensesList.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' + 
+        sortedExpenses.map(expense => `
+        <div class="expense-card">
+            <div class="expense-card-header">
+                <div>
+                    <h4 style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">${expense.description}</h4>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        ${categoryLabels[expense.category]} • ${formatDate(expense.date)}
+                    </div>
+                </div>
+                <div class="expense-card-amount" style="font-size: 20px; font-weight: 700; color: var(--danger);">
+                    ${formatCurrency(expense.amount)}
+                </div>
+            </div>
+            ${expense.notes ? `<div style="font-size: 13px; color: var(--text-secondary); margin-top: 8px; font-style: italic;">${expense.notes}</div>` : ''}
+            <div class="expense-card-actions" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="btn-small" onclick="editExpense('${expense.id}')" style="padding: 4px 12px; font-size: 12px;">✏️</button>
+                <button class="btn-danger" onclick="deleteExpense('${expense.id}')" style="padding: 4px 12px; font-size: 12px;">🗑️</button>
+            </div>
+        </div>
+    `).join('') + '</div>';
+}
+
+function openAddExpenseModal() {
+    state.editMode = false;
+    state.editItemId = null;
+    document.getElementById('modalExpenseTitle').textContent = 'Nuova Uscita';
+    document.getElementById('modalExpenseDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('modalExpenseDescription').value = '';
+    document.getElementById('modalExpenseCategory').value = 'materiali';
+    document.getElementById('modalExpenseAmount').value = '';
+    document.getElementById('modalExpenseNotes').value = '';
+    openModal('expenseModal');
+}
+
+function editExpense(expenseId) {
+    const expense = state.expenses.find(e => e.id === expenseId);
+    if (!expense) return;
+    
+    state.editMode = true;
+    state.editItemId = expenseId;
+    document.getElementById('modalExpenseTitle').textContent = 'Modifica Uscita';
+    document.getElementById('modalExpenseDate').value = expense.date;
+    document.getElementById('modalExpenseDescription').value = expense.description;
+    document.getElementById('modalExpenseCategory').value = expense.category;
+    document.getElementById('modalExpenseAmount').value = expense.amount;
+    document.getElementById('modalExpenseNotes').value = expense.notes || '';
+    openModal('expenseModal');
+}
+
+function saveExpense() {
+    const description = document.getElementById('modalExpenseDescription').value.trim();
+    const amount = parseFloat(document.getElementById('modalExpenseAmount').value);
+    
+    if (!description || !amount || amount <= 0) {
+        alert('Descrizione e importo sono obbligatori');
+        return;
+    }
+    
+    const expenseData = {
+        date: document.getElementById('modalExpenseDate').value,
+        description,
+        category: document.getElementById('modalExpenseCategory').value,
+        amount,
+        notes: document.getElementById('modalExpenseNotes').value.trim()
+    };
+    
+    if (state.editMode && state.editItemId) {
+        // Modifica uscita esistente
+        const expenseIndex = state.expenses.findIndex(e => e.id === state.editItemId);
+        state.expenses[expenseIndex] = {
+            ...state.expenses[expenseIndex],
+            ...expenseData,
+            updatedAt: new Date().toISOString()
+        };
+    } else {
+        // Nuova uscita
+        const newExpense = {
+            id: generateId(),
+            ...expenseData,
+            createdAt: new Date().toISOString()
+        };
+        state.expenses.push(newExpense);
+    }
+    
+    saveToStorage();
+    renderExpenses();
+    closeModal('expenseModal');
+}
+
+function deleteExpense(expenseId) {
+    if (!confirm('Sei sicuro di voler eliminare questa uscita?')) {
+        return;
+    }
+    
+    state.expenses = state.expenses.filter(e => e.id !== expenseId);
+    saveToStorage();
+    renderExpenses();
+}
+
 // ===== REPORT SYSTEM =====
 function openReportView() {
     // Nascondo TUTTO tranne il report
@@ -1470,25 +1637,89 @@ function generateReport() {
     
     console.log(`👥 Clienti acquisiti trovati: ${newClients.length}`);
     
-    // ===== CALCOLA STATISTICHE =====
+    // ===== CALCOLA INCASSI (SOLO ORDINI PAGATI!) =====
+    const paidOrders = allOrders.filter(o => o.paymentStatus === 'pagato');
+    const partiallyPaidOrders = allOrders.filter(o => o.paymentStatus === 'parziale');
+    
+    // Incassi = solo ordini con stato pagamento 'pagato'
+    const totalRevenue = paidOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+    
+    // ===== CALCOLA USCITE =====
+    const periodExpenses = state.expenses.filter(expense => {
+        if (!expense.date) return false;
+        const expenseDate = new Date(expense.date);
+        expenseDate.setHours(12, 0, 0, 0);
+        return expenseDate >= dateRange.from && expenseDate <= dateRange.to;
+    });
+    
+    const totalExpenses = periodExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+    
+    // ===== BILANCIO =====
+    const balance = totalRevenue - totalExpenses;
+    
+    // ===== ALTRE STATISTICHE =====
     const totalOrders = allOrders.length;
-    const totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
     const completedOrders = allOrders.filter(o => o.status === 'completato').length;
     const totalNewClients = newClients.length;
     
-    console.log('📊 Statistiche:', { totalNewClients, totalOrders, totalRevenue, completedOrders });
+    console.log('📊 Statistiche:', {
+        totalNewClients,
+        totalOrders,
+        paidOrders: paidOrders.length,
+        totalRevenue,
+        totalExpenses,
+        balance,
+        completedOrders
+    });
     
     // Aggiorna summary
     document.getElementById('totalNewClients').textContent = totalNewClients;
     document.getElementById('totalOrders').textContent = totalOrders;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('totalExpenses').textContent = formatCurrency(totalExpenses);
+    document.getElementById('totalBalance').textContent = formatCurrency(balance);
+    document.getElementById('totalBalance').style.color = balance >= 0 ? '#10b981' : '#ef4444';
     document.getElementById('completedOrders').textContent = completedOrders;
     
     // Renderizza tabelle
     renderClientsAcquiredTable(newClients, dateRange);
+    renderExpensesTable(periodExpenses);
     renderReportTable(allOrders);
     
     console.log('✅ Report generato!');
+    console.log(`💰 Incassi: ${formatCurrency(totalRevenue)} (${paidOrders.length} ordini pagati)`);
+    console.log(`💸 Uscite: ${formatCurrency(totalExpenses)} (${periodExpenses.length} spese)`);
+    console.log(`📊 Bilancio: ${formatCurrency(balance)}`);
+}
+
+function renderExpensesTable(expenses) {
+    const tbody = document.getElementById('expensesTableBody');
+    
+    if (expenses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-report">Nessuna uscita in questo periodo</td></tr>';
+        return;
+    }
+    
+    const categoryLabels = {
+        'materiali': '🔧 Materiali',
+        'fornitori': '🏭 Fornitori',
+        'stipendi': '👤 Stipendi',
+        'affitto': '🏢 Affitto/Utenze',
+        'trasporti': '🚗 Trasporti',
+        'marketing': '📢 Marketing',
+        'software': '💻 Software',
+        'tasse': '📋 Tasse',
+        'altro': '📁 Altro'
+    };
+    
+    tbody.innerHTML = expenses.map(expense => `
+        <tr>
+            <td><strong>${formatDate(expense.date)}</strong></td>
+            <td>${expense.description}${expense.notes ? `<br><small style="color: var(--text-secondary);">${expense.notes}</small>` : ''}</td>
+            <td>${categoryLabels[expense.category] || expense.category}</td>
+            <td class="report-amount" style="color: var(--danger);">-${formatCurrency(expense.amount)}</td>
+        </tr>
+    `).join('');
 }
 
 function renderClientsAcquiredTable(clients, dateRange) {
