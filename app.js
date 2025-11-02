@@ -965,12 +965,26 @@ function renderOrders() {
             'altro': '📋'
         };
         
+        // Dettagli pagamento parziale
+        let partialPaymentInfo = '';
+        if (paymentStatus === 'parziale' && order.paidAmount) {
+            const remaining = (order.amount || 0) - (order.paidAmount || 0);
+            partialPaymentInfo = `
+                <div style="margin-top: 8px; padding: 8px; background: rgba(156, 163, 175, 0.1); border-radius: 6px; font-size: 12px;">
+                    <div>💰 Pagato: <strong>${formatCurrency(order.paidAmount)}</strong></div>
+                    <div>⏳ Da saldare: <strong>${formatCurrency(remaining)}</strong></div>
+                    ${order.expectedPaymentDate ? `<div>📅 Previsto: <strong>${formatDate(order.expectedPaymentDate)}</strong></div>` : ''}
+                </div>
+            `;
+        }
+        
         return `
         <div class="order-card">
             <div class="order-card-header">
                 <div class="order-card-info">
                     <h4>${order.number}</h4>
                     <div class="order-card-description">${order.description}</div>
+                    ${partialPaymentInfo}
                 </div>
                 <div style="display: flex; gap: 8px; flex-direction: column; align-items: flex-end;">
                     <span class="order-status ${order.status}">${statusLabels[order.status]}</span>
@@ -1007,7 +1021,25 @@ function openAddOrderModal() {
     document.getElementById('modalOrderStatus').value = 'in_lavorazione';
     document.getElementById('modalOrderPaymentStatus').value = 'non_pagato';
     document.getElementById('modalOrderPaymentMethod').value = '';
+    
+    // Reset campi pagamento parziale
+    document.getElementById('modalOrderPaidAmount').value = '';
+    document.getElementById('modalOrderExpectedPaymentDate').value = '';
+    document.getElementById('partialPaymentFields').style.display = 'none';
+    
     openModal('orderModal');
+}
+
+// Funzione per mostrare/nascondere campi pagamento parziale
+function togglePartialPaymentFields() {
+    const paymentStatus = document.getElementById('modalOrderPaymentStatus').value;
+    const partialFields = document.getElementById('partialPaymentFields');
+    
+    if (paymentStatus === 'parziale') {
+        partialFields.style.display = 'block';
+    } else {
+        partialFields.style.display = 'none';
+    }
 }
 
 function editOrder(orderId) {
@@ -1032,6 +1064,18 @@ function editOrder(orderId) {
     document.getElementById('modalOrderStatus').value = order.status;
     document.getElementById('modalOrderPaymentStatus').value = order.paymentStatus || 'non_pagato';
     document.getElementById('modalOrderPaymentMethod').value = order.paymentMethod || '';
+    
+    // Campi pagamento parziale
+    document.getElementById('modalOrderPaidAmount').value = order.paidAmount || '';
+    document.getElementById('modalOrderExpectedPaymentDate').value = order.expectedPaymentDate || '';
+    
+    // Mostra campi parziale se necessario
+    if (order.paymentStatus === 'parziale') {
+        document.getElementById('partialPaymentFields').style.display = 'block';
+    } else {
+        document.getElementById('partialPaymentFields').style.display = 'none';
+    }
+    
     openModal('orderModal');
 }
 
@@ -1045,6 +1089,7 @@ function saveOrder() {
     }
 
     const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const paymentStatus = document.getElementById('modalOrderPaymentStatus').value;
     
     const orderData = {
         number,
@@ -1052,9 +1097,19 @@ function saveOrder() {
         amount: parseFloat(document.getElementById('modalOrderAmount').value) || 0,
         date: document.getElementById('modalOrderDate').value,
         status: document.getElementById('modalOrderStatus').value,
-        paymentStatus: document.getElementById('modalOrderPaymentStatus').value,
+        paymentStatus: paymentStatus,
         paymentMethod: document.getElementById('modalOrderPaymentMethod').value
     };
+    
+    // Aggiungi dati pagamento parziale se applicabile
+    if (paymentStatus === 'parziale') {
+        orderData.paidAmount = parseFloat(document.getElementById('modalOrderPaidAmount').value) || 0;
+        orderData.expectedPaymentDate = document.getElementById('modalOrderExpectedPaymentDate').value || '';
+    } else {
+        // Rimuovi campi se non è parziale
+        orderData.paidAmount = null;
+        orderData.expectedPaymentDate = null;
+    }
     
     if (state.editMode && state.editItemId) {
         // Modifica ordine esistente
@@ -1441,29 +1496,77 @@ function generateReport() {
     const newClients = [];
     
     state.clients.forEach(client => {
-        // Usa acquisitionDate se esiste, altrimenti createdAt come fallback
-        const dateToUse = client.acquisitionDate || client.createdAt;
-        
-        if (!dateToUse) {
-            console.warn('⚠️ Cliente senza data:', client.name);
-            return;
-        }
-        
-        const clientDate = new Date(dateToUse);
-        clientDate.setHours(12, 0, 0, 0); // Normalizza
-        
         // Filtra per cliente se selezionato
         if (clientFilter !== 'all' && client.id !== clientFilter) return;
         
-        if (clientDate >= dateRange.from && clientDate <= dateRange.to) {
-            newClients.push(client);
+        // Usa la data del PRIMO ORDINE invece della data di registrazione
+        if (!client.orders || client.orders.length === 0) {
+            // Nessun ordine: usa data acquisizione come fallback
+            const dateToUse = client.acquisitionDate || client.createdAt;
+            
+            if (dateToUse) {
+                const clientDate = new Date(dateToUse);
+                clientDate.setHours(12, 0, 0, 0);
+                
+                if (clientDate >= dateRange.from && clientDate <= dateRange.to) {
+                    newClients.push(client);
+                }
+            }
+            return;
+        }
+        
+        // Trova il primo ordine (più vecchio)
+        const firstOrder = client.orders.reduce((oldest, order) => {
+            if (!order.date) return oldest;
+            if (!oldest || new Date(order.date) < new Date(oldest.date)) {
+                return order;
+            }
+            return oldest;
+        }, null);
+        
+        if (firstOrder && firstOrder.date) {
+            const firstOrderDate = new Date(firstOrder.date);
+            firstOrderDate.setHours(12, 0, 0, 0);
+            
+            // Cliente appare nel periodo del primo ordine
+            if (firstOrderDate >= dateRange.from && firstOrderDate <= dateRange.to) {
+                newClients.push(client);
+            }
         }
     });
     
-    // Ordina per data acquisizione (più recenti prima)
+    // Ordina per data del primo ordine (più recenti prima)
     newClients.sort((a, b) => {
-        const dateA = new Date(a.acquisitionDate || a.createdAt);
-        const dateB = new Date(b.acquisitionDate || b.createdAt);
+        // Trova data del primo ordine per cliente A
+        let dateA = new Date(a.acquisitionDate || a.createdAt);
+        if (a.orders && a.orders.length > 0) {
+            const firstOrderA = a.orders.reduce((oldest, order) => {
+                if (!order.date) return oldest;
+                if (!oldest || new Date(order.date) < new Date(oldest.date)) {
+                    return order;
+                }
+                return oldest;
+            }, null);
+            if (firstOrderA && firstOrderA.date) {
+                dateA = new Date(firstOrderA.date);
+            }
+        }
+        
+        // Trova data del primo ordine per cliente B
+        let dateB = new Date(b.acquisitionDate || b.createdAt);
+        if (b.orders && b.orders.length > 0) {
+            const firstOrderB = b.orders.reduce((oldest, order) => {
+                if (!order.date) return oldest;
+                if (!oldest || new Date(order.date) < new Date(oldest.date)) {
+                    return order;
+                }
+                return oldest;
+            }, null);
+            if (firstOrderB && firstOrderB.date) {
+                dateB = new Date(firstOrderB.date);
+            }
+        }
+        
         return dateB - dateA;
     });
     
@@ -1519,8 +1622,43 @@ function renderClientsAcquiredTable(clients, dateRange) {
         // Contatti
         const contacts = [client.email, client.phone].filter(Boolean).join(' • ') || '-';
         
-        // Usa acquisitionDate se esiste, altrimenti createdAt
-        const displayDate = client.acquisitionDate || client.createdAt;
+        // Usa la data del PRIMO ORDINE come data di visualizzazione
+        let displayDate = client.acquisitionDate || client.createdAt;
+        
+        if (client.orders && client.orders.length > 0) {
+            // Trova il primo ordine (più vecchio)
+            const firstOrder = client.orders.reduce((oldest, order) => {
+                if (!order.date) return oldest;
+                if (!oldest || new Date(order.date) < new Date(oldest.date)) {
+                    return order;
+                }
+                return oldest;
+            }, null);
+            
+            if (firstOrder && firstOrder.date) {
+                displayDate = firstOrder.date;
+            }
+        }
+        
+        // Determina colore in base allo stato pagamenti
+        let paymentColor = '#6366f1'; // Default blu
+        
+        if (client.orders && client.orders.length > 0) {
+            const paidOrders = client.orders.filter(o => o.paymentStatus === 'pagato').length;
+            const unpaidOrders = client.orders.filter(o => o.paymentStatus === 'non_pagato').length;
+            const partialOrders = client.orders.filter(o => o.paymentStatus === 'parziale').length;
+            
+            if (paidOrders === client.orders.length) {
+                // Tutti pagati → Verde
+                paymentColor = '#065f46';
+            } else if (unpaidOrders === client.orders.length) {
+                // Tutti non pagati → Rosso
+                paymentColor = '#991b1b';
+            } else {
+                // Misto o parziale → Grigio
+                paymentColor = '#374151';
+            }
+        }
         
         return `
             <tr onclick="selectClient('${client.id}'); closeReportView();" style="cursor: pointer;">
@@ -1528,7 +1666,7 @@ function renderClientsAcquiredTable(clients, dateRange) {
                 <td><strong>${client.name}</strong></td>
                 <td>${contacts}</td>
                 <td>${ordersCount}</td>
-                <td class="report-amount">${formatCurrency(totalValue)}</td>
+                <td class="report-amount" style="color: ${paymentColor}; font-weight: 700;">${formatCurrency(totalValue)}</td>
             </tr>
         `;
     }).join('');
@@ -1538,7 +1676,7 @@ function renderReportTable(orders) {
     const tbody = document.getElementById('reportTableBody');
     
     if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
         return;
     }
     
@@ -1549,16 +1687,48 @@ function renderReportTable(orders) {
         'annullato': 'Annullato'
     };
     
-    tbody.innerHTML = orders.map(order => `
+    const paymentLabels = {
+        'pagato': '✅ Pagato',
+        'non_pagato': '❌ Non Pagato',
+        'parziale': '⏳ Parziale'
+    };
+    
+    tbody.innerHTML = orders.map(order => {
+        const paymentStatus = order.paymentStatus || 'non_pagato';
+        
+        // Determina il colore di background per lo stato pagamento
+        let paymentBgColor = '';
+        let paymentTextColor = '';
+        
+        if (paymentStatus === 'pagato') {
+            // Verde
+            paymentBgColor = '#d1fae5';
+            paymentTextColor = '#065f46';
+        } else if (paymentStatus === 'non_pagato') {
+            // Rosso
+            paymentBgColor = '#fee2e2';
+            paymentTextColor = '#991b1b';
+        } else if (paymentStatus === 'parziale') {
+            // Grigio
+            paymentBgColor = '#e5e7eb';
+            paymentTextColor = '#374151';
+        }
+        
+        // Colore per importo (stesso del badge)
+        let amountColor = paymentTextColor;
+        
+        return `
         <tr>
             <td>${formatDate(order.date)}</td>
             <td><strong>${order.clientName}</strong></td>
             <td>${order.number}</td>
             <td>${order.description}</td>
             <td><span class="report-status-badge ${order.status}">${statusLabels[order.status]}</span></td>
-            <td class="report-amount">${formatCurrency(order.amount)}</td>
+            <td><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${paymentBgColor}; color: ${paymentTextColor};">${paymentLabels[paymentStatus]}</span></td>
+            <td class="report-amount" style="color: ${amountColor}; font-weight: 700;">${formatCurrency(order.amount)}</td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function exportToCSV() {
@@ -1567,17 +1737,25 @@ function exportToCSV() {
         return;
     }
     
+    const paymentLabels = {
+        'pagato': 'Pagato',
+        'non_pagato': 'Non Pagato',
+        'parziale': 'Parziale'
+    };
+    
     // Intestazioni CSV
-    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Importo\n';
+    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Stato Pagamento,Importo\n';
     
     // Righe dati
     state.reportData.forEach(order => {
+        const paymentStatus = order.paymentStatus || 'non_pagato';
         const row = [
             formatDate(order.date),
             `"${order.clientName}"`,
             `"${order.number}"`,
             `"${order.description}"`,
             order.status,
+            paymentLabels[paymentStatus],
             order.amount || 0
         ].join(',');
         csv += row + '\n';
@@ -1586,8 +1764,8 @@ function exportToCSV() {
     // Aggiungi totali
     const totalRevenue = state.reportData.reduce((sum, o) => sum + (o.amount || 0), 0);
     csv += '\n';
-    csv += `TOTALE ORDINI,${state.reportData.length},,,,\n`;
-    csv += `TOTALE FATTURATO,,,,,${totalRevenue}\n`;
+    csv += `TOTALE ORDINI,${state.reportData.length},,,,,\n`;
+    csv += `TOTALE FATTURATO,,,,,,${totalRevenue}\n`;
     
     // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1707,6 +1885,9 @@ function printReport() {
                 .status-in_lavorazione { background: #dbeafe; color: #1e40af; }
                 .status-in_attesa { background: #fef3c7; color: #92400e; }
                 .status-annullato { background: #fee2e2; color: #991b1b; }
+                .payment-paid { background: #d1fae5; color: #065f46; }
+                .payment-unpaid { background: #fee2e2; color: #991b1b; }
+                .payment-partial { background: #e5e7eb; color: #374151; }
                 @media print {
                     body { padding: 10px; }
                     .summary { page-break-inside: avoid; }
@@ -1748,20 +1929,46 @@ function printReport() {
                         <th>N° Ordine</th>
                         <th>Descrizione</th>
                         <th>Stato</th>
+                        <th>Pagamento</th>
                         <th>Importo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${state.reportData.map(order => `
+                    ${state.reportData.map(order => {
+                        const paymentStatus = order.paymentStatus || 'non_pagato';
+                        const paymentLabels = {
+                            'pagato': 'Pagato',
+                            'non_pagato': 'Non Pagato',
+                            'parziale': 'Parziale'
+                        };
+                        
+                        // Colori per pagamento
+                        let paymentClass = '';
+                        let amountColor = '#6366f1';
+                        
+                        if (paymentStatus === 'pagato') {
+                            paymentClass = 'payment-paid';
+                            amountColor = '#065f46';
+                        } else if (paymentStatus === 'non_pagato') {
+                            paymentClass = 'payment-unpaid';
+                            amountColor = '#991b1b';
+                        } else if (paymentStatus === 'parziale') {
+                            paymentClass = 'payment-partial';
+                            amountColor = '#374151';
+                        }
+                        
+                        return `
                         <tr>
                             <td>${formatDate(order.date)}</td>
                             <td><strong>${order.clientName}</strong></td>
                             <td>${order.number}</td>
                             <td>${order.description}</td>
                             <td><span class="status-badge status-${order.status}">${statusLabels[order.status]}</span></td>
-                            <td><strong>${formatCurrency(order.amount)}</strong></td>
+                            <td><span class="status-badge ${paymentClass}">${paymentLabels[paymentStatus]}</span></td>
+                            <td><strong style="color: ${amountColor};">${formatCurrency(order.amount)}</strong></td>
                         </tr>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
         </body>

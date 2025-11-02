@@ -135,7 +135,7 @@
                             <table class="report-table">
                                 <thead>
                                     <tr>
-                                        <th>Data Registrazione</th>
+                                        <th>Data Primo Ordine</th>
                                         <th>Cliente</th>
                                         <th>Contatti</th>
                                         <th>N° Ordini</th>
@@ -170,12 +170,13 @@
                                     <th>N° Ordine</th>
                                     <th>Descrizione</th>
                                     <th>Stato</th>
+                                    <th>💳 Pagamento</th>
                                     <th>Importo</th>
                                 </tr>
                             </thead>
                             <tbody id="reportTableBody">
                                 <tr>
-                                    <td colspan="6" class="empty-report">Seleziona i filtri e genera il report</td>
+                                    <td colspan="7" class="empty-report">Seleziona i filtri e genera il report</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -441,12 +442,31 @@
                 </div>
                 <div class="form-group">
                     <label>💳 Stato Pagamento *</label>
-                    <select id="modalOrderPaymentStatus">
+                    <select id="modalOrderPaymentStatus" onchange="togglePartialPaymentFields()">
                         <option value="non_pagato">❌ Non Pagato</option>
                         <option value="parziale">⏳ Pagamento Parziale</option>
                         <option value="pagato">✅ Pagato</option>
                     </select>
                 </div>
+                
+                <!-- Campi per Pagamento Parziale -->
+                <div id="partialPaymentFields" style="display: none;">
+                    <div class="form-group">
+                        <label>💰 Importo Già Pagato (CHF)</label>
+                        <input type="number" id="modalOrderPaidAmount" step="0.01" placeholder="0.00">
+                        <small style="color: var(--text-secondary); font-size: 12px;">
+                            💡 Quanto è stato già pagato dal cliente
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>📅 Data Prevista Saldo</label>
+                        <input type="date" id="modalOrderExpectedPaymentDate">
+                        <small style="color: var(--text-secondary); font-size: 12px;">
+                            💡 Quando prevedi di ricevere il pagamento restante
+                        </small>
+                    </div>
+                </div>
+                
                 <div class="form-group">
                     <label>Metodo Pagamento</label>
                     <select id="modalOrderPaymentMethod">
