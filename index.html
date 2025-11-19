@@ -25,6 +25,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="firebase-config.js"></script>
+    
+    <!-- Chart.js per grafici -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="app">
@@ -32,9 +35,13 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <img src="logo.png" alt="3DMAKES" class="logo">
+                <div class="theme-toggle" id="themeToggle" onclick="toggleDarkMode()" title="Cambia tema">
+                    <span class="theme-icon" id="themeIcon">🌙</span>
+                    <span class="theme-text" id="themeText">Dark</span>
+                </div>
                 <div class="cloud-status" id="cloudStatus" onclick="showCloudSettings()">
                     <span class="cloud-icon" title="Sincronizzazione cloud">☁️</span>
-                    <span class="cloud-text">Locale</span>
+                    <span class="cloud-text">Cloud</span>
                 </div>
             </div>
             
@@ -63,6 +70,11 @@
 
             <!-- Dashboard View -->
             <div class="dashboard-view" id="dashboardView" style="display: none;">
+                <!-- Bottone Indietro Mobile -->
+                <button class="btn-back-mobile" onclick="backToClientList()">
+                    ← Torna alla Lista
+                </button>
+                
                 <div class="dashboard-header">
                     <div>
                         <h2>📊 Dashboard</h2>
@@ -87,6 +99,13 @@
                         </div>
                     </div>
                     <div class="kpi-card">
+                        <div class="kpi-icon">💵</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Ordini Totali (CHF)</div>
+                            <div class="kpi-value" id="dashTotalOrdersAmount">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
                         <div class="kpi-icon">💰</div>
                         <div class="kpi-content">
                             <div class="kpi-label">Fatturato Totale</div>
@@ -99,6 +118,18 @@
                             <div class="kpi-label">In Lavorazione</div>
                             <div class="kpi-value" id="dashInProgress">0</div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Grafici -->
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>📊 Ordini per Stato</h3>
+                        <canvas id="ordersStatusChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>💰 Fatturato Ultimi 6 Mesi</h3>
+                        <canvas id="revenueChart"></canvas>
                     </div>
                 </div>
 
@@ -221,7 +252,7 @@
                     <div class="summary-card">
                         <div class="summary-icon">💰</div>
                         <div class="summary-content">
-                            <div class="summary-label">Incassi Totali (Pagati)</div>
+                            <div class="summary-label" id="totalRevenueLabel">Importo Totale</div>
                             <div class="summary-value" id="totalRevenue">CHF 0.00</div>
                         </div>
                     </div>
@@ -230,6 +261,56 @@
                         <div class="summary-content">
                             <div class="summary-label">Completati</div>
                             <div class="summary-value" id="completedOrders">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Breakdown per Stato -->
+                <div class="status-breakdown" id="statusBreakdown">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">📊 Breakdown per Stato</h3>
+                    <div class="status-cards">
+                        <div class="status-card status-in-lavorazione" onclick="filterByStatus('in_lavorazione')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">🔨</div>
+                                <div class="status-card-label">In Lavorazione</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="statusCountInLavorazione">0</div>
+                                <div class="status-card-amount" id="statusAmountInLavorazione">CHF 0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="status-card status-completato" onclick="filterByStatus('completato')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">✅</div>
+                                <div class="status-card-label">Completato</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="statusCountCompletato">0</div>
+                                <div class="status-card-amount" id="statusAmountCompletato">CHF 0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="status-card status-in-attesa" onclick="filterByStatus('in_attesa')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">⏳</div>
+                                <div class="status-card-label">In Attesa</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="statusCountInAttesa">0</div>
+                                <div class="status-card-amount" id="statusAmountInAttesa">CHF 0.00</div>
+                            </div>
+                        </div>
+
+                        <div class="status-card status-completato-non-pagato" onclick="filterByCompletedUnpaid()" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">⚠️</div>
+                                <div class="status-card-label">Completati Non Pagati</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="statusCountCompletatoNonPagato">0</div>
+                                <div class="status-card-amount" id="statusAmountCompletatoNonPagato">CHF 0.00</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -518,12 +599,33 @@
                     <textarea id="modalOrderDescription" rows="3" required></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Importo (CHF)</label>
-                    <input type="number" id="modalOrderAmount" step="0.01" placeholder="0.00">
+                    <label>Importo Totale (CHF) *</label>
+                    <input type="number" id="modalOrderAmount" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label>💰 Costo Materiali (CHF) *</label>
+                    <input type="number" id="modalOrderCost" step="0.01" placeholder="0.00" required>
+                    <small style="color: var(--text-secondary); font-size: 12px;">
+                        💡 Costo dei materiali per questo ordine (per calcolare il margine)
+                    </small>
+                </div>
+                <div class="form-group" id="marginDisplay" style="display: none;">
+                    <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 8px; border: 2px solid var(--success);">
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">📊 Margine Lordo</div>
+                        <div style="font-size: 24px; font-weight: 700; color: var(--success);" id="marginValue">CHF 0.00</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;" id="marginPercentage">0%</div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Data Ordine</label>
                     <input type="date" id="modalOrderDate">
+                </div>
+                <div class="form-group">
+                    <label>📅 Data Scadenza/Consegna</label>
+                    <input type="date" id="modalOrderDeadline">
+                    <small style="color: var(--text-secondary); font-size: 12px;">
+                        💡 Quando deve essere consegnato questo ordine
+                    </small>
                 </div>
                 <div class="form-group">
                     <label>Stato *</label>

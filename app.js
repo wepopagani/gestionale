@@ -46,8 +46,42 @@ window.addEventListener('beforeinstallprompt', (e) => {
     console.log('💡 App installabile come PWA');
 });
 
+// ===== DARK MODE =====
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    
+    // Salva la preferenza
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    
+    // Aggiorna icona
+    const icon = document.getElementById('themeIcon');
+    icon.textContent = isDark ? '☀️' : '🌙';
+    
+    // Animazione
+    icon.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+        icon.style.transform = 'scale(1)';
+    }, 200);
+    
+    console.log(isDark ? '🌙 Dark mode attivato' : '☀️ Light mode attivato');
+}
+
+// Carica preferenza dark mode
+function loadDarkMode() {
+    const darkMode = localStorage.getItem('darkMode');
+    if (darkMode === 'enabled') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('themeIcon').textContent = '☀️';
+    } else {
+        document.body.classList.remove('dark-mode');
+        document.getElementById('themeIcon').textContent = '🌙';
+    }
+}
+
 // ===== INIZIALIZZAZIONE =====
 document.addEventListener('DOMContentLoaded', () => {
+    loadDarkMode(); // Carica tema salvato
     initFirebase();
     loadFromStorage();
     renderClients();
@@ -451,6 +485,10 @@ function setupEventListeners() {
     // Bottoni ordini
     document.getElementById('addOrderBtn').addEventListener('click', openAddOrderModal);
     document.getElementById('saveOrderBtn').addEventListener('click', saveOrder);
+    
+    // Calcolo margine in tempo reale
+    document.getElementById('modalOrderAmount').addEventListener('input', calculateMargin);
+    document.getElementById('modalOrderCost').addEventListener('input', calculateMargin);
 
     // Bottoni file
     document.getElementById('addFileBtn').addEventListener('click', openAddFileModal);
@@ -573,12 +611,14 @@ function backToClientList() {
     document.querySelector('.sidebar').classList.remove('hidden-mobile');
     document.querySelector('.main-content').classList.remove('fullscreen-mobile');
     document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('reportView').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'none';
     
     if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
     } else {
-        // Mostra dashboard
-        showDashboard();
+        // Su mobile, torna semplicemente a mostrare la lista clienti
+        // (la sidebar è già visibile)
     }
 }
 
@@ -997,6 +1037,31 @@ function renderOrders() {
             'altro': '📋'
         };
         
+        // Badge scadenza
+        let deadlineBadge = '';
+        if (order.deadline) {
+            const deadline = new Date(order.deadline);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            deadline.setHours(0, 0, 0, 0);
+            
+            const diffDays = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                // Scaduto
+                deadlineBadge = `<div style="margin-top: 8px; padding: 6px 10px; background: #fee2e2; border: 1px solid #ef4444; border-radius: 6px; font-size: 12px; color: #991b1b; font-weight: 600;">⚠️ Scaduto ${Math.abs(diffDays)} giorni fa!</div>`;
+            } else if (diffDays === 0) {
+                // Oggi
+                deadlineBadge = `<div style="margin-top: 8px; padding: 6px 10px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; font-size: 12px; color: #92400e; font-weight: 600;">🔥 Scadenza OGGI!</div>`;
+            } else if (diffDays <= 3) {
+                // Entro 3 giorni
+                deadlineBadge = `<div style="margin-top: 8px; padding: 6px 10px; background: #fed7aa; border: 1px solid #f97316; border-radius: 6px; font-size: 12px; color: #9a3412; font-weight: 600;">⏰ Scade tra ${diffDays} giorni</div>`;
+            } else if (diffDays <= 7) {
+                // Entro 7 giorni
+                deadlineBadge = `<div style="margin-top: 8px; padding: 6px 10px; background: #fef9c3; border: 1px solid #eab308; border-radius: 6px; font-size: 12px; color: #713f12; font-weight: 500;">📅 Scade tra ${diffDays} giorni</div>`;
+            }
+        }
+        
         // Dettagli pagamento parziale
         let partialPaymentInfo = '';
         if (paymentStatus === 'parziale' && order.paidAmount) {
@@ -1010,12 +1075,21 @@ function renderOrders() {
             `;
         }
         
+        // Margine
+        let marginInfo = '';
+        if (order.margin !== undefined && order.margin !== null) {
+            const marginColor = order.margin < 0 ? '#ef4444' : (order.margin < (order.amount * 0.2) ? '#f59e0b' : '#10b981');
+            marginInfo = `<div style="margin-top: 8px; padding: 6px 10px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; font-size: 12px; color: ${marginColor}; font-weight: 500;">📊 Margine: ${formatCurrency(order.margin)} (${order.marginPercent}%)</div>`;
+        }
+        
         return `
         <div class="order-card" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <div class="order-card-header">
                 <div class="order-card-info">
                     <h4>${order.number}</h4>
                     <div class="order-card-description">${order.description}</div>
+                    ${deadlineBadge}
+                    ${marginInfo}
                     ${partialPaymentInfo}
                 </div>
                 <div style="display: flex; gap: 8px; flex-direction: column; align-items: flex-end;">
@@ -1049,6 +1123,8 @@ function openAddOrderModal() {
     
     document.getElementById('modalOrderDescription').value = '';
     document.getElementById('modalOrderAmount').value = '';
+    document.getElementById('modalOrderCost').value = '';
+    document.getElementById('modalOrderDeadline').value = '';
     document.getElementById('modalOrderDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('modalOrderStatus').value = 'in_lavorazione';
     document.getElementById('modalOrderPaymentStatus').value = 'non_pagato';
@@ -1059,7 +1135,42 @@ function openAddOrderModal() {
     document.getElementById('modalOrderExpectedPaymentDate').value = '';
     document.getElementById('partialPaymentFields').style.display = 'none';
     
+    // Nascondi margine display
+    document.getElementById('marginDisplay').style.display = 'none';
+    
     openModal('orderModal');
+}
+
+// Calcola margine in tempo reale
+function calculateMargin() {
+    const amount = parseFloat(document.getElementById('modalOrderAmount').value) || 0;
+    const cost = parseFloat(document.getElementById('modalOrderCost').value) || 0;
+    
+    if (amount > 0 && cost >= 0) {
+        const margin = amount - cost;
+        const marginPercent = ((margin / amount) * 100).toFixed(1);
+        
+        document.getElementById('marginValue').textContent = formatCurrency(margin);
+        document.getElementById('marginPercentage').textContent = `${marginPercent}% di margine`;
+        document.getElementById('marginDisplay').style.display = 'block';
+        
+        // Cambia colore in base al margine
+        const marginValueEl = document.getElementById('marginValue');
+        const marginDisplayEl = document.getElementById('marginDisplay').querySelector('div');
+        
+        if (margin < 0) {
+            marginValueEl.style.color = '#ef4444'; // Rosso
+            marginDisplayEl.style.borderColor = '#ef4444';
+        } else if (margin < amount * 0.2) {
+            marginValueEl.style.color = '#f59e0b'; // Arancione
+            marginDisplayEl.style.borderColor = '#f59e0b';
+        } else {
+            marginValueEl.style.color = '#10b981'; // Verde
+            marginDisplayEl.style.borderColor = '#10b981';
+        }
+    } else {
+        document.getElementById('marginDisplay').style.display = 'none';
+    }
 }
 
 // Funzione per mostrare/nascondere campi pagamento parziale
@@ -1092,6 +1203,8 @@ function editOrder(orderId) {
     
     document.getElementById('modalOrderDescription').value = order.description;
     document.getElementById('modalOrderAmount').value = order.amount;
+    document.getElementById('modalOrderCost').value = order.cost || 0;
+    document.getElementById('modalOrderDeadline').value = order.deadline || '';
     document.getElementById('modalOrderDate').value = order.date;
     document.getElementById('modalOrderStatus').value = order.status;
     document.getElementById('modalOrderPaymentStatus').value = order.paymentStatus || 'non_pagato';
@@ -1108,25 +1221,50 @@ function editOrder(orderId) {
         document.getElementById('partialPaymentFields').style.display = 'none';
     }
     
+    // Calcola e mostra margine
+    calculateMargin();
+    
     openModal('orderModal');
 }
 
 function saveOrder() {
     const number = document.getElementById('modalOrderNumber').value.trim();
     const description = document.getElementById('modalOrderDescription').value.trim();
+    const amount = parseFloat(document.getElementById('modalOrderAmount').value);
+    const cost = parseFloat(document.getElementById('modalOrderCost').value);
     
+    // Validazione campi obbligatori
     if (!number || !description) {
-        alert('Numero ordine e descrizione sono obbligatori');
+        alert('❌ Numero ordine e descrizione sono obbligatori');
+        return;
+    }
+    
+    if (!amount || amount <= 0) {
+        alert('❌ Importo totale è obbligatorio e deve essere maggiore di 0');
+        document.getElementById('modalOrderAmount').focus();
+        return;
+    }
+    
+    if (cost === undefined || cost === null || cost < 0) {
+        alert('❌ Costo materiali è obbligatorio (può essere 0)');
+        document.getElementById('modalOrderCost').focus();
         return;
     }
 
     const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
     const paymentStatus = document.getElementById('modalOrderPaymentStatus').value;
     
+    const margin = amount - cost;
+    const marginPercent = amount > 0 ? ((margin / amount) * 100).toFixed(2) : 0;
+    
     const orderData = {
         number,
         description,
-        amount: parseFloat(document.getElementById('modalOrderAmount').value) || 0,
+        amount: amount,
+        cost: cost,
+        margin: margin,
+        marginPercent: parseFloat(marginPercent),
+        deadline: document.getElementById('modalOrderDeadline').value || null,
         date: document.getElementById('modalOrderDate').value,
         status: document.getElementById('modalOrderStatus').value,
         paymentStatus: paymentStatus,
@@ -1381,6 +1519,176 @@ function deleteFile(fileId) {
     renderFiles();
 }
 
+// ===== DASHBOARD CHARTS =====
+let ordersStatusChart = null;
+let revenueChart = null;
+
+function destroyCharts() {
+    if (ordersStatusChart) {
+        ordersStatusChart.destroy();
+        ordersStatusChart = null;
+    }
+    if (revenueChart) {
+        revenueChart.destroy();
+        revenueChart = null;
+    }
+}
+
+function createOrdersStatusChart(statusStats) {
+    const ctx = document.getElementById('ordersStatusChart');
+    if (!ctx) return;
+    
+    destroyCharts();
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    
+    ordersStatusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['🔨 In Lavorazione', '✅ Completato', '⏳ In Attesa'],
+            datasets: [{
+                data: [
+                    statusStats.in_lavorazione.count,
+                    statusStats.completato.count,
+                    statusStats.in_attesa.count
+                ],
+                backgroundColor: [
+                    'rgba(30, 64, 175, 0.8)',
+                    'rgba(6, 95, 70, 0.8)',
+                    'rgba(146, 64, 14, 0.8)'
+                ],
+                borderColor: [
+                    '#1e40af',
+                    '#065f46',
+                    '#92400e'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: textColor,
+                        padding: 15,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} ordini (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createRevenueChart() {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+    
+    // Calcola fatturato ultimi 6 mesi
+    const now = new Date();
+    const monthsData = [];
+    
+    for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
+        
+        let revenue = 0;
+        state.clients.forEach(client => {
+            if (client.orders) {
+                client.orders.forEach(order => {
+                    if (order.date) {
+                        const orderDate = new Date(order.date);
+                        if (orderDate.getMonth() === date.getMonth() && 
+                            orderDate.getFullYear() === date.getFullYear() &&
+                            order.paymentStatus === 'pagato') {
+                            revenue += (order.amount || 0);
+                        }
+                    }
+                });
+            }
+        });
+        
+        monthsData.push({
+            month: monthName,
+            revenue: revenue
+        });
+    }
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    
+    revenueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: monthsData.map(d => d.month),
+            datasets: [{
+                label: 'Fatturato (Pagati)',
+                data: monthsData.map(d => d.revenue),
+                backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                borderColor: '#6366f1',
+                borderWidth: 2,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: textColor,
+                        callback: function(value) {
+                            return 'CHF ' + value.toLocaleString('de-CH');
+                        }
+                    },
+                    grid: {
+                        color: gridColor
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: textColor
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
 // ===== DASHBOARD SYSTEM =====
 function showDashboard() {
     // Nascondi tutto tranne la dashboard
@@ -1388,6 +1696,12 @@ function showDashboard() {
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('reportView').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'block';
+    
+    // Su mobile, nascondi la sidebar e mostra fullscreen
+    if (window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.add('hidden-mobile');
+        document.querySelector('.main-content').classList.add('fullscreen-mobile');
+    }
     
     // Deseleziona cliente corrente
     state.currentClientId = null;
@@ -1402,7 +1716,8 @@ function renderDashboard() {
     const totalClients = state.clients.length;
     
     let totalOrders = 0;
-    let totalRevenue = 0;
+    let totalOrdersAmount = 0;  // Importo totale di TUTTI gli ordini
+    let totalRevenue = 0;        // Importo solo ordini pagati
     let inProgressOrders = 0;
     let completedOrders = 0;
     let waitingOrders = 0;
@@ -1425,6 +1740,9 @@ function renderDashboard() {
                 };
                 
                 allOrders.push(orderWithClient);
+                
+                // Somma importo totale di TUTTI gli ordini
+                totalOrdersAmount += (order.amount || 0);
                 
                 // Conteggi per stato
                 if (order.status === 'in_lavorazione') inProgressOrders++;
@@ -1450,6 +1768,7 @@ function renderDashboard() {
     // Aggiorna KPI
     document.getElementById('dashTotalClients').textContent = totalClients;
     document.getElementById('dashTotalOrders').textContent = totalOrders;
+    document.getElementById('dashTotalOrdersAmount').textContent = formatCurrency(totalOrdersAmount);
     document.getElementById('dashTotalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('dashInProgress').textContent = inProgressOrders;
     document.getElementById('dashCompleted').textContent = completedOrders;
@@ -1473,6 +1792,16 @@ function renderDashboard() {
         return dateB - dateA;
     }).slice(0, 5);
     renderDashboardRecentClients(recentClients);
+    
+    // Crea grafici
+    const statusStats = {
+        'in_lavorazione': { count: inProgressOrders, amount: 0 },
+        'completato': { count: completedOrders, amount: 0 },
+        'in_attesa': { count: waitingOrders, amount: 0 }
+    };
+    
+    createOrdersStatusChart(statusStats);
+    createRevenueChart();
 }
 
 function renderDashboardRecentOrders(orders) {
@@ -1571,9 +1900,11 @@ function openReportView() {
     document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('reportView').style.display = 'block';
     
-    // Su mobile, rimuovi classi fullscreen
-    document.querySelector('.sidebar').classList.remove('hidden-mobile');
-    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
+    // Su mobile, nascondi la sidebar e mostra fullscreen
+    if (window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.add('hidden-mobile');
+        document.querySelector('.main-content').classList.add('fullscreen-mobile');
+    }
     
     // Popola dropdown clienti
     const clientSelect = document.getElementById('reportClient');
@@ -1596,11 +1927,15 @@ function openReportView() {
 function closeReportView() {
     document.getElementById('reportView').style.display = 'none';
     
+    // Mostra la sidebar
+    document.querySelector('.sidebar').classList.remove('hidden-mobile');
+    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
+    
     if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
     } else if (state.currentClientId) {
         document.getElementById('clientDetail').style.display = 'block';
-        // Ripristina fullscreen mobile se necessario
+        // Su mobile, nascondi sidebar per fullscreen cliente
         if (window.innerWidth <= 768) {
             document.querySelector('.sidebar').classList.add('hidden-mobile');
             document.querySelector('.main-content').classList.add('fullscreen-mobile');
@@ -1625,6 +1960,73 @@ function handlePeriodChange() {
     
     // Rigenera automaticamente il report quando cambia il periodo
     generateReport();
+}
+
+// Filtra per stato cliccando sulle card
+function filterByStatus(status) {
+    const statusSelect = document.getElementById('reportStatus');
+    
+    // Se è già selezionato questo stato, torna a "tutti"
+    if (statusSelect.value === status) {
+        statusSelect.value = 'all';
+    } else {
+        statusSelect.value = status;
+    }
+    
+    // Aggiorna classi active sulle card
+    updateStatusCardsActive(statusSelect.value);
+    
+    // Rigenera il report con il nuovo filtro
+    generateReport();
+    
+    // Scroll al report table
+    document.getElementById('reportTable').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Aggiorna le classi active sulle status cards
+function updateStatusCardsActive(selectedStatus) {
+    document.querySelectorAll('.status-card').forEach(card => {
+        card.classList.remove('active');
+    });
+    
+    if (selectedStatus !== 'all') {
+        const activeCard = document.querySelector(`.status-card.status-${selectedStatus}`);
+        if (activeCard) {
+            activeCard.classList.add('active');
+        }
+    }
+}
+
+// Filtra per completati non pagati
+function filterByCompletedUnpaid() {
+    // Imposta entrambi i filtri
+    document.getElementById('reportStatus').value = 'completato';
+    
+    // Genera il report base
+    generateReport();
+    
+    // Poi filtra ulteriormente solo i non pagati
+    const allOrders = state.reportData;
+    const completedUnpaid = allOrders.filter(order => {
+        return order.status === 'completato' && 
+               (order.paymentStatus === 'non_pagato' || !order.paymentStatus);
+    });
+    
+    // Aggiorna la tabella con solo questi ordini
+    renderReportTable(completedUnpaid);
+    
+    // Aggiorna l'importo totale
+    const totalAmount = completedUnpaid.reduce((sum, order) => sum + (order.amount || 0), 0);
+    document.getElementById('totalRevenue').textContent = formatCurrency(totalAmount);
+    document.getElementById('totalRevenueLabel').textContent = 'Importo Completati Non Pagati';
+    document.getElementById('totalOrders').textContent = completedUnpaid.length;
+    
+    // Marca la card come attiva
+    document.querySelectorAll('.status-card').forEach(card => card.classList.remove('active'));
+    document.querySelector('.status-card.status-completato-non-pagato')?.classList.add('active');
+    
+    // Scroll al report table
+    document.getElementById('reportTable').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function getDateRange(period) {
@@ -1810,10 +2212,63 @@ function generateReport() {
     
     console.log(`👥 Clienti acquisiti trovati: ${newClients.length}`);
     
-    // ===== CALCOLA INCASSI (SOLO ORDINI PAGATI!) =====
-    // 🏦 REGOLA ECONOMICA: Solo ordini con stato "Pagato" contano negli incassi!
-    const paidOrders = allOrders.filter(o => o.paymentStatus === 'pagato');
-    const totalRevenue = paidOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+    // ===== CALCOLA STATISTICHE PER STATO =====
+    const statusStats = {
+        'in_lavorazione': { count: 0, amount: 0 },
+        'completato': { count: 0, amount: 0 },
+        'in_attesa': { count: 0, amount: 0 },
+        'completato_non_pagato': { count: 0, amount: 0 }
+    };
+    
+    allOrders.forEach(order => {
+        const status = order.status || 'in_lavorazione';
+        const paymentStatus = order.paymentStatus || 'non_pagato';
+        
+        // Conta per stato normale
+        if (statusStats[status]) {
+            statusStats[status].count++;
+            statusStats[status].amount += (order.amount || 0);
+        }
+        
+        // Conta separatamente i completati non pagati
+        if (status === 'completato' && paymentStatus === 'non_pagato') {
+            statusStats.completato_non_pagato.count++;
+            statusStats.completato_non_pagato.amount += (order.amount || 0);
+        }
+    });
+    
+    // Aggiorna breakdown per stato
+    document.getElementById('statusCountInLavorazione').textContent = statusStats.in_lavorazione.count;
+    document.getElementById('statusAmountInLavorazione').textContent = formatCurrency(statusStats.in_lavorazione.amount);
+    
+    document.getElementById('statusCountCompletato').textContent = statusStats.completato.count;
+    document.getElementById('statusAmountCompletato').textContent = formatCurrency(statusStats.completato.amount);
+    
+    document.getElementById('statusCountInAttesa').textContent = statusStats.in_attesa.count;
+    document.getElementById('statusAmountInAttesa').textContent = formatCurrency(statusStats.in_attesa.amount);
+    
+    document.getElementById('statusCountCompletatoNonPagato').textContent = statusStats.completato_non_pagato.count;
+    document.getElementById('statusAmountCompletatoNonPagato').textContent = formatCurrency(statusStats.completato_non_pagato.amount);
+    
+    // ===== CALCOLA IMPORTO TOTALE IN BASE AL FILTRO =====
+    let totalRevenue = 0;
+    let revenueLabelText = 'Importo Totale';
+    
+    if (statusFilter === 'all') {
+        // Nessun filtro: mostra importo totale di TUTTI gli ordini
+        totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+        revenueLabelText = 'Importo Totale (Tutti)';
+    } else {
+        // Filtro stato selezionato: mostra solo importo di quel stato
+        totalRevenue = statusStats[statusFilter].amount;
+        const statusLabels = {
+            'in_lavorazione': 'In Lavorazione',
+            'completato': 'Completato',
+            'in_attesa': 'In Attesa',
+            'annullato': 'Annullato'
+        };
+        revenueLabelText = `Importo ${statusLabels[statusFilter]}`;
+    }
     
     // ===== ALTRE STATISTICHE =====
     const totalOrders = allOrders.length;
@@ -1823,23 +2278,28 @@ function generateReport() {
     console.log('📊 Statistiche:', {
         totalNewClients,
         totalOrders,
-        paidOrders: paidOrders.length,
         totalRevenue,
-        completedOrders
+        completedOrders,
+        statusFilter,
+        statusStats
     });
     
     // Aggiorna summary
     document.getElementById('totalNewClients').textContent = totalNewClients;
     document.getElementById('totalOrders').textContent = totalOrders;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('totalRevenueLabel').textContent = revenueLabelText;
     document.getElementById('completedOrders').textContent = completedOrders;
     
     // Renderizza tabelle
     renderClientsAcquiredTable(newClients, dateRange);
     renderReportTable(allOrders);
     
+    // Aggiorna classi active sulle card
+    updateStatusCardsActive(statusFilter);
+    
     console.log('✅ Report generato!');
-    console.log(`💰 Incassi (solo pagati): ${formatCurrency(totalRevenue)} (${paidOrders.length} ordini)`);
+    console.log(`💰 Importo filtrato: ${formatCurrency(totalRevenue)}`);
 }
 
 function renderClientsAcquiredTable(clients, dateRange) {

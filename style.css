@@ -22,6 +22,23 @@
     --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
+/* Dark Mode */
+body.dark-mode {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #141414;
+    --bg-tertiary: #222222;
+    --border: #333333;
+    --text-primary: #f5f5f5;
+    --text-secondary: #a0a0a0;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.7);
+}
+
+/* Logo resta normale in dark mode */
+body.dark-mode .logo {
+    /* Nessun filtro - il logo resta com'è */
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-secondary);
@@ -88,6 +105,39 @@ input, textarea, [contenteditable] {
     font-size: 24px;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+/* Theme Toggle */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.theme-toggle:hover {
+    background: var(--border);
+    transform: scale(1.1) rotate(15deg);
+    border-color: var(--primary);
+}
+
+.theme-icon {
+    font-size: 20px;
+    transition: transform 0.3s;
+}
+
+body.dark-mode .theme-icon {
+    transform: rotate(180deg);
+}
+
+.theme-text {
+    display: none; /* Nascondi testo */
 }
 
 .cloud-status {
@@ -810,7 +860,7 @@ input, textarea, [contenteditable] {
 
 .dashboard-kpi {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 32px;
 }
@@ -870,6 +920,32 @@ input, textarea, [contenteditable] {
 .kpi-value {
     font-size: 28px;
     font-weight: 700;
+}
+
+/* Dashboard Charts */
+.dashboard-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.chart-container {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.chart-container h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+}
+
+.chart-container canvas {
+    max-height: 300px;
 }
 
 .dashboard-content {
@@ -968,6 +1044,158 @@ input, textarea, [contenteditable] {
     font-size: 24px;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+/* Calendar View */
+.calendar-view {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.calendar-header h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.calendar-header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.calendar-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.calendar-day-header {
+    text-align: center;
+    padding: 12px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.calendar-day {
+    min-height: 120px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.calendar-day:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.calendar-day.other-month {
+    opacity: 0.3;
+}
+
+.calendar-day.today {
+    border: 2px solid var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.calendar-day-number {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.calendar-day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.calendar-event {
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.calendar-event:hover {
+    transform: scale(1.05);
+    z-index: 10;
+}
+
+.calendar-event.overdue {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 3px solid #ef4444;
+}
+
+.calendar-event.today {
+    background: #fef3c7;
+    color: #92400e;
+    border-left: 3px solid #f59e0b;
+}
+
+.calendar-event.upcoming {
+    background: #d1fae5;
+    color: #065f46;
+    border-left: 3px solid #10b981;
+}
+
+.calendar-legend {
+    display: flex;
+    gap: 24px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    align-items: center;
+}
+
+.calendar-legend h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
 }
 
 /* Report View */
@@ -1094,6 +1322,131 @@ input, textarea, [contenteditable] {
     font-size: 24px;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+/* Status Breakdown */
+.status-breakdown {
+    margin-bottom: 32px;
+}
+
+.status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.status-card {
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.status-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.status-card.status-in-lavorazione:hover,
+.status-card.status-in-lavorazione.active {
+    border-color: #1e40af;
+    background: rgba(30, 64, 175, 0.05);
+}
+
+.status-card.status-completato:hover,
+.status-card.status-completato.active {
+    border-color: #065f46;
+    background: rgba(6, 95, 70, 0.05);
+}
+
+.status-card.status-in-attesa:hover,
+.status-card.status-in-attesa.active {
+    border-color: #92400e;
+    background: rgba(146, 64, 14, 0.05);
+}
+
+.status-card.status-completato-non-pagato:hover,
+.status-card.status-completato-non-pagato.active {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.status-card.active {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+.status-card.active::before {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.status-card {
+    position: relative;
+}
+
+.status-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.status-card-icon {
+    font-size: 24px;
+}
+
+.status-card-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.status-card-stats {
+    text-align: center;
+}
+
+.status-card-count {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.status-card-amount {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.status-card.status-in-lavorazione .status-card-count {
+    color: #1e40af;
+}
+
+.status-card.status-completato .status-card-count {
+    color: #065f46;
+}
+
+.status-card.status-in-attesa .status-card-count {
+    color: #92400e;
+}
+
+.status-card.status-completato-non-pagato .status-card-count {
+    color: #dc2626;
 }
 
 /* Report Table */
@@ -1676,6 +2029,18 @@ input, textarea, [contenteditable] {
     .dashboard-kpi {
         grid-template-columns: 1fr;
     }
+    
+    .dashboard-charts {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-container {
+        padding: 16px;
+    }
+    
+    .chart-container h3 {
+        font-size: 14px;
+    }
 
     .kpi-card {
         padding: 20px;
@@ -1701,6 +2066,69 @@ input, textarea, [contenteditable] {
 
     .dashboard-section h3 {
         font-size: 16px;
+    }
+
+    /* Status breakdown responsive */
+    .status-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .status-card {
+        padding: 16px;
+    }
+
+    .status-card-icon {
+        font-size: 20px;
+    }
+
+    .status-card-label {
+        font-size: 12px;
+    }
+
+    .status-card-count {
+        font-size: 24px;
+    }
+
+    .status-card-amount {
+        font-size: 12px;
+    }
+
+    /* Calendar responsive */
+    .calendar-header {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .calendar-controls {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .calendar-grid {
+        gap: 4px;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+        padding: 4px;
+    }
+    
+    .calendar-day-number {
+        font-size: 12px;
+    }
+    
+    .calendar-event {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+    
+    .calendar-legend {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .legend-item {
+        font-size: 11px;
     }
 
     /* Report responsive */
@@ -1747,6 +2175,12 @@ input, textarea, [contenteditable] {
     .report-table td {
         padding: 12px 16px;
         font-size: 13px;
+    }
+    
+    /* Nascondi N° Ordine su mobile */
+    .report-table th:nth-child(3),
+    .report-table td:nth-child(3) {
+        display: none;
     }
 
     .cloud-status {
