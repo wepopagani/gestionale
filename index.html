@@ -2,8 +2,22 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>3DMAKES - Gestionale Clienti</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Gestionale clienti per 3DMAKES con ordini, documenti e report">
+    <meta name="theme-color" content="#6366f1">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="3DMAKES">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="apple-touch-startup-image" href="logo.png">
+    
+    <!-- Styles -->
     <link rel="stylesheet" href="style.css?v=2.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -29,7 +43,8 @@
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
-                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📊 Report Completo</button>
+                <button class="btn-secondary" id="viewDashboardBtn" style="margin-top: 8px; width: 100%;">📊 Dashboard</button>
+                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📈 Report Completo</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -44,6 +59,98 @@
                 <h2>Benvenuto nel tuo Gestionale</h2>
                 <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
+            </div>
+
+            <!-- Dashboard View -->
+            <div class="dashboard-view" id="dashboardView" style="display: none;">
+                <div class="dashboard-header">
+                    <div>
+                        <h2>📊 Dashboard</h2>
+                        <p>Panoramica generale della tua attività</p>
+                    </div>
+                </div>
+
+                <!-- Dashboard KPI Cards -->
+                <div class="dashboard-kpi">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">👥</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Clienti Totali</div>
+                            <div class="kpi-value" id="dashTotalClients">0</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📦</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Ordini Totali</div>
+                            <div class="kpi-value" id="dashTotalOrders">0</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">💰</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Fatturato Totale</div>
+                            <div class="kpi-value" id="dashTotalRevenue">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🔨</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">In Lavorazione</div>
+                            <div class="kpi-value" id="dashInProgress">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Content Grid -->
+                <div class="dashboard-content">
+                    <!-- Ultimi Ordini -->
+                    <div class="dashboard-section">
+                        <h3>📋 Ultimi Ordini</h3>
+                        <div class="dashboard-list" id="dashRecentOrders">
+                            <div class="empty-section"><p>Nessun ordine</p></div>
+                        </div>
+                    </div>
+
+                    <!-- Pagamenti in Attesa -->
+                    <div class="dashboard-section">
+                        <h3>⏳ Pagamenti in Sospeso</h3>
+                        <div class="dashboard-list" id="dashPendingPayments">
+                            <div class="empty-section"><p>Nessun pagamento in sospeso</p></div>
+                        </div>
+                    </div>
+
+                    <!-- Clienti Recenti -->
+                    <div class="dashboard-section">
+                        <h3>👤 Clienti Recenti</h3>
+                        <div class="dashboard-list" id="dashRecentClients">
+                            <div class="empty-section"><p>Nessun cliente</p></div>
+                        </div>
+                    </div>
+
+                    <!-- Statistiche Veloci -->
+                    <div class="dashboard-section">
+                        <h3>📈 Statistiche Rapide</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-label">✅ Completati</div>
+                                <div class="stat-value" id="dashCompleted">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">⏳ In Attesa</div>
+                                <div class="stat-value" id="dashWaiting">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">💳 Pagati</div>
+                                <div class="stat-value" id="dashPaid">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">❌ Non Pagati</div>
+                                <div class="stat-value" id="dashUnpaid">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Report View Unificato -->
@@ -127,35 +234,10 @@
                     </div>
                 </div>
                 
-                <!-- Sezione Clienti Acquisiti -->
-                <div class="report-section">
-                    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 16px;">👥 Clienti Acquisiti</h3>
-                    <div class="report-table-container" style="margin-bottom: 32px;">
-                        <div class="report-table-wrapper">
-                            <table class="report-table">
-                                <thead>
-                                    <tr>
-                                        <th>Data Primo Ordine</th>
-                                        <th>Cliente</th>
-                                        <th>Contatti</th>
-                                        <th>N° Ordini</th>
-                                        <th>Valore Totale</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="clientsAcquiredTableBody">
-                                    <tr>
-                                        <td colspan="5" class="empty-report">Nessun nuovo cliente in questo periodo</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Report Table -->
-                <div class="report-table-container">
+                <!-- Report Table - Dettaglio Ordini -->
+                <div class="report-table-container" style="margin-bottom: 32px;">
                     <div class="report-actions">
-                        <h3>Dettaglio Ordini</h3>
+                        <h3>📦 Dettaglio Ordini</h3>
                         <div>
                             <button class="btn-small" id="exportCSVBtn">📄 Esporta CSV</button>
                             <button class="btn-small" id="printReportBtn">🖨️ Stampa</button>
@@ -182,6 +264,31 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Sezione Clienti Acquisiti -->
+                <div class="report-section">
+                    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 16px;">👥 Clienti Acquisiti</h3>
+                    <div class="report-table-container">
+                        <div class="report-table-wrapper">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data Primo Ordine</th>
+                                        <th>Cliente</th>
+                                        <th>Contatti</th>
+                                        <th>N° Ordini</th>
+                                        <th>Valore Totale</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientsAcquiredTableBody">
+                                    <tr>
+                                        <td colspan="5" class="empty-report">Nessun nuovo cliente in questo periodo</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="client-detail" id="clientDetail" style="display: none;">
@@ -204,14 +311,27 @@
 
                 <!-- Tabs -->
                 <div class="tabs">
-                    <button class="tab-btn active" data-tab="documents">📄 Documenti</button>
+                    <button class="tab-btn active" data-tab="orders">🛒 Ordini</button>
+                    <button class="tab-btn" data-tab="documents">📄 Documenti</button>
                     <button class="tab-btn" data-tab="files">📎 File</button>
                     <button class="tab-btn" data-tab="notes">📝 Note</button>
-                    <button class="tab-btn" data-tab="orders">🛒 Ordini</button>
+                </div>
+
+                <!-- Tab Content: Ordini -->
+                <div class="tab-content active" id="ordersTab">
+                    <div class="section-header">
+                        <h3>Ordini</h3>
+                        <button class="btn-small" id="addOrderBtn">+ Nuovo Ordine</button>
+                    </div>
+                    <div class="orders-list" id="ordersList">
+                        <div class="empty-section">
+                            <p>Nessun ordine presente</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Tab Content: Documenti -->
-                <div class="tab-content active" id="documentsTab">
+                <div class="tab-content" id="documentsTab">
                     <div class="section-header">
                         <h3>Documenti</h3>
                         <button class="btn-small" id="addDocumentBtn">+ Aggiungi Documento</button>
@@ -219,19 +339,6 @@
                     <div class="documents-grid" id="documentsList">
                         <div class="empty-section">
                             <p>Nessun documento caricato</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab Content: Note -->
-                <div class="tab-content" id="notesTab">
-                    <div class="section-header">
-                        <h3>Note</h3>
-                        <button class="btn-small" id="addNoteBtn">+ Nuova Nota</button>
-                    </div>
-                    <div class="notes-list" id="notesList">
-                        <div class="empty-section">
-                            <p>Nessuna nota presente</p>
                         </div>
                     </div>
                 </div>
@@ -258,19 +365,6 @@
                     <div class="notes-list" id="notesList">
                         <div class="empty-section">
                             <p>Nessuna nota presente</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab Content: Ordini -->
-                <div class="tab-content" id="ordersTab">
-                    <div class="section-header">
-                        <h3>Ordini</h3>
-                        <button class="btn-small" id="addOrderBtn">+ Nuovo Ordine</button>
-                    </div>
-                    <div class="orders-list" id="ordersList">
-                        <div class="empty-section">
-                            <p>Nessun ordine presente</p>
                         </div>
                     </div>
                 </div>

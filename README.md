@@ -1,12 +1,34 @@
-# 📊 Gestionale Clienti
+# 📱 3DMAKES - Gestionale Clienti
 
-Un software gestionale web moderno e minimal per la gestione completa di clienti, documenti, ordini e report analitici.
+**Progressive Web App** moderna e minimal per la gestione completa di clienti, documenti, ordini e report analitici.
+
+> 🎉 **NUOVO!** Ora installabile come app su iPhone!
 
 ## 🚀 Come Utilizzarlo
 
+### 💻 Su Desktop
 1. **Apri il file `index.html`** nel tuo browser (doppio click sul file)
 2. Inizia ad aggiungere i tuoi clienti e gestire i loro dati!
-3. **Bonus**: Configura Firebase per il salvataggio cloud (opzionale)
+
+### 📱 Su iPhone (Installazione App)
+1. Leggi la guida: **[INSTALLAZIONE_IPHONE.md](INSTALLAZIONE_IPHONE.md)** 📖
+2. Apri in Safari → Condividi → "Aggiungi alla schermata Home"
+3. ✅ L'app si apre a schermo intero come un'app nativa!
+
+### 🌐 Online (Opzionale)
+Vuoi accedere da ovunque? Leggi: **[HOSTING_ONLINE.md](HOSTING_ONLINE.md)** 🌐
+- Hosting gratuito su Netlify/Vercel/Firebase
+- Accesso da qualsiasi dispositivo
+- URL permanente e HTTPS
+
+## 📱 Nuove Funzionalità PWA
+
+### ✨ Progressive Web App
+- **📲 Installabile su iPhone** - Come un'app dall'App Store
+- **📴 Funziona Offline** - Service Worker per cache intelligente
+- **⚡ Veloce** - Caricamento istantaneo dopo la prima visita
+- **🎯 Schermo Intero** - Esperienza app nativa
+- **🔄 Auto-aggiornamento** - Sempre l'ultima versione disponibile
 
 ## ✨ Funzionalità
 
@@ -62,15 +84,41 @@ Gestisci gli ordini con stati di avanzamento:
 - **⏳ In Attesa** - Ordini in sospeso
 - **❌ Annullato** - Ordini annullati
 
+**Stati Pagamento:**
+- ✅ **Pagato** - Ordine completamente pagato
+- ❌ **Non Pagato** - Ordine da saldare
+- ⏳ **Parziale** - Pagamento parziale (con importo pagato e saldo)
+
 Per ogni ordine puoi salvare:
-- Numero ordine
+- Numero ordine (auto-incrementale)
 - Descrizione dettagliata
 - Importo
 - Data
 - Stato di avanzamento
+- Stato pagamento
+- Metodo pagamento (contanti, bonifico, carta, TWINT, PayPal)
+
+**💡 Modifica Rapida:**
+- Clicca su qualsiasi ordine (dal cliente o dal report) per modificarlo
+- I bottoni ✏️ e 🗑️ restano disponibili per azioni rapide
+
+### 📊 Dashboard Interattiva
+**Nuovo!** Panoramica completa della tua attività:
+
+**KPI Cards:**
+- 👥 Totale clienti
+- 📦 Totale ordini
+- 💰 Fatturato totale (solo ordini pagati)
+- 🔨 Ordini in lavorazione
+
+**Sezioni Dashboard:**
+- 📋 **Ultimi Ordini** - I 5 ordini più recenti (cliccabili)
+- ⏳ **Pagamenti in Sospeso** - Ordini da saldare
+- 👤 **Clienti Recenti** - Ultimi clienti aggiunti
+- 📈 **Statistiche Rapide** - Conteggi ordini per stato
 
 ### 📊 Sistema Report Avanzato
-**Nuovo!** Analisi completa degli ordini con filtri multipli:
+Analisi completa degli ordini con filtri multipli:
 
 **Periodi Disponibili:**
 - 📅 Settimana corrente

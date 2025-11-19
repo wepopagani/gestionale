@@ -19,6 +19,33 @@ let state = {
     orderCounter: 1 // Counter per numeri ordine sequenziali
 };
 
+// ===== PWA SERVICE WORKER =====
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+                console.log('✅ Service Worker registrato:', registration.scope);
+                
+                // Controlla aggiornamenti ogni ora
+                setInterval(() => {
+                    registration.update();
+                }, 3600000);
+            })
+            .catch((error) => {
+                console.log('❌ Registrazione Service Worker fallita:', error);
+            });
+    });
+}
+
+// Gestione installazione PWA
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Previene il prompt automatico
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('💡 App installabile come PWA');
+});
+
 // ===== INIZIALIZZAZIONE =====
 document.addEventListener('DOMContentLoaded', () => {
     initFirebase();
@@ -26,9 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderClients();
     setupEventListeners();
     
-    // Se ci sono clienti, seleziona il primo
+    // Se ci sono clienti, mostra la dashboard
     if (state.clients.length > 0) {
-        selectClient(state.clients[0].id);
+        showDashboard();
     }
 });
 
@@ -430,7 +457,8 @@ function setupEventListeners() {
     document.getElementById('saveFileBtn').addEventListener('click', saveFile);
     document.getElementById('modalFileInput').addEventListener('change', handleFileSelect);
 
-    // Bottoni report
+    // Bottoni dashboard e report
+    document.getElementById('viewDashboardBtn').addEventListener('click', showDashboard);
     document.getElementById('viewReportsBtn').addEventListener('click', openReportView);
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
     document.getElementById('reportPeriod').addEventListener('change', handlePeriodChange);
@@ -476,10 +504,10 @@ function switchTab(tabName) {
     });
     
     const tabMap = {
+        'orders': 'ordersTab',
         'documents': 'documentsTab',
         'files': 'filesTab',
-        'notes': 'notesTab',
-        'orders': 'ordersTab'
+        'notes': 'notesTab'
     };
     
     document.getElementById(tabMap[tabName]).classList.add('active');
@@ -516,6 +544,7 @@ function selectClient(clientId) {
     // Nascondi TUTTO tranne il client detail
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('reportView').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'block';
     
     // Su mobile, nascondi la sidebar quando si apre un cliente
@@ -547,6 +576,9 @@ function backToClientList() {
     
     if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
+    } else {
+        // Mostra dashboard
+        showDashboard();
     }
 }
 
@@ -643,12 +675,12 @@ function deleteCurrentClient() {
     saveToStorage();
     renderClients();
     
-    // Mostra empty state o seleziona primo cliente
+    // Mostra empty state o dashboard
     if (state.clients.length === 0) {
         document.getElementById('clientDetail').style.display = 'none';
         document.getElementById('emptyState').style.display = 'block';
     } else {
-        selectClient(state.clients[0].id);
+        showDashboard();
     }
 }
 
@@ -979,7 +1011,7 @@ function renderOrders() {
         }
         
         return `
-        <div class="order-card">
+        <div class="order-card" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <div class="order-card-header">
                 <div class="order-card-info">
                     <h4>${order.number}</h4>
@@ -995,8 +1027,8 @@ function renderOrders() {
                 <div class="order-card-amount">${formatCurrency(order.amount)}</div>
                 <div class="order-card-date">${formatDate(order.date)}</div>
                 <div class="order-card-actions">
-                    <button class="btn-small" onclick="editOrder('${order.id}')" style="padding: 4px 12px; font-size: 12px;">✏️</button>
-                    <button class="btn-danger" onclick="deleteOrder('${order.id}')" style="padding: 4px 12px; font-size: 12px;">🗑️</button>
+                    <button class="btn-small" onclick="event.stopPropagation(); editOrder('${order.id}')" style="padding: 4px 12px; font-size: 12px;">✏️</button>
+                    <button class="btn-danger" onclick="event.stopPropagation(); deleteOrder('${order.id}')" style="padding: 4px 12px; font-size: 12px;">🗑️</button>
                 </div>
             </div>
         </div>
@@ -1151,6 +1183,28 @@ function deleteOrder(orderId) {
     
     saveToStorage();
     renderOrders();
+}
+
+// Modifica ordine dal report
+function editOrderFromReport(clientId, orderId) {
+    // Imposta il cliente corrente
+    state.currentClientId = clientId;
+    
+    // Trova il cliente e l'ordine
+    const client = state.clients.find(c => c.id === clientId);
+    if (!client) {
+        alert('Cliente non trovato');
+        return;
+    }
+    
+    const order = client.orders ? client.orders.find(o => o.id === orderId) : null;
+    if (!order) {
+        alert('Ordine non trovato');
+        return;
+    }
+    
+    // Apri il modal di modifica
+    editOrder(orderId);
 }
 
 // ===== FILE =====
@@ -1327,11 +1381,194 @@ function deleteFile(fileId) {
     renderFiles();
 }
 
+// ===== DASHBOARD SYSTEM =====
+function showDashboard() {
+    // Nascondi tutto tranne la dashboard
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('reportView').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'block';
+    
+    // Deseleziona cliente corrente
+    state.currentClientId = null;
+    renderClients(); // Rimuove la selezione visiva
+    
+    // Popola la dashboard
+    renderDashboard();
+}
+
+function renderDashboard() {
+    // Calcola KPI generali
+    const totalClients = state.clients.length;
+    
+    let totalOrders = 0;
+    let totalRevenue = 0;
+    let inProgressOrders = 0;
+    let completedOrders = 0;
+    let waitingOrders = 0;
+    let paidOrders = 0;
+    let unpaidOrders = 0;
+    
+    const allOrders = [];
+    const pendingPayments = [];
+    
+    state.clients.forEach(client => {
+        if (client.orders && client.orders.length > 0) {
+            totalOrders += client.orders.length;
+            
+            client.orders.forEach(order => {
+                // Aggiungi info cliente all'ordine
+                const orderWithClient = {
+                    ...order,
+                    clientId: client.id,
+                    clientName: client.name
+                };
+                
+                allOrders.push(orderWithClient);
+                
+                // Conteggi per stato
+                if (order.status === 'in_lavorazione') inProgressOrders++;
+                if (order.status === 'completato') completedOrders++;
+                if (order.status === 'in_attesa') waitingOrders++;
+                
+                // Conteggi pagamenti
+                const paymentStatus = order.paymentStatus || 'non_pagato';
+                if (paymentStatus === 'pagato') {
+                    paidOrders++;
+                    totalRevenue += (order.amount || 0);
+                }
+                if (paymentStatus === 'non_pagato') unpaidOrders++;
+                
+                // Pagamenti in sospeso (non pagato o parziale)
+                if (paymentStatus === 'non_pagato' || paymentStatus === 'parziale') {
+                    pendingPayments.push(orderWithClient);
+                }
+            });
+        }
+    });
+    
+    // Aggiorna KPI
+    document.getElementById('dashTotalClients').textContent = totalClients;
+    document.getElementById('dashTotalOrders').textContent = totalOrders;
+    document.getElementById('dashTotalRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('dashInProgress').textContent = inProgressOrders;
+    document.getElementById('dashCompleted').textContent = completedOrders;
+    document.getElementById('dashWaiting').textContent = waitingOrders;
+    document.getElementById('dashPaid').textContent = paidOrders;
+    document.getElementById('dashUnpaid').textContent = unpaidOrders;
+    
+    // Ordina ordini per data (più recenti prima)
+    allOrders.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    
+    // Ultimi 5 ordini
+    renderDashboardRecentOrders(allOrders.slice(0, 5));
+    
+    // Pagamenti in sospeso (massimo 5)
+    renderDashboardPendingPayments(pendingPayments.slice(0, 5));
+    
+    // Clienti recenti (ultimi 5)
+    const recentClients = [...state.clients].sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+    }).slice(0, 5);
+    renderDashboardRecentClients(recentClients);
+}
+
+function renderDashboardRecentOrders(orders) {
+    const container = document.getElementById('dashRecentOrders');
+    
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="empty-section"><p>Nessun ordine</p></div>';
+        return;
+    }
+    
+    const statusColors = {
+        'in_lavorazione': { bg: '#dbeafe', color: '#1e40af' },
+        'completato': { bg: '#d1fae5', color: '#065f46' },
+        'in_attesa': { bg: '#fef3c7', color: '#92400e' },
+        'annullato': { bg: '#fee2e2', color: '#991b1b' }
+    };
+    
+    const statusLabels = {
+        'in_lavorazione': '🔨',
+        'completato': '✅',
+        'in_attesa': '⏳',
+        'annullato': '❌'
+    };
+    
+    container.innerHTML = orders.map(order => {
+        const colors = statusColors[order.status] || { bg: '#e5e7eb', color: '#374151' };
+        return `
+            <div class="dashboard-item" onclick="editOrderFromReport('${order.clientId}', '${order.id}')">
+                <div class="dashboard-item-header">
+                    <div class="dashboard-item-title">${order.number}</div>
+                    <span class="dashboard-item-badge" style="background: ${colors.bg}; color: ${colors.color};">${statusLabels[order.status]}</span>
+                </div>
+                <div class="dashboard-item-subtitle">${order.clientName} • ${formatDate(order.date)}</div>
+                <div class="dashboard-item-amount">${formatCurrency(order.amount)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderDashboardPendingPayments(orders) {
+    const container = document.getElementById('dashPendingPayments');
+    
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="empty-section"><p>Tutto pagato! 🎉</p></div>';
+        return;
+    }
+    
+    container.innerHTML = orders.map(order => {
+        const paymentStatus = order.paymentStatus || 'non_pagato';
+        const isParziale = paymentStatus === 'parziale';
+        const remaining = isParziale ? (order.amount || 0) - (order.paidAmount || 0) : (order.amount || 0);
+        
+        return `
+            <div class="dashboard-item" onclick="editOrderFromReport('${order.clientId}', '${order.id}')">
+                <div class="dashboard-item-header">
+                    <div class="dashboard-item-title">${order.number}</div>
+                    <span class="dashboard-item-badge" style="background: ${isParziale ? '#fef3c7' : '#fee2e2'}; color: ${isParziale ? '#92400e' : '#991b1b'};">${isParziale ? '⏳' : '❌'}</span>
+                </div>
+                <div class="dashboard-item-subtitle">${order.clientName}</div>
+                <div class="dashboard-item-amount" style="color: #ef4444;">${formatCurrency(remaining)} ${isParziale ? 'da saldare' : 'da pagare'}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderDashboardRecentClients(clients) {
+    const container = document.getElementById('dashRecentClients');
+    
+    if (clients.length === 0) {
+        container.innerHTML = '<div class="empty-section"><p>Nessun cliente</p></div>';
+        return;
+    }
+    
+    container.innerHTML = clients.map(client => {
+        const ordersCount = (client.orders || []).length;
+        const totalValue = (client.orders || []).reduce((sum, o) => sum + (o.amount || 0), 0);
+        
+        return `
+            <div class="dashboard-item" onclick="selectClient('${client.id}')">
+                <div class="dashboard-item-header">
+                    <div class="dashboard-item-title">${client.name}</div>
+                    <span class="dashboard-item-badge" style="background: var(--bg-tertiary); color: var(--text-secondary);">${ordersCount} 📦</span>
+                </div>
+                <div class="dashboard-item-subtitle">${client.email || 'Nessuna email'}</div>
+                ${totalValue > 0 ? `<div class="dashboard-item-amount">${formatCurrency(totalValue)}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
 // ===== REPORT SYSTEM =====
 function openReportView() {
     // Nascondo TUTTO tranne il report
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('reportView').style.display = 'block';
     
     // Su mobile, rimuovi classi fullscreen
@@ -1369,7 +1606,8 @@ function closeReportView() {
             document.querySelector('.main-content').classList.add('fullscreen-mobile');
         }
     } else {
-        document.getElementById('emptyState').style.display = 'block';
+        // Torna alla dashboard
+        showDashboard();
     }
 }
 
@@ -1718,7 +1956,7 @@ function renderReportTable(orders) {
         let amountColor = paymentTextColor;
         
         return `
-        <tr>
+        <tr onclick="editOrderFromReport('${order.clientId}', '${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <td>${formatDate(order.date)}</td>
             <td><strong>${order.clientName}</strong></td>
             <td>${order.number}</td>
