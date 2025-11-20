@@ -868,13 +868,15 @@ body.dark-mode .theme-icon {
 .kpi-card {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     border-radius: 16px;
-    padding: 24px;
+    padding: 20px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     transition: all 0.3s;
     box-shadow: var(--shadow);
     color: white;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .kpi-card:hover {
@@ -908,18 +910,24 @@ body.dark-mode .theme-icon {
 
 .kpi-content {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .kpi-label {
-    font-size: 13px;
+    font-size: 12px;
     opacity: 0.9;
     margin-bottom: 4px;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 .kpi-value {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Dashboard Charts */
@@ -2043,17 +2051,21 @@ body.dark-mode .theme-icon {
     }
 
     .kpi-card {
-        padding: 20px;
+        padding: 16px;
     }
 
     .kpi-icon {
-        font-size: 32px;
-        width: 56px;
-        height: 56px;
+        font-size: 28px;
+        width: 48px;
+        height: 48px;
     }
 
     .kpi-value {
-        font-size: 24px;
+        font-size: 18px;
+    }
+    
+    .kpi-label {
+        font-size: 11px;
     }
 
     .dashboard-content {
