@@ -426,7 +426,10 @@ function formatDate(date) {
 
 function formatCurrency(amount) {
     if (!amount) return 'CHF 0.00';
-    return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' }).format(amount);
+    // Formatta con locale svizzero e aggiungi spazio sottile dopo l'apostrofo per leggibilità
+    return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' })
+        .format(amount)
+        .replace(/'/g, "'\u202F"); // Spazio sottile dopo apostrofo
 }
 
 function generateOrderNumber() {
@@ -563,6 +566,9 @@ function renderClients(searchTerm = '') {
         clientsList.innerHTML = '<div class="empty-section"><p>Nessun cliente trovato</p></div>';
         return;
     }
+
+    // Ordina alfabeticamente per nome
+    filteredClients.sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }));
 
     clientsList.innerHTML = filteredClients.map(client => `
         <div class="client-item ${client.id === state.currentClientId ? 'active' : ''}" 
@@ -2097,7 +2103,8 @@ function generateReport() {
     const dateRange = getDateRange(period);
     
     // ===== RACCOLTA ORDINI =====
-    const allOrders = [];
+    // Prima raccogliamo TUTTI gli ordini del periodo (per le statistiche)
+    const allOrdersForStats = [];
     
     state.clients.forEach(client => {
         if (!client.orders || client.orders.length === 0) return;
@@ -2113,24 +2120,26 @@ function generateReport() {
             
             // Filtra per periodo
             if (orderDate >= dateRange.from && orderDate <= dateRange.to) {
-                // Filtra per stato
-                if (statusFilter === 'all' || order.status === statusFilter) {
-                    allOrders.push({
-                        ...order,
-                        clientId: client.id,
-                        clientName: client.name
-                    });
-                }
+                allOrdersForStats.push({
+                    ...order,
+                    clientId: client.id,
+                    clientName: client.name
+                });
             }
         });
     });
     
+    // Poi filtriamo per stato (per la tabella)
+    const filteredOrders = statusFilter === 'all' 
+        ? [...allOrdersForStats]
+        : allOrdersForStats.filter(order => order.status === statusFilter);
+    
     // Ordina per data (più recenti prima)
-    allOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+    filteredOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    state.reportData = allOrders;
+    state.reportData = filteredOrders;
     
-    console.log(`📦 Ordini trovati: ${allOrders.length}`);
+    console.log(`📦 Ordini totali: ${allOrdersForStats.length}, Filtrati: ${filteredOrders.length}`);
     
     // ===== RACCOLTA CLIENTI ACQUISITI =====
     const newClients = [];
@@ -2213,6 +2222,7 @@ function generateReport() {
     console.log(`👥 Clienti acquisiti trovati: ${newClients.length}`);
     
     // ===== CALCOLA STATISTICHE PER STATO =====
+    // Le statistiche vengono calcolate su TUTTI gli ordini del periodo (non filtrati)
     const statusStats = {
         'in_lavorazione': { count: 0, amount: 0 },
         'completato': { count: 0, amount: 0 },
@@ -2220,7 +2230,7 @@ function generateReport() {
         'completato_non_pagato': { count: 0, amount: 0 }
     };
     
-    allOrders.forEach(order => {
+    allOrdersForStats.forEach(order => {
         const status = order.status || 'in_lavorazione';
         const paymentStatus = order.paymentStatus || 'non_pagato';
         
@@ -2256,7 +2266,7 @@ function generateReport() {
     
     if (statusFilter === 'all') {
         // Nessun filtro: mostra importo totale di TUTTI gli ordini
-        totalRevenue = allOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+        totalRevenue = allOrdersForStats.reduce((sum, order) => sum + (order.amount || 0), 0);
         revenueLabelText = 'Importo Totale (Tutti)';
     } else {
         // Filtro stato selezionato: mostra solo importo di quel stato
@@ -2271,8 +2281,9 @@ function generateReport() {
     }
     
     // ===== ALTRE STATISTICHE =====
-    const totalOrders = allOrders.length;
-    const completedOrders = allOrders.filter(o => o.status === 'completato').length;
+    // Le statistiche dei summary cards mostrano i dati FILTRATI (quelli nella tabella)
+    const totalOrders = filteredOrders.length;
+    const completedOrders = filteredOrders.filter(o => o.status === 'completato').length;
     const totalNewClients = newClients.length;
     
     console.log('📊 Statistiche:', {
@@ -2293,7 +2304,7 @@ function generateReport() {
     
     // Renderizza tabelle
     renderClientsAcquiredTable(newClients, dateRange);
-    renderReportTable(allOrders);
+    renderReportTable(filteredOrders);
     
     // Aggiorna classi active sulle card
     updateStatusCardsActive(statusFilter);
