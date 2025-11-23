@@ -870,13 +870,13 @@ body.dark-mode .theme-icon {
     border-radius: 16px;
     padding: 20px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 12px;
     transition: all 0.3s;
     box-shadow: var(--shadow);
     color: white;
-    min-width: 0;
-    overflow: hidden;
+    text-align: center;
 }
 
 .kpi-card:hover {
@@ -909,9 +909,10 @@ body.dark-mode .theme-icon {
 }
 
 .kpi-content {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .kpi-label {
@@ -923,11 +924,9 @@ body.dark-mode .theme-icon {
 }
 
 .kpi-value {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 /* Dashboard Charts */
@@ -1350,6 +1349,9 @@ body.dark-mode .theme-icon {
     padding: 20px;
     cursor: pointer;
     transition: all 0.3s;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
 }
 
 .status-card:hover {
@@ -1426,6 +1428,11 @@ body.dark-mode .theme-icon {
 
 .status-card-stats {
     text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
 }
 
 .status-card-count {
@@ -1439,6 +1446,7 @@ body.dark-mode .theme-icon {
     font-size: 14px;
     font-weight: 600;
     color: var(--primary);
+    word-break: break-word;
 }
 
 .status-card.status-in-lavorazione .status-card-count {
@@ -2087,6 +2095,7 @@ body.dark-mode .theme-icon {
 
     .status-card {
         padding: 16px;
+        min-height: 120px;
     }
 
     .status-card-icon {
