@@ -52,6 +52,7 @@
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
                 <button class="btn-secondary" id="viewDashboardBtn" style="margin-top: 8px; width: 100%;">📊 Dashboard</button>
                 <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📈 Report Completo</button>
+                <button class="btn-secondary" id="backupBtn" style="margin-top: 8px; width: 100%;">💾 Backup Dati</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -767,6 +768,49 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeModal('fileModal')">Annulla</button>
                 <button class="btn-primary" id="saveFileBtn">Carica</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Backup/Restore -->
+    <div class="modal" id="backupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>💾 Backup & Restore</h3>
+                <button class="modal-close" onclick="closeModal('backupModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 24px;">
+                    <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">📥 Esporta Backup</h4>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Scarica tutti i tuoi dati (clienti, ordini, documenti, note, file) in formato JSON.
+                    </p>
+                    <button class="btn-primary" onclick="exportBackup()" style="width: 100%;">
+                        📥 Scarica Backup JSON
+                    </button>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid var(--border); margin: 24px 0;">
+                
+                <div>
+                    <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">📤 Importa Backup</h4>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        ⚠️ <strong>Attenzione:</strong> Importare un backup sostituirà tutti i dati attuali!
+                    </p>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="restoreFileInput" accept=".json">
+                        <div class="file-input-display">
+                            <span class="file-input-icon">📁</span>
+                            <span class="file-input-text">Seleziona file backup JSON</span>
+                        </div>
+                    </div>
+                    <button class="btn-secondary" onclick="importBackup()" style="width: 100%; margin-top: 12px;">
+                        📤 Importa Backup
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('backupModal')">Chiudi</button>
             </div>
         </div>
     </div>

@@ -465,9 +465,14 @@ function openModal(modalId) {
 // ===== EVENT LISTENERS =====
 function setupEventListeners() {
     // Ricerca clienti
+    // Debounce per ricerca (evita rendering continui)
+    let searchTimeout;
     document.getElementById('searchInput').addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase();
-        renderClients(searchTerm);
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            renderClients(searchTerm);
+        }, 300); // Attende 300ms dopo che l'utente smette di digitare
     });
 
     // Bottoni clienti
@@ -475,6 +480,9 @@ function setupEventListeners() {
     document.getElementById('editClientBtn').addEventListener('click', openEditClientModal);
     document.getElementById('deleteClientBtn').addEventListener('click', deleteCurrentClient);
     document.getElementById('saveClientBtn').addEventListener('click', saveClient);
+    
+    // Bottone backup
+    document.getElementById('backupBtn').addEventListener('click', () => openModal('backupModal'));
 
     // Bottoni documenti
     document.getElementById('addDocumentBtn').addEventListener('click', openAddDocumentModal);
@@ -708,6 +716,9 @@ function saveClient() {
     renderClients();
     selectClient(state.currentClientId);
     closeModal('clientModal');
+    
+    // Notifica successo
+    showNotification(state.editMode ? '✅ Cliente aggiornato' : '✅ Cliente creato', 'success');
 }
 
 function deleteCurrentClient() {
@@ -720,6 +731,9 @@ function deleteCurrentClient() {
     
     saveToStorage();
     renderClients();
+    
+    // Notifica successo
+    showNotification('🗑️ Cliente eliminato', 'success');
     
     // Mostra empty state o dashboard
     if (state.clients.length === 0) {
@@ -849,6 +863,9 @@ function saveDocument() {
         closeModal('documentModal');
         
         state.selectedDocFile = null;
+        
+        // Notifica successo
+        showNotification('✅ Documento aggiunto', 'success');
     };
 
     // Se c'è un file selezionato, caricalo
@@ -992,6 +1009,9 @@ function saveNote() {
     saveToStorage();
     renderNotes();
     closeModal('noteModal');
+    
+    // Notifica successo
+    showNotification(state.editMode ? '✅ Nota aggiornata' : '✅ Nota creata', 'success');
 }
 
 function deleteNote(noteId) {
@@ -1315,6 +1335,9 @@ function saveOrder() {
     saveToStorage();
     renderOrders();
     closeModal('orderModal');
+    
+    // Notifica successo
+    showNotification(state.editMode ? '✅ Ordine aggiornato' : '✅ Ordine creato', 'success');
 }
 
 function deleteOrder(orderId) {
@@ -1489,6 +1512,9 @@ function saveFile() {
         closeModal('fileModal');
         
         state.selectedFile = null;
+        
+        // Notifica successo
+        showNotification('✅ File caricato', 'success');
     };
 
     reader.onerror = function() {
@@ -2691,5 +2717,100 @@ function printReport() {
         printWindow.print();
         printWindow.close();
     }, 250);
+}
+
+// ===== BACKUP & RESTORE =====
+function exportBackup() {
+    try {
+        const backupData = {
+            version: '2.1',
+            timestamp: new Date().toISOString(),
+            clients: state.clients,
+            orderCounter: state.orderCounter
+        };
+        
+        const dataStr = JSON.stringify(backupData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        const date = new Date().toISOString().split('T')[0];
+        link.download = `3dmakes-backup-${date}.json`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        showNotification('✅ Backup scaricato con successo', 'success');
+        console.log('💾 Backup esportato:', backupData);
+    } catch (error) {
+        console.error('❌ Errore esportazione backup:', error);
+        showNotification('❌ Errore durante l\'esportazione', 'error');
+    }
+}
+
+function importBackup() {
+    const fileInput = document.getElementById('restoreFileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Seleziona un file backup JSON');
+        return;
+    }
+    
+    if (!confirm('⚠️ ATTENZIONE: Importare questo backup sostituirà TUTTI i dati attuali. Sei sicuro di voler continuare?')) {
+        return;
+    }
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const backupData = JSON.parse(e.target.result);
+            
+            // Valida il formato
+            if (!backupData.clients || !Array.isArray(backupData.clients)) {
+                throw new Error('Formato backup non valido');
+            }
+            
+            // Ripristina i dati
+            state.clients = backupData.clients;
+            state.orderCounter = backupData.orderCounter || 1;
+            
+            // Salva in localStorage e cloud
+            saveToStorage();
+            
+            // Aggiorna l'interfaccia
+            renderClients();
+            state.currentClientId = null;
+            
+            if (state.clients.length > 0) {
+                showDashboard();
+            } else {
+                document.getElementById('clientDetail').style.display = 'none';
+                document.getElementById('dashboardView').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'block';
+            }
+            
+            closeModal('backupModal');
+            fileInput.value = ''; // Reset input
+            
+            showNotification(`✅ Backup ripristinato! ${state.clients.length} clienti importati`, 'success');
+            console.log('📥 Backup importato:', backupData);
+        } catch (error) {
+            console.error('❌ Errore importazione backup:', error);
+            showNotification('❌ Errore: file backup non valido', 'error');
+        }
+    };
+    
+    reader.onerror = function() {
+        showNotification('❌ Errore lettura file', 'error');
+    };
+    
+    reader.readAsText(file);
 }
 
