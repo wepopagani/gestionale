@@ -77,11 +77,13 @@ input, textarea, [contenteditable] {
 /* Sidebar */
 .sidebar {
     width: 320px;
+    min-width: 320px;
     background: var(--bg-primary);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: width 0.3s ease, min-width 0.3s ease;
 }
 
 .sidebar-header {
@@ -236,6 +238,49 @@ body.dark-mode .theme-icon {
     flex: 1;
     overflow-y: auto;
     padding: 40px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+/* Toggle Sidebar Button */
+.btn-toggle-sidebar {
+    position: fixed;
+    top: 20px;
+    left: 330px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--text-primary);
+    z-index: 999;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow);
+}
+
+.btn-toggle-sidebar:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+/* Quando sidebar è nascosta */
+.sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+    overflow: hidden;
+}
+
+/* Posiziona il bottone quando sidebar è nascosta */
+body.sidebar-collapsed .btn-toggle-sidebar {
+    left: 10px;
 }
 
 /* Empty state */
@@ -1798,6 +1843,11 @@ body.dark-mode .theme-icon {
     .app {
         flex-direction: column;
         position: relative;
+    }
+    
+    /* Nascondi toggle sidebar su mobile */
+    .btn-toggle-sidebar {
+        display: none;
     }
 
     .sidebar {

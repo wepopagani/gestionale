@@ -16,7 +16,8 @@ let state = {
     editMode: false,
     editItemId: null,
     reportData: [],
-    orderCounter: 1 // Counter per numeri ordine sequenziali
+    orderCounter: 1, // Counter per numeri ordine sequenziali
+    isSyncingFromCloud: false // Flag per evitare loop di sincronizzazione
 };
 
 // ===== PWA SERVICE WORKER =====
@@ -67,6 +68,39 @@ function toggleDarkMode() {
     console.log(isDark ? '🌙 Dark mode attivato' : '☀️ Light mode attivato');
 }
 
+// ===== TOGGLE SIDEBAR =====
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const icon = document.getElementById('toggleSidebarIcon');
+    const body = document.body;
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    
+    // Aggiungi/rimuovi classe al body per gestire il layout
+    if (isCollapsed) {
+        body.classList.add('sidebar-collapsed');
+    } else {
+        body.classList.remove('sidebar-collapsed');
+    }
+    
+    // Cambia icona
+    icon.textContent = isCollapsed ? '▶' : '◀';
+    
+    // Salva preferenza
+    localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
+    
+    console.log(isCollapsed ? '◀ Sidebar nascosta' : '▶ Sidebar visibile');
+}
+
+// Carica preferenza sidebar
+function loadSidebarState() {
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (isCollapsed) {
+        document.querySelector('.sidebar').classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+        document.getElementById('toggleSidebarIcon').textContent = '▶';
+    }
+}
+
 // Carica preferenza dark mode
 function loadDarkMode() {
     const darkMode = localStorage.getItem('darkMode');
@@ -82,6 +116,7 @@ function loadDarkMode() {
 // ===== INIZIALIZZAZIONE =====
 document.addEventListener('DOMContentLoaded', () => {
     loadDarkMode(); // Carica tema salvato
+    loadSidebarState(); // Carica stato sidebar
     initFirebase();
     loadFromStorage();
     renderClients();
@@ -182,9 +217,20 @@ function setupCloudSync() {
                 // Solo se i dati sono diversi (evita loop)
                 if (JSON.stringify(cloudData) !== JSON.stringify(state.clients)) {
                     console.log('🔄 Aggiornamento automatico dal cloud');
+                    console.log(`📊 Dati cloud: ${cloudData.length} clienti`);
+                    console.log(`📊 Dati locali: ${state.clients.length} clienti`);
+                    
+                    // Imposta flag per evitare loop
+                    state.isSyncingFromCloud = true;
+                    
                     state.clients = cloudData;
-                    saveToStorage();
+                    saveToStorage(); // Salva solo in localStorage, non nel cloud
                     renderClients();
+                    
+                    // Rimuovi flag dopo un breve delay
+                    setTimeout(() => {
+                        state.isSyncingFromCloud = false;
+                    }, 1000);
                     
                     // Mantieni la vista corrente se possibile
                     if (state.currentClientId) {
@@ -226,9 +272,18 @@ function saveToCloud() {
     if (!firebaseDb || !cloudSyncEnabled || !userId) return;
     
     try {
-        firebaseDb.ref('clients/' + userId).set(state.clients);
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`☁️ [${timestamp}] Salvataggio ${state.clients.length} clienti nel cloud`);
+        firebaseDb.ref('clients/' + userId).set(state.clients)
+            .then(() => {
+                console.log(`✅ [${timestamp}] Dati salvati nel cloud con successo`);
+            })
+            .catch(error => {
+                console.error(`❌ [${timestamp}] Errore salvataggio cloud:`, error);
+                showNotification('⚠️ Errore sincronizzazione cloud', 'error');
+            });
     } catch (error) {
-        console.error('Errore salvataggio cloud:', error);
+        console.error('❌ Errore salvataggio cloud:', error);
     }
 }
 
@@ -365,10 +420,23 @@ function changeUserId() {
 
 // ===== STORAGE =====
 function saveToStorage() {
-    localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
-    localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-    saveToCloud();
-    saveCounterToCloud(); // Salva anche il counter nel cloud
+    try {
+        const timestamp = new Date().toLocaleTimeString();
+        localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
+        localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+        console.log(`💾 [${timestamp}] Salvato in localStorage: ${state.clients.length} clienti`);
+        
+        // Non salvare nel cloud se stiamo sincronizzando DAL cloud (evita loop)
+        if (!state.isSyncingFromCloud) {
+            saveToCloud();
+            saveCounterToCloud();
+        } else {
+            console.log(`⏭️ [${timestamp}] Skip salvataggio cloud (sync in corso)`);
+        }
+    } catch (error) {
+        console.error('❌ Errore salvataggio localStorage:', error);
+        showNotification('⚠️ Errore salvataggio dati locali', 'error');
+    }
 }
 
 function loadFromStorage() {
@@ -2718,6 +2786,43 @@ function printReport() {
         printWindow.close();
     }, 250);
 }
+
+// ===== DEBUG HELPERS =====
+// Funzione chiamabile dalla console per debug: window.debugState()
+window.debugState = function() {
+    console.log('🔍 ==== DEBUG STATE ====');
+    console.log('📊 Clienti totali:', state.clients.length);
+    console.log('🔢 Order counter:', state.orderCounter);
+    console.log('☁️ Cloud sync:', cloudSyncEnabled ? 'ATTIVO' : 'DISATTIVO');
+    console.log('🆔 User ID:', userId);
+    console.log('🔄 Syncing from cloud:', state.isSyncingFromCloud);
+    console.log('📂 Cliente corrente:', state.currentClientId);
+    
+    // Conta ordini totali
+    let totalOrders = 0;
+    state.clients.forEach(c => {
+        if (c.orders) totalOrders += c.orders.length;
+    });
+    console.log('📦 Ordini totali:', totalOrders);
+    
+    // Mostra ultimo salvataggio
+    const localData = localStorage.getItem('gestionale_data');
+    if (localData) {
+        const parsed = JSON.parse(localData);
+        console.log('💾 LocalStorage: OK,', parsed.length, 'clienti');
+    } else {
+        console.log('💾 LocalStorage: VUOTO');
+    }
+    
+    console.log('🔍 ==== FINE DEBUG ====');
+    return state;
+};
+
+// Log automatico ogni 5 minuti per tracking
+setInterval(() => {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`⏰ [${timestamp}] Stato: ${state.clients.length} clienti, cloud: ${cloudSyncEnabled ? 'ON' : 'OFF'}`);
+}, 300000); // 5 minuti
 
 // ===== BACKUP & RESTORE =====
 function exportBackup() {
