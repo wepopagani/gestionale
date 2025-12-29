@@ -127,15 +127,123 @@
                     </div>
                 </div>
 
-                <!-- Grafici -->
+                <!-- Filtri Dashboard -->
+                <div class="dashboard-filters">
+                    <div class="filter-group">
+                        <label>Periodo Analisi</label>
+                        <select id="dashboardPeriod" onchange="updateDashboardCharts()">
+                            <option value="6months" selected>Ultimi 6 Mesi</option>
+                            <option value="3months">Ultimi 3 Mesi</option>
+                            <option value="12months">Ultimi 12 Mesi</option>
+                            <option value="year">Anno Corrente</option>
+                            <option value="all">Tutti i Dati</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Grafici Principali -->
                 <div class="dashboard-charts">
                     <div class="chart-container">
-                        <h3>📊 Ordini per Stato</h3>
+                        <div class="chart-header">
+                            <h3>📊 Ordini per Stato</h3>
+                            <button class="btn-chart-export" onclick="exportChart('ordersStatusChart', 'Ordini-Stato')" title="Esporta grafico">📥</button>
+                        </div>
                         <canvas id="ordersStatusChart"></canvas>
                     </div>
                     <div class="chart-container">
-                        <h3>💰 Fatturato Ultimi 6 Mesi</h3>
+                        <div class="chart-header">
+                            <h3 id="revenueChartTitle">💰 Fatturato nel Tempo</h3>
+                            <button class="btn-chart-export" onclick="exportChart('revenueChart', 'Fatturato')" title="Esporta grafico">📥</button>
+                        </div>
                         <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Grafici Secondari -->
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>📈 Trend Fatturato (Line)</h3>
+                            <button class="btn-chart-export" onclick="exportChart('revenueTrendChart', 'Trend-Fatturato')" title="Esporta grafico">📥</button>
+                        </div>
+                        <canvas id="revenueTrendChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>💳 Stato Pagamenti</h3>
+                            <button class="btn-chart-export" onclick="exportChart('paymentsChart', 'Stato-Pagamenti')" title="Esporta grafico">📥</button>
+                        </div>
+                        <canvas id="paymentsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Grafici Terziari -->
+                <div class="dashboard-charts">
+                    <div class="chart-container chart-container-large">
+                        <div class="chart-header">
+                            <h3>🏆 Top 10 Clienti per Fatturato</h3>
+                            <button class="btn-chart-export" onclick="exportChart('topClientsChart', 'Top-Clienti')" title="Esporta grafico">📥</button>
+                        </div>
+                        <canvas id="topClientsChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>📊 Distribuzione Ordini Mensile</h3>
+                            <button class="btn-chart-export" onclick="exportChart('ordersDistributionChart', 'Distribuzione-Ordini')" title="Esporta grafico">📥</button>
+                        </div>
+                        <canvas id="ordersDistributionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Widget Statistiche Avanzate -->
+                <div class="dashboard-advanced-stats">
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">📊</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Valore Medio Ordine</div>
+                            <div class="stat-widget-value" id="avgOrderValue">CHF 0.00</div>
+                            <div class="stat-widget-change" id="avgOrderChange">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">💎</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Margine Medio</div>
+                            <div class="stat-widget-value" id="avgMargin">0%</div>
+                            <div class="stat-widget-change" id="avgMarginChange">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">📈</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Crescita Fatturato</div>
+                            <div class="stat-widget-value" id="revenueGrowth">0%</div>
+                            <div class="stat-widget-change" id="revenueGrowthChange">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">⏱️</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Tempo Medio Consegna</div>
+                            <div class="stat-widget-value" id="avgDeliveryTime">-</div>
+                            <div class="stat-widget-change">Giorni</div>
+                        </div>
+                    </div>
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">🎯</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Tasso Completamento</div>
+                            <div class="stat-widget-value" id="completionRate">0%</div>
+                            <div class="stat-widget-change">Ordini completati</div>
+                        </div>
+                    </div>
+                    <div class="stat-widget">
+                        <div class="stat-widget-icon">💰</div>
+                        <div class="stat-widget-content">
+                            <div class="stat-widget-label">Totale da Incassare</div>
+                            <div class="stat-widget-value" id="pendingRevenue">CHF 0.00</div>
+                            <div class="stat-widget-change">Non pagati</div>
+                        </div>
                     </div>
                 </div>
 
@@ -819,6 +927,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
 
     <script src="app.js?v=2.1"></script>
 </body>

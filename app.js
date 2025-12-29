@@ -358,30 +358,46 @@ function setupCounterSync() {
 }
 
 function showNotification(message, type = 'info') {
-    // Crea notifica temporanea
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6366f1'};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        font-weight: 500;
-        animation: slideIn 0.3s ease-out;
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    // Icone per tipo
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    // Crea toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icon = icons[type] || icons.info;
+    const title = type === 'success' ? 'Successo' : 
+                  type === 'error' ? 'Errore' : 
+                  type === 'warning' ? 'Attenzione' : 'Info';
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
     `;
     
-    document.body.appendChild(notification);
+    container.appendChild(toast);
     
+    // Auto-rimuovi dopo 4 secondi
     setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+        toast.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 300);
+    }, 4000);
 }
 
 // ===== CLOUD SETTINGS =====
@@ -1622,6 +1638,11 @@ function deleteFile(fileId) {
 // ===== DASHBOARD CHARTS =====
 let ordersStatusChart = null;
 let revenueChart = null;
+let revenueTrendChart = null;
+let paymentsChart = null;
+let topClientsChart = null;
+let ordersDistributionChart = null;
+let dashboardPeriod = '6months';
 
 function destroyCharts() {
     if (ordersStatusChart) {
@@ -1632,6 +1653,56 @@ function destroyCharts() {
         revenueChart.destroy();
         revenueChart = null;
     }
+    if (revenueTrendChart) {
+        revenueTrendChart.destroy();
+        revenueTrendChart = null;
+    }
+    if (paymentsChart) {
+        paymentsChart.destroy();
+        paymentsChart = null;
+    }
+    if (topClientsChart) {
+        topClientsChart.destroy();
+        topClientsChart = null;
+    }
+    if (ordersDistributionChart) {
+        ordersDistributionChart.destroy();
+        ordersDistributionChart = null;
+    }
+}
+
+function updateDashboardCharts() {
+    const periodSelect = document.getElementById('dashboardPeriod');
+    if (periodSelect) {
+        dashboardPeriod = periodSelect.value;
+    }
+    
+    // Aggiorna titolo grafico
+    const titleEl = document.getElementById('revenueChartTitle');
+    if (titleEl) {
+        const titles = {
+            '3months': '💰 Fatturato Ultimi 3 Mesi',
+            '6months': '💰 Fatturato Ultimi 6 Mesi',
+            '12months': '💰 Fatturato Ultimi 12 Mesi',
+            'year': '💰 Fatturato Anno Corrente',
+            'all': '💰 Fatturato Completo'
+        };
+        titleEl.textContent = titles[dashboardPeriod] || titles['6months'];
+    }
+    
+    renderDashboard();
+}
+
+function exportChart(canvasId, filename) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const url = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.png`;
+    link.href = url;
+    link.click();
+    showNotification('📥 Grafico esportato!', 'success');
 }
 
 function createOrdersStatusChart(statusStats) {
@@ -1655,21 +1726,28 @@ function createOrdersStatusChart(statusStats) {
                     statusStats.in_attesa.count
                 ],
                 backgroundColor: [
-                    'rgba(30, 64, 175, 0.8)',
-                    'rgba(6, 95, 70, 0.8)',
-                    'rgba(146, 64, 14, 0.8)'
+                    'rgba(59, 130, 246, 0.9)',
+                    'rgba(16, 185, 129, 0.9)',
+                    'rgba(251, 191, 36, 0.9)'
                 ],
                 borderColor: [
-                    '#1e40af',
-                    '#065f46',
-                    '#92400e'
+                    '#3b82f6',
+                    '#10b981',
+                    '#fbbf24'
                 ],
-                borderWidth: 2
+                borderWidth: 3,
+                hoverOffset: 8
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 1000,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: {
                     position: 'bottom',
@@ -1677,17 +1755,28 @@ function createOrdersStatusChart(statusStats) {
                         color: textColor,
                         padding: 15,
                         font: {
-                            size: 12
-                        }
+                            size: 13,
+                            weight: '500'
+                        },
+                        usePointStyle: true,
+                        pointStyle: 'circle'
                     }
                 },
                 tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    displayColors: true,
                     callbacks: {
                         label: function(context) {
                             const label = context.label || '';
                             const value = context.parsed || 0;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                             return `${label}: ${value} ordini (${percentage}%)`;
                         }
                     }
@@ -1701,11 +1790,32 @@ function createRevenueChart() {
     const ctx = document.getElementById('revenueChart');
     if (!ctx) return;
     
-    // Calcola fatturato ultimi 6 mesi
+    // Calcola periodo in base al filtro
     const now = new Date();
+    let monthsToShow = 6;
+    if (dashboardPeriod === '3months') monthsToShow = 3;
+    else if (dashboardPeriod === '12months') monthsToShow = 12;
+    else if (dashboardPeriod === 'year') {
+        monthsToShow = now.getMonth() + 1;
+    } else if (dashboardPeriod === 'all') {
+        // Trova il mese più vecchio
+        let oldestDate = new Date();
+        state.clients.forEach(client => {
+            if (client.orders) {
+                client.orders.forEach(order => {
+                    if (order.date) {
+                        const orderDate = new Date(order.date);
+                        if (orderDate < oldestDate) oldestDate = orderDate;
+                    }
+                });
+            }
+        });
+        monthsToShow = Math.max(6, Math.ceil((now - oldestDate) / (1000 * 60 * 60 * 24 * 30)));
+    }
+    
     const monthsData = [];
     
-    for (let i = 5; i >= 0; i--) {
+    for (let i = monthsToShow - 1; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthName = date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
         
@@ -1742,20 +1852,169 @@ function createRevenueChart() {
             datasets: [{
                 label: 'Fatturato (Pagati)',
                 data: monthsData.map(d => d.revenue),
-                backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                backgroundColor: (context) => {
+                    const ctx = context.chart.ctx;
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.9)');
+                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.7)');
+                    return gradient;
+                },
                 borderColor: '#6366f1',
                 borderWidth: 2,
-                borderRadius: 6
+                borderRadius: 8,
+                borderSkipped: false
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            animation: {
+                duration: 1200,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: {
                     display: false
                 },
                 tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: textColor,
+                        font: {
+                            size: 11
+                        },
+                        callback: function(value) {
+                            return 'CHF ' + value.toLocaleString('de-CH');
+                        }
+                    },
+                    grid: {
+                        color: gridColor
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: textColor
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createRevenueTrendChart() {
+    const ctx = document.getElementById('revenueTrendChart');
+    if (!ctx) return;
+    
+    // Calcola periodo in base al filtro
+    const now = new Date();
+    let monthsToShow = 6;
+    if (dashboardPeriod === '3months') monthsToShow = 3;
+    else if (dashboardPeriod === '12months') monthsToShow = 12;
+    else if (dashboardPeriod === 'year') {
+        monthsToShow = now.getMonth() + 1;
+    } else if (dashboardPeriod === 'all') {
+        // Trova il mese più vecchio
+        let oldestDate = new Date();
+        state.clients.forEach(client => {
+            if (client.orders) {
+                client.orders.forEach(order => {
+                    if (order.date) {
+                        const orderDate = new Date(order.date);
+                        if (orderDate < oldestDate) oldestDate = orderDate;
+                    }
+                });
+            }
+        });
+        monthsToShow = Math.max(6, Math.ceil((now - oldestDate) / (1000 * 60 * 60 * 24 * 30)));
+    }
+    
+    const monthsData = [];
+    for (let i = monthsToShow - 1; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = date.toLocaleDateString('it-IT', { month: 'short' });
+        
+        let revenue = 0;
+        state.clients.forEach(client => {
+            if (client.orders) {
+                client.orders.forEach(order => {
+                    if (order.date && order.paymentStatus === 'pagato') {
+                        const orderDate = new Date(order.date);
+                        if (orderDate.getMonth() === date.getMonth() && 
+                            orderDate.getFullYear() === date.getFullYear()) {
+                            revenue += (order.amount || 0);
+                        }
+                    }
+                });
+            }
+        });
+        
+        monthsData.push({
+            month: monthName,
+            revenue: revenue
+        });
+    }
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    
+    revenueTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: monthsData.map(d => d.month),
+            datasets: [{
+                label: 'Fatturato',
+                data: monthsData.map(d => d.revenue),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#6366f1',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: {
+                duration: 1200,
+                easing: 'easeOutQuart'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
                     callbacks: {
                         label: function(context) {
                             return formatCurrency(context.parsed.y);
@@ -1787,6 +2046,392 @@ function createRevenueChart() {
             }
         }
     });
+}
+
+function createPaymentsChart() {
+    const ctx = document.getElementById('paymentsChart');
+    if (!ctx) return;
+    
+    let pagati = 0;
+    let nonPagati = 0;
+    let parziale = 0;
+    let pagatiAmount = 0;
+    let nonPagatiAmount = 0;
+    let parzialeAmount = 0;
+    
+    state.clients.forEach(client => {
+        if (client.orders) {
+            client.orders.forEach(order => {
+                const paymentStatus = order.paymentStatus || 'non_pagato';
+                const amount = order.amount || 0;
+                
+                if (paymentStatus === 'pagato') {
+                    pagati++;
+                    pagatiAmount += amount;
+                } else if (paymentStatus === 'parziale') {
+                    parziale++;
+                    parzialeAmount += (amount - (order.paidAmount || 0));
+                } else {
+                    nonPagati++;
+                    nonPagatiAmount += amount;
+                }
+            });
+        }
+    });
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    
+    paymentsChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['✅ Pagati', '❌ Non Pagati', '⏳ Parziali'],
+            datasets: [{
+                data: [pagatiAmount, nonPagatiAmount, parzialeAmount],
+                backgroundColor: [
+                    'rgba(16, 185, 129, 0.9)',
+                    'rgba(239, 68, 68, 0.9)',
+                    'rgba(251, 191, 36, 0.9)'
+                ],
+                borderColor: [
+                    '#10b981',
+                    '#ef4444',
+                    '#fbbf24'
+                ],
+                borderWidth: 3,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 1000,
+                easing: 'easeOutQuart'
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: textColor,
+                        padding: 15,
+                        font: {
+                            size: 13,
+                            weight: '500'
+                        },
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: isDark ? '#475569' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${label}: ${formatCurrency(value)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createTopClientsChart() {
+    const ctx = document.getElementById('topClientsChart');
+    if (!ctx) return;
+    
+    // Calcola fatturato per cliente
+    const clientRevenue = {};
+    state.clients.forEach(client => {
+        let revenue = 0;
+        if (client.orders) {
+            client.orders.forEach(order => {
+                if (order.paymentStatus === 'pagato') {
+                    revenue += (order.amount || 0);
+                }
+            });
+        }
+        if (revenue > 0) {
+            clientRevenue[client.name] = revenue;
+        }
+    });
+    
+    // Ordina e prendi top 10
+    const sortedClients = Object.entries(clientRevenue)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    
+    topClientsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedClients.map(c => c[0]),
+            datasets: [{
+                label: 'Fatturato',
+                data: sortedClients.map(c => c[1]),
+                backgroundColor: (context) => {
+                    const ctx = context.chart.ctx;
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.9)');
+                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.7)');
+                    return gradient;
+                },
+                borderColor: '#6366f1',
+                borderWidth: 2,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: {
+                duration: 1200,
+                easing: 'easeOutQuart'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return formatCurrency(context.parsed.x);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: textColor,
+                        callback: function(value) {
+                            return 'CHF ' + value.toLocaleString('de-CH');
+                        }
+                    },
+                    grid: {
+                        color: gridColor
+                    }
+                },
+                y: {
+                    ticks: {
+                        color: textColor
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createOrdersDistributionChart() {
+    const ctx = document.getElementById('ordersDistributionChart');
+    if (!ctx) return;
+    
+    // Calcola distribuzione ordini per mese
+    const now = new Date();
+    const monthsData = [];
+    
+    for (let i = 11; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = date.toLocaleDateString('it-IT', { month: 'short' });
+        
+        let count = 0;
+        state.clients.forEach(client => {
+            if (client.orders) {
+                client.orders.forEach(order => {
+                    if (order.date) {
+                        const orderDate = new Date(order.date);
+                        if (orderDate.getMonth() === date.getMonth() && 
+                            orderDate.getFullYear() === date.getFullYear()) {
+                            count++;
+                        }
+                    }
+                });
+            }
+        });
+        
+        monthsData.push({
+            month: monthName,
+            count: count
+        });
+    }
+    
+    const isDark = document.body.classList.contains('dark-mode');
+    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    
+    ordersDistributionChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: monthsData.map(d => d.month),
+            datasets: [{
+                label: 'Numero Ordini',
+                data: monthsData.map(d => d.count),
+                backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                borderColor: '#8b5cf6',
+                borderWidth: 2,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            animation: {
+                duration: 1200,
+                easing: 'easeOutQuart'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: textColor,
+                    bodyColor: textColor,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y + ' ordini';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: textColor,
+                        stepSize: 1
+                    },
+                    grid: {
+                        color: gridColor
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: textColor
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+function calculateAdvancedStats() {
+    // Calcola statistiche avanzate
+    let totalOrders = 0;
+    let totalRevenue = 0;
+    let totalAmount = 0;
+    let totalCost = 0;
+    let totalPending = 0;
+    let completedCount = 0;
+    let totalDeliveryDays = 0;
+    let deliveryCount = 0;
+    
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    let currentMonthRevenue = 0;
+    let lastMonthRevenue = 0;
+    
+    state.clients.forEach(client => {
+        if (client.orders) {
+            client.orders.forEach(order => {
+                totalOrders++;
+                totalAmount += (order.amount || 0);
+                totalCost += (order.cost || 0);
+                
+                if (order.paymentStatus === 'pagato') {
+                    totalRevenue += (order.amount || 0);
+                } else {
+                    totalPending += (order.amount || 0);
+                }
+                
+                if (order.status === 'completato') {
+                    completedCount++;
+                }
+                
+                // Calcola tempo consegna
+                if (order.date && order.deadline) {
+                    const orderDate = new Date(order.date);
+                    const deadline = new Date(order.deadline);
+                    const days = Math.ceil((deadline - orderDate) / (1000 * 60 * 60 * 24));
+                    if (days > 0) {
+                        totalDeliveryDays += days;
+                        deliveryCount++;
+                    }
+                }
+                
+                // Revenue per mese
+                if (order.date && order.paymentStatus === 'pagato') {
+                    const orderDate = new Date(order.date);
+                    if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
+                        currentMonthRevenue += (order.amount || 0);
+                    }
+                    if (orderDate.getMonth() === currentMonth - 1 && orderDate.getFullYear() === currentYear) {
+                        lastMonthRevenue += (order.amount || 0);
+                    }
+                }
+            });
+        }
+    });
+    
+    // Valore medio ordine
+    const avgOrderValue = totalOrders > 0 ? totalAmount / totalOrders : 0;
+    document.getElementById('avgOrderValue').textContent = formatCurrency(avgOrderValue);
+    
+    // Margine medio
+    const totalMargin = totalAmount - totalCost;
+    const avgMargin = totalAmount > 0 ? (totalMargin / totalAmount) * 100 : 0;
+    document.getElementById('avgMargin').textContent = avgMargin.toFixed(1) + '%';
+    
+    // Crescita fatturato
+    const revenueGrowth = lastMonthRevenue > 0 ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
+    const growthEl = document.getElementById('revenueGrowth');
+    growthEl.textContent = (revenueGrowth >= 0 ? '+' : '') + revenueGrowth.toFixed(1) + '%';
+    growthEl.parentElement.querySelector('.stat-widget-change').textContent = revenueGrowth >= 0 ? '↑ vs mese scorso' : '↓ vs mese scorso';
+    growthEl.parentElement.querySelector('.stat-widget-change').className = 'stat-widget-change ' + (revenueGrowth >= 0 ? 'positive' : 'negative');
+    
+    // Tempo medio consegna
+    const avgDelivery = deliveryCount > 0 ? Math.round(totalDeliveryDays / deliveryCount) : 0;
+    document.getElementById('avgDeliveryTime').textContent = avgDelivery > 0 ? avgDelivery : '-';
+    
+    // Tasso completamento
+    const completionRate = totalOrders > 0 ? (completedCount / totalOrders) * 100 : 0;
+    document.getElementById('completionRate').textContent = completionRate.toFixed(1) + '%';
+    
+    // Totale da incassare
+    document.getElementById('pendingRevenue').textContent = formatCurrency(totalPending);
 }
 
 // ===== DASHBOARD SYSTEM =====
@@ -1902,6 +2547,13 @@ function renderDashboard() {
     
     createOrdersStatusChart(statusStats);
     createRevenueChart();
+    createRevenueTrendChart();
+    createPaymentsChart();
+    createTopClientsChart();
+    createOrdersDistributionChart();
+    
+    // Calcola statistiche avanzate
+    calculateAdvancedStats();
 }
 
 function renderDashboardRecentOrders(orders) {
