@@ -581,8 +581,11 @@ function setupEventListeners() {
     document.getElementById('addOrderBtn').addEventListener('click', openAddOrderModal);
     document.getElementById('saveOrderBtn').addEventListener('click', saveOrder);
     
-    // Calcolo margine in tempo reale
-    document.getElementById('modalOrderAmount').addEventListener('input', calculateMargin);
+    // Calcolo margine e IVA in tempo reale
+    document.getElementById('modalOrderAmount').addEventListener('input', () => {
+        calculateMargin();
+        calculateVat();
+    });
     document.getElementById('modalOrderCost').addEventListener('input', calculateMargin);
 
     // Bottoni file
@@ -1192,6 +1195,12 @@ function renderOrders() {
             marginInfo = `<div style="margin-top: 8px; padding: 6px 10px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; font-size: 12px; color: ${marginColor}; font-weight: 500;">📊 Margine: ${formatCurrency(order.margin)} (${order.marginPercent}%)</div>`;
         }
         
+        // IVA
+        let vatInfo = '';
+        if (order.vatEnabled && order.vatAmount) {
+            vatInfo = `<div style="margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; font-size: 12px; color: #d97706; font-weight: 500;">🧾 IVA ${order.vatRate}%: ${formatCurrency(order.vatAmount)} <span style="color: var(--text-secondary); font-weight: 400;">(Netto: ${formatCurrency(order.netAmount)})</span></div>`;
+        }
+        
         return `
         <div class="order-card" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <div class="order-card-header">
@@ -1200,6 +1209,7 @@ function renderOrders() {
                     <div class="order-card-description">${order.description}</div>
                     ${deadlineBadge}
                     ${marginInfo}
+                    ${vatInfo}
                     ${partialPaymentInfo}
                 </div>
                 <div style="display: flex; gap: 8px; flex-direction: column; align-items: flex-end;">
@@ -1248,6 +1258,16 @@ function openAddOrderModal() {
     // Nascondi margine display
     document.getElementById('marginDisplay').style.display = 'none';
     
+    // Reset campi IVA - di default attivo per ordini dal 2026
+    const currentYear = new Date().getFullYear();
+    document.getElementById('modalOrderVatEnabled').checked = currentYear >= 2026;
+    document.getElementById('modalOrderVatRate').value = '8.1';
+    document.getElementById('vatFields').style.display = currentYear >= 2026 ? 'block' : 'none';
+    document.getElementById('vatNetAmount').textContent = 'CHF 0.00';
+    document.getElementById('vatAmount').textContent = 'CHF 0.00';
+    document.getElementById('vatGrossAmount').textContent = 'CHF 0.00';
+    document.getElementById('vatRateDisplay').textContent = '8.1';
+    
     openModal('orderModal');
 }
 
@@ -1295,6 +1315,46 @@ function togglePartialPaymentFields() {
     }
 }
 
+// ===== FUNZIONI IVA =====
+// Mostra/nasconde i campi IVA
+function toggleVatFields() {
+    const vatEnabled = document.getElementById('modalOrderVatEnabled').checked;
+    const vatFields = document.getElementById('vatFields');
+    
+    if (vatEnabled) {
+        vatFields.style.display = 'block';
+    } else {
+        vatFields.style.display = 'none';
+    }
+}
+
+// Calcola l'IVA in tempo reale
+function calculateVat() {
+    const vatEnabled = document.getElementById('modalOrderVatEnabled').checked;
+    
+    if (!vatEnabled) return;
+    
+    const grossAmount = parseFloat(document.getElementById('modalOrderAmount').value) || 0;
+    const vatRate = parseFloat(document.getElementById('modalOrderVatRate').value) || 0;
+    
+    if (grossAmount > 0) {
+        // Calcolo IVA da importo lordo (IVA inclusa)
+        // Formula: IVA = Lordo - (Lordo / (1 + aliquota/100))
+        const netAmount = grossAmount / (1 + vatRate / 100);
+        const vatAmount = grossAmount - netAmount;
+        
+        // Aggiorna display
+        document.getElementById('vatNetAmount').textContent = formatCurrency(netAmount);
+        document.getElementById('vatRateDisplay').textContent = vatRate;
+        document.getElementById('vatAmount').textContent = formatCurrency(vatAmount);
+        document.getElementById('vatGrossAmount').textContent = formatCurrency(grossAmount);
+    } else {
+        document.getElementById('vatNetAmount').textContent = 'CHF 0.00';
+        document.getElementById('vatAmount').textContent = 'CHF 0.00';
+        document.getElementById('vatGrossAmount').textContent = 'CHF 0.00';
+    }
+}
+
 function editOrder(orderId) {
     const client = state.clients.find(c => c.id === state.currentClientId);
     const order = client.orders.find(o => o.id === orderId);
@@ -1329,6 +1389,21 @@ function editOrder(orderId) {
         document.getElementById('partialPaymentFields').style.display = 'block';
     } else {
         document.getElementById('partialPaymentFields').style.display = 'none';
+    }
+    
+    // Carica dati IVA se presenti
+    const hasVat = order.vatEnabled || order.vatRate !== undefined;
+    document.getElementById('modalOrderVatEnabled').checked = hasVat;
+    document.getElementById('modalOrderVatRate').value = order.vatRate || '8.1';
+    document.getElementById('vatFields').style.display = hasVat ? 'block' : 'none';
+    
+    if (hasVat) {
+        calculateVat();
+    } else {
+        document.getElementById('vatNetAmount').textContent = 'CHF 0.00';
+        document.getElementById('vatAmount').textContent = 'CHF 0.00';
+        document.getElementById('vatGrossAmount').textContent = 'CHF 0.00';
+        document.getElementById('vatRateDisplay').textContent = order.vatRate || '8.1';
     }
     
     // Calcola e mostra margine
@@ -1367,6 +1442,19 @@ function saveOrder() {
     const margin = amount - cost;
     const marginPercent = amount > 0 ? ((margin / amount) * 100).toFixed(2) : 0;
     
+    // Calcola dati IVA
+    const vatEnabled = document.getElementById('modalOrderVatEnabled').checked;
+    const vatRate = parseFloat(document.getElementById('modalOrderVatRate').value) || 0;
+    
+    let vatAmount = 0;
+    let netAmount = amount;
+    
+    if (vatEnabled && vatRate > 0) {
+        // L'importo inserito è lordo (IVA inclusa)
+        netAmount = amount / (1 + vatRate / 100);
+        vatAmount = amount - netAmount;
+    }
+    
     const orderData = {
         number,
         description,
@@ -1378,7 +1466,12 @@ function saveOrder() {
         date: document.getElementById('modalOrderDate').value,
         status: document.getElementById('modalOrderStatus').value,
         paymentStatus: paymentStatus,
-        paymentMethod: document.getElementById('modalOrderPaymentMethod').value
+        paymentMethod: document.getElementById('modalOrderPaymentMethod').value,
+        // Dati IVA
+        vatEnabled: vatEnabled,
+        vatRate: vatEnabled ? vatRate : null,
+        vatAmount: vatEnabled ? vatAmount : null,
+        netAmount: vatEnabled ? netAmount : null
     };
     
     // Aggiungi dati pagamento parziale se applicabile
@@ -2463,6 +2556,7 @@ function renderDashboard() {
     let totalOrders = 0;
     let totalOrdersAmount = 0;  // Importo totale di TUTTI gli ordini
     let totalRevenue = 0;        // Importo solo ordini pagati
+    let totalVat = 0;            // IVA totale di tutti gli ordini
     let inProgressOrders = 0;
     let completedOrders = 0;
     let waitingOrders = 0;
@@ -2488,6 +2582,11 @@ function renderDashboard() {
                 
                 // Somma importo totale di TUTTI gli ordini
                 totalOrdersAmount += (order.amount || 0);
+                
+                // Somma IVA totale
+                if (order.vatEnabled && order.vatAmount) {
+                    totalVat += (order.vatAmount || 0);
+                }
                 
                 // Conteggi per stato
                 if (order.status === 'in_lavorazione') inProgressOrders++;
@@ -2515,6 +2614,7 @@ function renderDashboard() {
     document.getElementById('dashTotalOrders').textContent = totalOrders;
     document.getElementById('dashTotalOrdersAmount').textContent = formatCurrency(totalOrdersAmount);
     document.getElementById('dashTotalRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('dashTotalVat').textContent = formatCurrency(totalVat);
     document.getElementById('dashInProgress').textContent = inProgressOrders;
     document.getElementById('dashCompleted').textContent = completedOrders;
     document.getElementById('dashWaiting').textContent = waitingOrders;
@@ -3006,17 +3106,22 @@ function generateReport() {
     document.getElementById('statusCountCompletatoNonPagato').textContent = statusStats.completato_non_pagato.count;
     document.getElementById('statusAmountCompletatoNonPagato').textContent = formatCurrency(statusStats.completato_non_pagato.amount);
     
-    // ===== CALCOLA IMPORTO TOTALE IN BASE AL FILTRO =====
+    // ===== CALCOLA IMPORTO TOTALE E IVA IN BASE AL FILTRO =====
     let totalRevenue = 0;
+    let totalVat = 0;
     let revenueLabelText = 'Importo Totale';
     
     if (statusFilter === 'all') {
         // Nessun filtro: mostra importo totale di TUTTI gli ordini
         totalRevenue = allOrdersForStats.reduce((sum, order) => sum + (order.amount || 0), 0);
+        totalVat = allOrdersForStats.reduce((sum, order) => sum + (order.vatAmount || 0), 0);
         revenueLabelText = 'Importo Totale (Tutti)';
     } else {
         // Filtro stato selezionato: mostra solo importo di quel stato
         totalRevenue = statusStats[statusFilter].amount;
+        totalVat = allOrdersForStats
+            .filter(order => (order.status || 'in_lavorazione') === statusFilter)
+            .reduce((sum, order) => sum + (order.vatAmount || 0), 0);
         const statusLabels = {
             'in_lavorazione': 'In Lavorazione',
             'completato': 'Completato',
@@ -3046,6 +3151,7 @@ function generateReport() {
     document.getElementById('totalOrders').textContent = totalOrders;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('totalRevenueLabel').textContent = revenueLabelText;
+    document.getElementById('totalVat').textContent = formatCurrency(totalVat);
     document.getElementById('completedOrders').textContent = completedOrders;
     
     // Renderizza tabelle
@@ -3131,7 +3237,7 @@ function renderReportTable(orders) {
     const tbody = document.getElementById('reportTableBody');
     
     if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
         return;
     }
     
@@ -3172,6 +3278,11 @@ function renderReportTable(orders) {
         // Colore per importo (stesso del badge)
         let amountColor = paymentTextColor;
         
+        // Visualizza IVA
+        const vatDisplay = order.vatEnabled && order.vatAmount ? 
+            `<span style="color: #d97706; font-weight: 500;">${formatCurrency(order.vatAmount)}</span><br><small style="color: var(--text-secondary);">${order.vatRate}%</small>` : 
+            '<span style="color: var(--text-secondary);">-</span>';
+        
         return `
         <tr onclick="editOrderFromReport('${order.clientId}', '${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <td>${formatDate(order.date)}</td>
@@ -3180,6 +3291,7 @@ function renderReportTable(orders) {
             <td>${order.description}</td>
             <td><span class="report-status-badge ${order.status}">${statusLabels[order.status]}</span></td>
             <td><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${paymentBgColor}; color: ${paymentTextColor};">${paymentLabels[paymentStatus]}</span></td>
+            <td>${vatDisplay}</td>
             <td class="report-amount" style="color: ${amountColor}; font-weight: 700;">${formatCurrency(order.amount)}</td>
         </tr>
         `;
@@ -3198,12 +3310,16 @@ function exportToCSV() {
         'parziale': 'Parziale'
     };
     
-    // Intestazioni CSV
-    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Stato Pagamento,Importo\n';
+    // Intestazioni CSV con IVA
+    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Stato Pagamento,Aliquota IVA,IVA,Netto,Importo Lordo\n';
     
     // Righe dati
     state.reportData.forEach(order => {
         const paymentStatus = order.paymentStatus || 'non_pagato';
+        const vatRate = order.vatEnabled ? `${order.vatRate}%` : '-';
+        const vatAmount = order.vatEnabled ? (order.vatAmount || 0).toFixed(2) : '0';
+        const netAmount = order.vatEnabled ? (order.netAmount || 0).toFixed(2) : (order.amount || 0).toFixed(2);
+        
         const row = [
             formatDate(order.date),
             `"${order.clientName}"`,
@@ -3211,16 +3327,24 @@ function exportToCSV() {
             `"${order.description}"`,
             order.status,
             paymentLabels[paymentStatus],
-            order.amount || 0
+            vatRate,
+            vatAmount,
+            netAmount,
+            (order.amount || 0).toFixed(2)
         ].join(',');
         csv += row + '\n';
     });
     
     // Aggiungi totali
     const totalRevenue = state.reportData.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const totalVat = state.reportData.reduce((sum, o) => sum + (o.vatAmount || 0), 0);
+    const totalNet = state.reportData.reduce((sum, o) => sum + (o.netAmount || o.amount || 0), 0);
+    
     csv += '\n';
-    csv += `TOTALE ORDINI,${state.reportData.length},,,,,\n`;
-    csv += `TOTALE FATTURATO,,,,,,${totalRevenue}\n`;
+    csv += `TOTALE ORDINI,${state.reportData.length},,,,,,,,\n`;
+    csv += `TOTALE IVA,,,,,,,${totalVat.toFixed(2)},,\n`;
+    csv += `TOTALE NETTO,,,,,,,,${totalNet.toFixed(2)},\n`;
+    csv += `TOTALE LORDO,,,,,,,,,${totalRevenue.toFixed(2)}\n`;
     
     // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -3259,6 +3383,7 @@ function printReport() {
     
     const totalOrders = state.reportData.length;
     const totalRevenue = state.reportData.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const totalVat = state.reportData.reduce((sum, o) => sum + (o.vatAmount || 0), 0);
     const completedOrders = state.reportData.filter(o => o.status === 'completato').length;
     
     const statusLabels = {
@@ -3363,16 +3488,16 @@ function printReport() {
                     <div class="summary-value">${totalOrders}</div>
                 </div>
                 <div class="summary-box">
-                    <div class="summary-label">Valore Totale</div>
+                    <div class="summary-label">Valore Totale (Lordo)</div>
                     <div class="summary-value">${formatCurrency(totalRevenue)}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">🧾 Totale IVA</div>
+                    <div class="summary-value" style="color: #d97706;">${formatCurrency(totalVat)}</div>
                 </div>
                 <div class="summary-box">
                     <div class="summary-label">Completati</div>
                     <div class="summary-value">${completedOrders}</div>
-                </div>
-                <div class="summary-box">
-                    <div class="summary-label">Media Ordine</div>
-                    <div class="summary-value">${formatCurrency(totalRevenue / totalOrders)}</div>
                 </div>
             </div>
             
@@ -3385,6 +3510,7 @@ function printReport() {
                         <th>Descrizione</th>
                         <th>Stato</th>
                         <th>Pagamento</th>
+                        <th>IVA</th>
                         <th>Importo</th>
                     </tr>
                 </thead>
@@ -3396,6 +3522,10 @@ function printReport() {
                             'non_pagato': 'Non Pagato',
                             'parziale': 'Parziale'
                         };
+                        
+                        // IVA
+                        const vatDisplay = order.vatEnabled && order.vatAmount ? 
+                            formatCurrency(order.vatAmount) + ' (' + order.vatRate + '%)' : '-';
                         
                         // Colori per pagamento
                         let paymentClass = '';
@@ -3420,6 +3550,7 @@ function printReport() {
                             <td>${order.description}</td>
                             <td><span class="status-badge status-${order.status}">${statusLabels[order.status]}</span></td>
                             <td><span class="status-badge ${paymentClass}">${paymentLabels[paymentStatus]}</span></td>
+                            <td style="color: #d97706;">${vatDisplay}</td>
                             <td><strong style="color: ${amountColor};">${formatCurrency(order.amount)}</strong></td>
                         </tr>
                         `;

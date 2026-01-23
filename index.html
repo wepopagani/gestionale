@@ -119,6 +119,13 @@
                         </div>
                     </div>
                     <div class="kpi-card">
+                        <div class="kpi-icon">🧾</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">IVA Totale</div>
+                            <div class="kpi-value" id="dashTotalVat">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
                         <div class="kpi-icon">🔨</div>
                         <div class="kpi-content">
                             <div class="kpi-label">In Lavorazione</div>
@@ -371,6 +378,13 @@
                         </div>
                     </div>
                     <div class="summary-card">
+                        <div class="summary-icon">🧾</div>
+                        <div class="summary-content">
+                            <div class="summary-label">Totale IVA</div>
+                            <div class="summary-value" id="totalVat">CHF 0.00</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
                         <div class="summary-icon">✅</div>
                         <div class="summary-content">
                             <div class="summary-label">Completati</div>
@@ -448,12 +462,13 @@
                                     <th>Descrizione</th>
                                     <th>Stato</th>
                                     <th>💳 Pagamento</th>
+                                    <th>🧾 IVA</th>
                                     <th>Importo</th>
                                 </tr>
                             </thead>
                             <tbody id="reportTableBody">
                                 <tr>
-                                    <td colspan="7" class="empty-report">Seleziona i filtri e genera il report</td>
+                                    <td colspan="8" class="empty-report">Seleziona i filtri e genera il report</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -788,6 +803,48 @@
                         <option value="paypal">🅿️ PayPal</option>
                         <option value="altro">📋 Altro</option>
                     </select>
+                </div>
+                
+                <!-- Sezione IVA -->
+                <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="modalOrderVatEnabled" onchange="toggleVatFields(); calculateVat();" style="width: 18px; height: 18px; cursor: pointer;">
+                        <span>🧾 Applica IVA</span>
+                    </label>
+                    <small style="color: var(--text-secondary); font-size: 12px; display: block; margin-top: 4px;">
+                        💡 Attiva per calcolare l'IVA su questo ordine (dal 2026)
+                    </small>
+                </div>
+                
+                <div id="vatFields" style="display: none;">
+                    <div class="form-group">
+                        <label>Aliquota IVA</label>
+                        <select id="modalOrderVatRate" onchange="calculateVat()">
+                            <option value="8.1">8.1% - Aliquota normale</option>
+                            <option value="2.6">2.6% - Aliquota ridotta</option>
+                            <option value="3.8">3.8% - Aliquota speciale (alloggio)</option>
+                            <option value="0">0% - Esente IVA</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="vatDisplay">
+                        <div style="padding: 12px; background: var(--bg-tertiary); border-radius: 8px; border: 2px solid var(--primary);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-size: 13px; color: var(--text-secondary);">Imponibile (netto):</span>
+                                <span style="font-size: 14px; font-weight: 600;" id="vatNetAmount">CHF 0.00</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-size: 13px; color: var(--text-secondary);">🧾 IVA (<span id="vatRateDisplay">8.1</span>%):</span>
+                                <span style="font-size: 14px; font-weight: 600; color: var(--warning);" id="vatAmount">CHF 0.00</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border);">
+                                <span style="font-size: 14px; font-weight: 600;">Totale (lordo):</span>
+                                <span style="font-size: 16px; font-weight: 700; color: var(--primary);" id="vatGrossAmount">CHF 0.00</span>
+                            </div>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 11px; display: block; margin-top: 8px;">
+                            ⚠️ L'importo totale inserito sopra viene considerato come importo LORDO (IVA inclusa)
+                        </small>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
