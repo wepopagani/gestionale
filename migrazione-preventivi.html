@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migrazione preventivi - 3DMAKES</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="3dmakes-theme.css">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firestore-init.js"></script>
+    <style>
+        .mig-wrap { max-width: 720px; margin: 0 auto; padding: 24px; }
+        .mig-card { background: var(--dm-white); border-radius: var(--dm-radius); padding: 24px; box-shadow: var(--dm-shadow); margin-bottom: 24px; border: 1px solid var(--dm-border); }
+        .mig-card h2 { font-size: 1.1rem; color: var(--dm-navy); margin-bottom: 12px; }
+        .mig-card p, .mig-card li { font-size: 14px; color: var(--dm-text-muted); line-height: 1.6; margin-bottom: 8px; }
+        .mig-card textarea { width: 100%; min-height: 120px; font-family: ui-monospace, monospace; font-size: 12px; padding: 12px; border: 2px solid var(--dm-border); border-radius: 8px; margin: 12px 0; }
+        .mig-card input[type="file"] { margin: 12px 0; }
+        .mig-out { white-space: pre-wrap; font-size: 12px; background: var(--dm-cream); padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 12px; }
+    </style>
+</head>
+<body class="dm-page">
+    <header class="dm-header">
+        <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+        <nav class="dm-nav" aria-label="Strumenti">
+            <a href="index.html">Gestionale</a>
+            <a href="calcolatore.html">Calcolatore</a>
+            <a href="genera-preventivo.html">Preventivo</a>
+            <a href="storico-preventivi.html">Storico</a>
+        </nav>
+        <div class="dm-header__actions">
+            <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
+        </div>
+    </header>
+
+    <div class="mig-wrap">
+        <h1 style="font-size: 1.35rem; color: var(--dm-navy); margin-bottom: 8px;">Migrazione preventivi</h1>
+        <p style="color: var(--dm-text-muted); font-size: 14px; margin-bottom: 24px;">
+            Lo <strong>storico</strong> legge i preventivi dal progetto Firebase del gestionale (<code>gestionale-a0cb6</code>).
+            Se avevi salvato preventivi con il <strong>vecchio generatore</strong> (altro progetto Firebase), qui puoi spostarli nel progetto attuale.
+        </p>
+
+        <div class="mig-card">
+            <h2>1 — Esporta dal progetto vecchio</h2>
+            <p>Incolla qui il blocco <strong>firebaseConfig</strong> del progetto <em>precedente</em> (da Firebase Console → Impostazioni progetto → tua app Web). Poi clicca «Scarica JSON».</p>
+            <textarea id="legacyConfig" placeholder='Esempio:
+{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "preventivi-9fee1",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+            <button type="button" class="dm-btn dm-btn--outline" id="btnExport">Scarica preventivi.json dal progetto incollato</button>
+            <div id="exportLog" class="mig-out" style="display:none;"></div>
+        </div>
+
+        <div class="mig-card">
+            <h2>2 — Importa nel gestionale attuale</h2>
+            <p>Usa il file JSON scaricato al passo 1 (o un backup con lo stesso formato). I documenti vengono scritti in Firestore sul progetto di <code>firebase-config.js</code>.</p>
+            <p><strong>Nota:</strong> se un ID documento esiste già, viene aggiornato (merge).</p>
+            <input type="file" id="fileImport" accept=".json,application/json">
+            <button type="button" class="dm-btn dm-btn--cyan" id="btnImport">Importa nel database attuale</button>
+            <div id="importLog" class="mig-out" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const LEGACY_APP = 'legacyPreventiviExport';
+
+        function serializeValue(v) {
+            if (v == null) return v;
+            if (typeof v.toDate === 'function') return { __iso: v.toDate().toISOString() };
+            if (typeof v.toMillis === 'function') return { __iso: new Date(v.toMillis()).toISOString() };
+            if (v.seconds !== undefined && v.nanoseconds !== undefined) {
+                return { __iso: new Date(v.seconds * 1000).toISOString() };
+            }
+            if (Array.isArray(v)) return v.map(serializeValue);
+            if (typeof v === 'object' && v.constructor === Object) {
+                const o = {};
+                for (const [k, val] of Object.entries(v)) o[k] = serializeValue(val);
+                return o;
+            }
+            return v;
+        }
+
+        function deserializeValue(v) {
+            if (v && typeof v === 'object' && v.__iso) {
+                return firebase.firestore.Timestamp.fromDate(new Date(v.__iso));
+            }
+            if (Array.isArray(v)) return v.map(deserializeValue);
+            if (v && typeof v === 'object' && v.constructor === Object) {
+                const o = {};
+                for (const [k, val] of Object.entries(v)) o[k] = deserializeValue(val);
+                return o;
+            }
+            return v;
+        }
+
+        document.getElementById('btnExport').addEventListener('click', async function () {
+            const log = document.getElementById('exportLog');
+            log.style.display = 'block';
+            log.textContent = 'Connessione…';
+            let cfg;
+            try {
+                cfg = JSON.parse(document.getElementById('legacyConfig').value.trim());
+            } catch (e) {
+                log.textContent = 'JSON non valido: ' + e.message;
+                return;
+            }
+            if (!cfg.apiKey || !cfg.projectId) {
+                log.textContent = 'Servono almeno apiKey e projectId.';
+                return;
+            }
+            try {
+                if (firebase.apps.find(a => a.name === LEGACY_APP)) {
+                    await firebase.app(LEGACY_APP).delete();
+                }
+            } catch (e) { /* ignore */ }
+
+            try {
+                const legacyApp = firebase.initializeApp(cfg, LEGACY_APP);
+                const db = legacyApp.firestore();
+                if (typeof applyFirestoreConnectionSettings === 'function') applyFirestoreConnectionSettings(db);
+                const snap = await db.collection('preventivi').get();
+                const items = [];
+                snap.forEach(doc => {
+                    const raw = doc.data();
+                    const data = {};
+                    for (const [k, val] of Object.entries(raw)) {
+                        data[k] = serializeValue(val);
+                    }
+                    items.push({ id: doc.id, ...data });
+                });
+                const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), count: items.length, preventivi: items }, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'preventivi_backup_' + cfg.projectId + '_' + new Date().toISOString().split('T')[0] + '.json';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                log.textContent = 'OK: esportati ' + items.length + ' preventivi. Controlla il download.';
+                try { await legacyApp.delete(); } catch (e) { /* ignore */ }
+            } catch (e) {
+                log.textContent = 'Errore: ' + (e.message || e);
+                console.error(e);
+            }
+        });
+
+        document.getElementById('btnImport').addEventListener('click', async function () {
+            const log = document.getElementById('importLog');
+            const f = document.getElementById('fileImport').files[0];
+            if (!f) {
+                log.style.display = 'block';
+                log.textContent = 'Seleziona un file JSON.';
+                return;
+            }
+            log.style.display = 'block';
+            log.textContent = 'Lettura file…';
+
+            let json;
+            try {
+                json = JSON.parse(await f.text());
+            } catch (e) {
+                log.textContent = 'File JSON non valido: ' + e.message;
+                return;
+            }
+
+            const list = json.preventivi || json.items || (Array.isArray(json) ? json : null);
+            if (!list || !Array.isArray(list)) {
+                log.textContent = 'Formato atteso: { "preventivi": [ { id, ... }, ... ] } oppure un array.';
+                return;
+            }
+
+            if (typeof firebaseConfig === 'undefined' || !firebaseConfig.apiKey) {
+                log.textContent = 'firebase-config.js non caricato.';
+                return;
+            }
+
+            try {
+                const db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
+                if (!db) {
+                    log.textContent = 'Impossibile inizializzare Firestore (firebase-config.js).';
+                    return;
+                }
+                let ok = 0;
+                let err = 0;
+                for (const row of list) {
+                    const id = row.id;
+                    if (!id) { err++; continue; }
+                    const { id: _drop, ...rest } = row;
+                    const data = deserializeValue(rest);
+                    data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                    if (!data.createdAt) {
+                        data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    }
+                    try {
+                        await db.collection('preventivi').doc(id).set(data, { merge: true });
+                        ok++;
+                    } catch (e) {
+                        console.error(e);
+                        err++;
+                    }
+                }
+                log.textContent = 'Fatto. Importati/aggiornati: ' + ok + '. Errori: ' + err + '. Apri Storico preventivi per verificare.';
+            } catch (e) {
+                log.textContent = 'Errore: ' + (e.message || e);
+                console.error(e);
+            }
+        });
+    </script>
+</body>
+</html>

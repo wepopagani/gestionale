@@ -4,8 +4,8 @@
   "description": "Gestionale clienti per 3DMAKES con ordini, documenti e report",
   "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#6366f1",
-  "theme_color": "#6366f1",
+  "background_color": "#f5f2ed",
+  "theme_color": "#003b5c",
   "orientation": "portrait-primary",
   "icons": [
     {

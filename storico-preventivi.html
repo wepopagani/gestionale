@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storico Preventivi - 3DMAKES</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="3dmakes-theme.css">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firestore-init.js"></script>
+</head>
+<body class="dm-page">
+    <header class="dm-header">
+        <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+        <nav class="dm-nav" aria-label="Strumenti">
+            <a href="index.html">Gestionale</a>
+            <a href="calcolatore.html">Calcolatore</a>
+            <a href="genera-preventivo.html">Preventivo</a>
+            <a href="storico-preventivi.html" aria-current="page">Storico</a>
+        </nav>
+        <div class="dm-header__actions">
+            <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
+        </div>
+    </header>
+
+    <div class="dm-page-hero">
+        <h1>Storico preventivi</h1>
+    </div>
+
+    <div class="dm-main-pad">
+        <div id="errorBox" class="dm-alert dm-alert--err" style="display: none;"></div>
+        <div id="filtersBar" class="dm-storico-filters dm-card" hidden>
+            <div class="dm-storico-filters__grid">
+                <div class="dm-storico-filters__field">
+                    <label for="filterPeriodo">Periodo (data documento)</label>
+                    <select id="filterPeriodo" class="dm-storico-filters__select">
+                        <option value="tutti">Tutti</option>
+                        <option value="anno_corrente">Anno in corso</option>
+                        <option value="ultimo_mese">Ultimo mese</option>
+                        <option value="ultimi_3_mesi">Ultimi 3 mesi</option>
+                        <option value="ultimi_12_mesi">Ultimi 12 mesi</option>
+                        <option value="personalizzato">Intervallo personalizzato</option>
+                    </select>
+                </div>
+                <div id="filterCustomWrap" class="dm-storico-filters__custom" hidden>
+                    <div class="dm-storico-filters__field">
+                        <label for="filterDa">Da</label>
+                        <input type="date" id="filterDa" class="dm-storico-filters__input">
+                    </div>
+                    <div class="dm-storico-filters__field">
+                        <label for="filterA">A</label>
+                        <input type="date" id="filterA" class="dm-storico-filters__input">
+                    </div>
+                </div>
+                <div class="dm-storico-filters__field">
+                    <label for="filterOrdine">Ordine</label>
+                    <select id="filterOrdine" class="dm-storico-filters__select">
+                        <option value="modifica_desc" selected>Ultima modifica · più recenti prima</option>
+                        <option value="modifica_asc">Ultima modifica · più vecchi prima</option>
+                        <option value="data_doc_desc">Data documento · più recente prima</option>
+                        <option value="data_doc_asc">Data documento · più vecchia prima</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="dm-card dm-table-wrap">
+            <div id="loading" class="dm-loading">Caricamento…</div>
+            <div id="tableWrap" style="display: none;">
+                <table class="dm-table">
+                    <thead>
+                        <tr>
+                            <th>Offerta</th>
+                            <th>Data</th>
+                            <th>Cliente</th>
+                            <th>Totale</th>
+                            <th class="dm-table-actions-th">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody"></tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="dm-empty" style="display: none;"></div>
+        </div>
+    </div>
+    <script>
+        let db = null;
+        let ok = false;
+        let allRows = [];
+        try {
+            db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
+            ok = !!db;
+        } catch (e) {
+            console.error(e);
+        }
+
+        function tsMillis(ts) {
+            if (!ts) return 0;
+            if (typeof ts.toMillis === 'function') return ts.toMillis();
+            if (ts.seconds) return ts.seconds * 1000;
+            return 0;
+        }
+
+        function docDateMillis(row) {
+            if (!row || row.data == null || row.data === '') return 0;
+            const d = new Date(row.data);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+        }
+
+        function modificaMillis(row) {
+            return tsMillis(row.updatedAt) || tsMillis(row.createdAt) || 0;
+        }
+
+        function formatDate(s) {
+            if (!s) return '—';
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? s : d.toLocaleDateString('it-CH');
+        }
+
+        function formatMoney(n) {
+            if (n == null || isNaN(n)) return '—';
+            return Number(n).toFixed(2) + ' CHF';
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s == null ? '' : String(s);
+            return d.innerHTML;
+        }
+
+        function escapeAttr(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
+        }
+
+        function startOfDayMs(d) {
+            const x = new Date(d);
+            x.setHours(0, 0, 0, 0);
+            return x.getTime();
+        }
+
+        function endOfDayMs(d) {
+            const x = new Date(d);
+            x.setHours(23, 59, 59, 999);
+            return x.getTime();
+        }
+
+        function rowInPeriod(row) {
+            const periodo = document.getElementById('filterPeriodo').value;
+            const t = docDateMillis(row);
+            const now = new Date();
+
+            if (periodo === 'tutti') return true;
+            if (!t) return periodo === 'tutti';
+
+            if (periodo === 'anno_corrente') {
+                const y = new Date(row.data).getFullYear();
+                return y === now.getFullYear();
+            }
+            if (periodo === 'ultimo_mese') {
+                const m = new Date(now);
+                m.setMonth(m.getMonth() - 1);
+                return t >= startOfDayMs(m);
+            }
+            if (periodo === 'ultimi_3_mesi') {
+                const m = new Date(now);
+                m.setMonth(m.getMonth() - 3);
+                return t >= startOfDayMs(m);
+            }
+            if (periodo === 'ultimi_12_mesi') {
+                const m = new Date(now);
+                m.setMonth(m.getMonth() - 12);
+                return t >= startOfDayMs(m);
+            }
+            if (periodo === 'personalizzato') {
+                const da = document.getElementById('filterDa').value;
+                const a = document.getElementById('filterA').value;
+                if (!da && !a) return true;
+                if (da && t < startOfDayMs(da)) return false;
+                if (a && t > endOfDayMs(a)) return false;
+                return true;
+            }
+            return true;
+        }
+
+        function sortRows(rows, sortKey) {
+            const copy = rows.slice();
+            const doc = function (r) { return docDateMillis(r); };
+            const mod = function (r) { return modificaMillis(r); };
+            switch (sortKey) {
+                case 'data_doc_desc':
+                    copy.sort(function (a, b) { return doc(b) - doc(a); });
+                    break;
+                case 'data_doc_asc':
+                    copy.sort(function (a, b) { return doc(a) - doc(b); });
+                    break;
+                case 'modifica_desc':
+                    copy.sort(function (a, b) { return mod(b) - mod(a); });
+                    break;
+                case 'modifica_asc':
+                    copy.sort(function (a, b) { return mod(a) - mod(b); });
+                    break;
+                default:
+                    copy.sort(function (a, b) { return mod(b) - mod(a); });
+            }
+            return copy;
+        }
+
+        function renderTable(rows) {
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = '';
+            rows.forEach(function (row) {
+                const nome = row.cliente && row.cliente.nome ? row.cliente.nome : '—';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                        <td class="dm-num">${escapeHtml(row.numeroOfferta || '—')}</td>
+                        <td>${escapeHtml(formatDate(row.data))}</td>
+                        <td>${escapeHtml(nome)}</td>
+                        <td class="dm-tot">${escapeHtml(formatMoney(row.totale))}</td>
+                        <td class="dm-table-actions">
+                            <div class="dm-row-actions">
+                                <a class="dm-btn dm-btn--cyan dm-btn--sm" href="genera-preventivo.html?edit=${encodeURIComponent(row.id)}">Modifica</a>
+                                <a class="dm-btn dm-btn--outline dm-btn--sm" href="genera-preventivo.html?duplicate=${encodeURIComponent(row.id)}">Duplica</a>
+                                <button type="button" class="dm-btn dm-btn--danger dm-btn--sm" data-delete-id="${escapeAttr(row.id)}">Elimina</button>
+                            </div>
+                        </td>`;
+                tbody.appendChild(tr);
+            });
+            tbody.querySelectorAll('[data-delete-id]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    eliminaPreventivo(btn.getAttribute('data-delete-id'));
+                });
+            });
+        }
+
+        function applyFiltersAndRender() {
+            const tableWrap = document.getElementById('tableWrap');
+            const emptyState = document.getElementById('emptyState');
+            const filtered = allRows.filter(rowInPeriod);
+            const ordine = document.getElementById('filterOrdine').value;
+            const sorted = sortRows(filtered, ordine);
+
+            if (allRows.length === 0) {
+                emptyState.style.display = 'block';
+                emptyState.textContent = 'Nessun preventivo salvato. Crea il primo dal pulsante «Nuovo preventivo».';
+                tableWrap.style.display = 'none';
+                return;
+            }
+
+            if (sorted.length === 0) {
+                emptyState.style.display = 'block';
+                emptyState.textContent = 'Nessun preventivo corrisponde al periodo selezionato.';
+                tableWrap.style.display = 'none';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            tableWrap.style.display = 'block';
+            renderTable(sorted);
+        }
+
+        function syncFilterCustomVisibility() {
+            const isCustom = document.getElementById('filterPeriodo').value === 'personalizzato';
+            document.getElementById('filterCustomWrap').hidden = !isCustom;
+        }
+
+        async function eliminaPreventivo(id) {
+            if (!ok || !id) return;
+            if (!confirm('Eliminare definitivamente questo preventivo dall’archivio? L’operazione non si può annullare.')) return;
+            try {
+                await db.collection('preventivi').doc(id).delete();
+                await loadList();
+            } catch (e) {
+                console.error(e);
+                alert('Errore durante l’eliminazione: ' + (e.message || e));
+            }
+        }
+
+        async function loadList() {
+            const loading = document.getElementById('loading');
+            const errBox = document.getElementById('errorBox');
+            const tableWrap = document.getElementById('tableWrap');
+            const emptyState = document.getElementById('emptyState');
+            const filtersBar = document.getElementById('filtersBar');
+
+            if (!ok) {
+                loading.style.display = 'none';
+                errBox.style.display = 'block';
+                errBox.textContent = 'Firebase non configurato o Firestore non disponibile. Controlla firebase-config.js e abilita Firestore nel progetto.';
+                emptyState.style.display = 'none';
+                tableWrap.style.display = 'none';
+                filtersBar.hidden = true;
+                return;
+            }
+
+            try {
+                loading.style.display = 'block';
+                errBox.style.display = 'none';
+                tableWrap.style.display = 'none';
+                emptyState.style.display = 'none';
+                const snap = await db.collection('preventivi').get();
+                allRows = [];
+                snap.forEach(function (doc) {
+                    allRows.push({ id: doc.id, ...doc.data() });
+                });
+
+                loading.style.display = 'none';
+                filtersBar.hidden = allRows.length === 0;
+                syncFilterCustomVisibility();
+                applyFiltersAndRender();
+            } catch (e) {
+                console.error(e);
+                loading.style.display = 'none';
+                emptyState.style.display = 'none';
+                tableWrap.style.display = 'none';
+                filtersBar.hidden = true;
+                errBox.style.display = 'block';
+                errBox.style.whiteSpace = 'pre-wrap';
+                errBox.textContent = typeof formatFirestoreError === 'function'
+                    ? formatFirestoreError(e)
+                    : ('Errore Firestore: ' + (e.message || e));
+            }
+        }
+
+        document.getElementById('filterPeriodo').addEventListener('change', function () {
+            syncFilterCustomVisibility();
+            applyFiltersAndRender();
+        });
+        document.getElementById('filterOrdine').addEventListener('change', applyFiltersAndRender);
+        document.getElementById('filterDa').addEventListener('change', applyFiltersAndRender);
+        document.getElementById('filterA').addEventListener('change', applyFiltersAndRender);
+
+        loadList();
+    </script>
+</body>
+</html>

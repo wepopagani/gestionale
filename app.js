@@ -17,8 +17,70 @@ let state = {
     editItemId: null,
     reportData: [],
     orderCounter: 1, // Counter per numeri ordine sequenziali
-    isSyncingFromCloud: false // Flag per evitare loop di sincronizzazione
+    isSyncingFromCloud: false, // Flag per evitare loop di sincronizzazione
+    /** true se il dettaglio cliente è stato aperto dalla tabella "Clienti acquisiti" nel report */
+    cameFromReport: false
 };
+
+const REPORT_FILTERS_STORAGE_KEY = '3dmakes_report_filters_v1';
+
+function saveReportFiltersToStorage() {
+    try {
+        const periodEl = document.getElementById('reportPeriod');
+        if (!periodEl) return;
+        const data = {
+            period: periodEl.value,
+            status: document.getElementById('reportStatus').value,
+            client: document.getElementById('reportClient').value,
+            dateFrom: document.getElementById('reportDateFrom').value,
+            dateTo: document.getElementById('reportDateTo').value
+        };
+        sessionStorage.setItem(REPORT_FILTERS_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { /* ignore */ }
+}
+
+/** @returns {boolean} true se sono stati applicati valori salvati */
+function restoreReportFiltersFromStorage() {
+    try {
+        const raw = sessionStorage.getItem(REPORT_FILTERS_STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== 'object') return false;
+
+        if (data.period) document.getElementById('reportPeriod').value = data.period;
+        if (data.status) document.getElementById('reportStatus').value = data.status;
+        if (data.dateFrom) document.getElementById('reportDateFrom').value = data.dateFrom;
+        if (data.dateTo) document.getElementById('reportDateTo').value = data.dateTo;
+
+        const cid = data.client !== undefined && data.client !== null ? String(data.client) : 'all';
+        const sel = document.getElementById('reportClient');
+        if (sel) {
+            let found = false;
+            for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === cid) {
+                    sel.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) sel.value = 'all';
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function populateReportClientDropdown() {
+    const clientSelect = document.getElementById('reportClient');
+    clientSelect.innerHTML = '<option value="all">Tutti i Clienti</option>';
+    state.clients.forEach(client => {
+        const option = document.createElement('option');
+        option.value = client.id;
+        option.textContent = client.name;
+        clientSelect.appendChild(option);
+    });
+}
 
 // ===== PWA SERVICE WORKER =====
 if ('serviceWorker' in navigator) {
@@ -122,9 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderClients();
     setupEventListeners();
     
-    // Se ci sono clienti, mostra la dashboard
+    // Se ci sono clienti, apri il report completo (vista predefinita)
     if (state.clients.length > 0) {
-        showDashboard();
+        openReportView();
     }
 });
 
@@ -674,11 +736,23 @@ function renderClients(searchTerm = '') {
     `).join('');
 }
 
-function selectClient(clientId) {
+function selectClient(clientId, options = {}) {
+    if (!options.fromReport) {
+        state.cameFromReport = false;
+    } else {
+        state.cameFromReport = true;
+        saveReportFiltersToStorage();
+    }
+
     state.currentClientId = clientId;
     const client = state.clients.find(c => c.id === clientId);
     
     if (!client) return;
+
+    const backBtn = document.getElementById('backToListBtn');
+    if (backBtn) {
+        backBtn.textContent = state.cameFromReport ? '← Torna al report' : '← Torna alla lista';
+    }
 
     // Nascondi TUTTO tranne il client detail
     document.getElementById('emptyState').style.display = 'none';
@@ -707,19 +781,31 @@ function selectClient(clientId) {
     renderOrders();
 }
 
+/** Apertura cliente dalla tabella "Clienti acquisiti" nel report — mantiene filtri e consente "Torna al report". */
+function selectClientFromReport(clientId) {
+    selectClient(clientId, { fromReport: true });
+}
+
 function backToClientList() {
-    // Mostra sidebar, nascondi dettagli (solo su mobile)
     document.querySelector('.sidebar').classList.remove('hidden-mobile');
     document.querySelector('.main-content').classList.remove('fullscreen-mobile');
     document.getElementById('clientDetail').style.display = 'none';
-    document.getElementById('reportView').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
+
+    if (state.cameFromReport) {
+        state.cameFromReport = false;
+        state.currentClientId = null;
+        renderClients(document.getElementById('searchInput').value);
+        const backBtn = document.getElementById('backToListBtn');
+        if (backBtn) backBtn.textContent = '← Torna alla lista';
+        openReportView();
+        return;
+    }
+
+    document.getElementById('reportView').style.display = 'none';
     
     if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
-    } else {
-        // Su mobile, torna semplicemente a mostrare la lista clienti
-        // (la sidebar è già visibile)
     }
 }
 
@@ -822,12 +908,12 @@ function deleteCurrentClient() {
     // Notifica successo
     showNotification('🗑️ Cliente eliminato', 'success');
     
-    // Mostra empty state o dashboard
+    // Mostra empty state o report
     if (state.clients.length === 0) {
         document.getElementById('clientDetail').style.display = 'none';
         document.getElementById('emptyState').style.display = 'block';
     } else {
-        showDashboard();
+        openReportView();
     }
 }
 
@@ -1819,13 +1905,13 @@ function createOrdersStatusChart(statusStats) {
                     statusStats.in_attesa.count
                 ],
                 backgroundColor: [
-                    'rgba(59, 130, 246, 0.9)',
-                    'rgba(16, 185, 129, 0.9)',
+                    'rgba(0, 174, 239, 0.9)',
+                    'rgba(13, 148, 136, 0.9)',
                     'rgba(251, 191, 36, 0.9)'
                 ],
                 borderColor: [
-                    '#3b82f6',
-                    '#10b981',
+                    '#00aeef',
+                    '#0d9488',
                     '#fbbf24'
                 ],
                 borderWidth: 3,
@@ -1948,11 +2034,11 @@ function createRevenueChart() {
                 backgroundColor: (context) => {
                     const ctx = context.chart.ctx;
                     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.9)');
-                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.7)');
+                    gradient.addColorStop(0, 'rgba(0, 174, 239, 0.9)');
+                    gradient.addColorStop(1, 'rgba(0, 59, 92, 0.5)');
                     return gradient;
                 },
-                borderColor: '#6366f1',
+                borderColor: '#00aeef',
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false
@@ -2077,14 +2163,14 @@ function createRevenueTrendChart() {
             datasets: [{
                 label: 'Fatturato',
                 data: monthsData.map(d => d.revenue),
-                borderColor: '#6366f1',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderColor: '#00aeef',
+                backgroundColor: 'rgba(0, 174, 239, 0.12)',
                 borderWidth: 3,
                 fill: true,
                 tension: 0.4,
                 pointRadius: 5,
                 pointHoverRadius: 7,
-                pointBackgroundColor: '#6366f1',
+                pointBackgroundColor: '#00aeef',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2
             }]
@@ -2279,11 +2365,11 @@ function createTopClientsChart() {
                 backgroundColor: (context) => {
                     const ctx = context.chart.ctx;
                     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.9)');
-                    gradient.addColorStop(1, 'rgba(139, 92, 246, 0.7)');
+                    gradient.addColorStop(0, 'rgba(0, 174, 239, 0.9)');
+                    gradient.addColorStop(1, 'rgba(0, 59, 92, 0.5)');
                     return gradient;
                 },
-                borderColor: '#6366f1',
+                borderColor: '#00aeef',
                 borderWidth: 2,
                 borderRadius: 8
             }]
@@ -2385,8 +2471,8 @@ function createOrdersDistributionChart() {
             datasets: [{
                 label: 'Numero Ordini',
                 data: monthsData.map(d => d.count),
-                backgroundColor: 'rgba(139, 92, 246, 0.8)',
-                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(0, 174, 239, 0.75)',
+                borderColor: '#00aeef',
                 borderWidth: 2,
                 borderRadius: 6
             }]
@@ -2746,37 +2832,37 @@ function renderDashboardRecentClients(clients) {
 
 // ===== REPORT SYSTEM =====
 function openReportView() {
-    // Nascondo TUTTO tranne il report
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('reportView').style.display = 'block';
-    
-    // Su mobile, nascondi la sidebar e mostra fullscreen
+
+    state.currentClientId = null;
+    renderClients();
+
     if (window.innerWidth <= 768) {
         document.querySelector('.sidebar').classList.add('hidden-mobile');
         document.querySelector('.main-content').classList.add('fullscreen-mobile');
     }
     
-    // Popola dropdown clienti
-    const clientSelect = document.getElementById('reportClient');
-    clientSelect.innerHTML = '<option value="all">Tutti i Clienti</option>';
-    state.clients.forEach(client => {
-        const option = document.createElement('option');
-        option.value = client.id;
-        option.textContent = client.name;
-        clientSelect.appendChild(option);
-    });
+    populateReportClientDropdown();
     
-    // Reset filtri
-    document.getElementById('reportPeriod').value = 'month';
-    document.getElementById('reportStatus').value = 'all';
+    const hadSaved = restoreReportFiltersFromStorage();
+    if (!hadSaved) {
+        document.getElementById('reportPeriod').value = 'month';
+        document.getElementById('reportStatus').value = 'all';
+        document.getElementById('reportClient').value = 'all';
+        document.getElementById('customDates').style.display = 'none';
+    } else {
+        const period = document.getElementById('reportPeriod').value;
+        document.getElementById('customDates').style.display = period === 'custom' ? 'grid' : 'none';
+    }
     
-    // GENERA AUTOMATICAMENTE IL REPORT
     generateReport();
 }
 
 function closeReportView() {
+    saveReportFiltersToStorage();
     document.getElementById('reportView').style.display = 'none';
     
     // Mostra la sidebar
@@ -2801,16 +2887,20 @@ function closeReportView() {
 function handlePeriodChange() {
     const period = document.getElementById('reportPeriod').value;
     const customDates = document.getElementById('customDates');
+    const fromInput = document.getElementById('reportDateFrom');
+    const toInput = document.getElementById('reportDateTo');
     
     if (period === 'custom') {
         customDates.style.display = 'grid';
-        document.getElementById('reportDateFrom').value = new Date().toISOString().split('T')[0];
-        document.getElementById('reportDateTo').value = new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        if (!fromInput.value || !toInput.value) {
+            fromInput.value = today;
+            toInput.value = today;
+        }
     } else {
         customDates.style.display = 'none';
     }
     
-    // Rigenera automaticamente il report quando cambia il periodo
     generateReport();
 }
 
@@ -3161,6 +3251,8 @@ function generateReport() {
     // Aggiorna classi active sulle card
     updateStatusCardsActive(statusFilter);
     
+    saveReportFiltersToStorage();
+    
     console.log('✅ Report generato!');
     console.log(`💰 Importo filtrato: ${formatCurrency(totalRevenue)}`);
 }
@@ -3202,7 +3294,7 @@ function renderClientsAcquiredTable(clients, dateRange) {
         }
         
         // Determina colore in base allo stato pagamenti
-        let paymentColor = '#6366f1'; // Default blu
+        let paymentColor = '#00aeef'; // Default blu
         
         if (client.orders && client.orders.length > 0) {
             const paidOrders = client.orders.filter(o => o.paymentStatus === 'pagato').length;
@@ -3222,7 +3314,7 @@ function renderClientsAcquiredTable(clients, dateRange) {
         }
         
         return `
-            <tr onclick="selectClient('${client.id}'); closeReportView();" style="cursor: pointer;">
+            <tr onclick="selectClientFromReport('${client.id}')" style="cursor: pointer;">
                 <td><strong>${formatDate(displayDate)}</strong></td>
                 <td><strong>${client.name}</strong></td>
                 <td>${contacts}</td>
@@ -3405,7 +3497,7 @@ function printReport() {
                     color: #333;
                 }
                 h1 {
-                    color: #6366f1;
+                    color: #00aeef;
                     margin-bottom: 10px;
                 }
                 .meta {
@@ -3529,7 +3621,7 @@ function printReport() {
                         
                         // Colori per pagamento
                         let paymentClass = '';
-                        let amountColor = '#6366f1';
+                        let amountColor = '#00aeef';
                         
                         if (paymentStatus === 'pagato') {
                             paymentClass = 'payment-paid';
@@ -3677,7 +3769,7 @@ function importBackup() {
             state.currentClientId = null;
             
             if (state.clients.length > 0) {
-                showDashboard();
+                openReportView();
             } else {
                 document.getElementById('clientDetail').style.display = 'none';
                 document.getElementById('dashboardView').style.display = 'none';

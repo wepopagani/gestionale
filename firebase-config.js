@@ -30,6 +30,19 @@ const firebaseConfig = {
 // ⚠️ ATTENZIONE: Queste regole sono aperte per test!
 // Per produzione, configura regole più sicure con autenticazione
 
+// ===== FIRESTORE (preventivi) =====
+// Per «Genera Preventivo» e «Storico Preventivi»: nella Firebase Console abilita
+// Firestore Database (stesso progetto gestionale-a0cb6). Esempio regole di test:
+/*
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /preventivi/{id} { allow read, write: if true; }
+    match /counters/{id} { allow read, write: if true; }
+  }
+}
+*/
+
 // Esporta la configurazione
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = firebaseConfig;

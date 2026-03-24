@@ -7,7 +7,7 @@
     
     <!-- PWA Meta Tags -->
     <meta name="description" content="Gestionale clienti per 3DMAKES con ordini, documenti e report">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#003b5c">
     <link rel="manifest" href="manifest.json">
     
     <!-- iOS Meta Tags -->
@@ -17,9 +17,11 @@
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="apple-touch-startup-image" href="logo.png">
     
-    <!-- Styles -->
-    <link rel="stylesheet" href="style.css?v=2.1">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Styles — brand 3DMAKES -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=2.4">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -29,12 +31,30 @@
     <!-- Chart.js per grafici -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body class="has-site-nav">
+    <header class="dm-header app-site-header" role="banner">
+        <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+        <nav class="dm-nav" aria-label="Strumenti">
+            <a href="index.html" aria-current="page">Gestionale</a>
+            <a href="calcolatore.html">Calcolatore</a>
+            <a href="genera-preventivo.html">Preventivo</a>
+            <a href="storico-preventivi.html">Storico</a>
+        </nav>
+        <div class="dm-header__actions">
+            <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
+        </div>
+    </header>
     <div class="app">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="logo.png" alt="3DMAKES" class="logo">
+                <div class="sidebar-brand">
+                    <a href="index.html" class="sidebar-brand-text" title="3DMAKES">
+                        <span class="sidebar-brand-d">3D</span><span class="sidebar-brand-m">MAKES</span>
+                    </a>
+                    <img src="logo.png" alt="" class="logo sidebar-brand-logo" width="36" height="36">
+                </div>
                 <div class="theme-toggle" id="themeToggle" onclick="toggleDarkMode()" title="Cambia tema">
                     <span class="theme-icon" id="themeIcon">🌙</span>
                     <span class="theme-text" id="themeText">Dark</span>
@@ -53,6 +73,9 @@
                 <button class="btn-secondary" id="viewDashboardBtn" style="margin-top: 8px; width: 100%;">📊 Dashboard</button>
                 <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📈 Report Completo</button>
                 <button class="btn-secondary" id="backupBtn" style="margin-top: 8px; width: 100%;">💾 Backup Dati</button>
+                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='calcolatore.html'">🧮 Calcolatore prezzi 3D</button>
+                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='genera-preventivo.html'">📋 Genera Preventivo</button>
+                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='storico-preventivi.html'">📑 Storico Preventivi</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -311,6 +334,7 @@
                     <div>
                         <h2>📊 Report Completo</h2>
                         <p>Analisi ordini e clienti acquisiti per periodo</p>
+                        <p class="report-hint">Filtri salvati per questa sessione. Da un cliente aperto dal report usa «Torna al report» per ritrovare periodo e filtri.</p>
                     </div>
                     <button class="btn-secondary" id="closeReportBtn">✕ Chiudi</button>
                 </div>
@@ -876,8 +900,8 @@
                         <strong>✅ Tutti vedono gli stessi dati automaticamente!</strong><br>
                         Tu e i tuoi colleghi avete accesso allo stesso database in tempo reale.
                     </p>
-                    <div style="padding: 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.2);">
-                        <div style="font-size: 13px; color: var(--primary);">
+                    <div style="padding: 12px; background: rgba(0, 174, 239, 0.08); border-radius: 8px; border: 1px solid rgba(0, 174, 239, 0.25);">
+                        <div style="font-size: 13px; color: var(--primary-dark);">
                             <strong>📊 Vantaggi:</strong><br>
                             • Modifiche visibili istantaneamente<br>
                             • Nessuna configurazione necessaria<br>
@@ -988,7 +1012,7 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=2.1"></script>
+    <script src="app.js?v=2.5"></script>
 </body>
 </html>
 

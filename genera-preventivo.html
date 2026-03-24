@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generatore Preventivi - 3DMAKES</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="3dmakes-theme.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firestore-init.js"></script>
+</head>
+<body class="dm-page">
+    <header class="dm-header">
+        <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+        <nav class="dm-nav" aria-label="Strumenti">
+            <a href="index.html">Gestionale</a>
+            <a href="calcolatore.html">Calcolatore</a>
+            <a href="genera-preventivo.html" aria-current="page">Preventivo</a>
+            <a href="storico-preventivi.html">Storico</a>
+        </nav>
+        <div class="dm-header__actions">
+            <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
+        </div>
+    </header>
+    <div class="dm-preventivo-wrap">
+        <aside class="dm-sidebar dm-card dm-form">
+            <h2>Editor preventivo</h2>
+            <div class="dm-section-title">Info documento</div>
+            <div class="form-group">
+                <label>Numero Offerta:</label>
+                <input type="text" id="numeroOfferta" value="Caricamento..." oninput="aggiorna()" readonly>
+                <small id="infoNumeroOfferta" class="dm-muted-inline">Numero generato automaticamente e sequenziale</small>
+            </div>
+            <div class="form-group">
+                <label>Data:</label>
+                <input type="date" id="dataDoc" oninput="aggiorna()">
+            </div>
+            <div class="dm-section-title">Dati cliente</div>
+            <div class="form-group">
+                <label>Nome Cliente:</label>
+                <input type="text" id="nomeCliente" value="Mario Rossi" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Indirizzo Cliente:</label>
+                <textarea id="indirizzoCliente" oninput="aggiorna()">Via Roma 123
+6900 Lugano
+Svizzera</textarea>
+            </div>
+            <div class="dm-section-title">Articoli</div>
+            <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
+            <div id="righeEditor"></div>
+            <div class="dm-section-title">IVA</div>
+            <div class="form-group">
+                <label>Applicare IVA:</label>
+                <select id="applicaIva" onchange="aggiorna()">
+                    <option value="si">Sì - IVA 8.1%</option>
+                    <option value="no" selected>No - Regime forfettario</option>
+                </select>
+            </div>
+            <div class="form-group" id="aliquotaIvaContainer" style="display: none;">
+                <label>Aliquota IVA (%):</label>
+                <input type="number" id="aliquotaIva" value="8.1" min="0" max="100" step="0.1" onchange="aggiorna()">
+            </div>
+            <div class="dm-section-title">Note e condizioni</div>
+            <div class="form-group">
+                <label>Note:</label>
+                <textarea id="note" oninput="aggiorna()">Termine: 15 giorni lavorativi dall'ordinazione
+Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
+            </div>
+            <button type="button" class="dm-btn dm-btn--success dm-btn--block" id="btnSalva" onclick="salvaSuCloud()" style="display:none">Salva su cloud</button>
+            <button type="button" class="dm-btn dm-btn--cyan dm-btn--block" id="btnScaricaPDF" onclick="scaricaPDF(this)">Scarica PDF</button>
+            <a href="storico-preventivi.html" class="dm-btn dm-btn--outline dm-btn--block">Storico preventivi</a>
+        </aside>
+        <div class="dm-preview-shell dm-card">
+            <div class="dm-doc-preview" id="preventivo">
+                <div class="dm-doc-header">
+                    <div class="company-info">
+                        <img src="./logo.png" alt="3DMAKES Logo" class="company-logo" id="prev-logo" onerror="this.style.display='none';">
+                        <div class="company-details">
+                            <div style="white-space: pre-line;" id="prev-indirizzoAzienda"></div>
+                            <div style="white-space: pre-line; margin-top: 10px;" id="prev-contattiAzienda"></div>
+                        </div>
+                    </div>
+                    <div class="client-info">
+                        <div class="client-name" id="prev-nomeCliente">Mario Rossi</div>
+                        <div style="white-space: pre-line;" id="prev-indirizzoCliente"></div>
+                    </div>
+                </div>
+                <div class="dm-doc-title">Offerta</div>
+                <div class="dm-doc-info document-info">
+                    <div><strong>Offerta:</strong> <span id="prev-numeroOfferta">2024/001</span></div>
+                    <div><strong>Data:</strong> <span id="prev-data"></span></div>
+                </div>
+                <table class="dm-items-table items-table" id="prev-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 8%;">Art.</th>
+                            <th style="width: 42%;">Descrizione</th>
+                            <th style="width: 10%;">Quantità</th>
+                            <th style="width: 15%;">Prezzo unit.</th>
+                            <th style="width: 10%;">Sconto</th>
+                            <th style="width: 15%;">Importo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prev-tbody"></tbody>
+                </table>
+                <div class="dm-total-section total-section">
+                    <div class="total-row" id="subtotale-row">
+                        <strong>Subtotale:</strong>
+                        <span id="prev-subtotale">0.00 CHF</span>
+                    </div>
+                    <div class="total-row" id="iva-row" style="display: none;">
+                        <strong>IVA (<span id="prev-aliquota-iva">8.1</span>%):</strong>
+                        <span id="prev-iva">0.00 CHF</span>
+                    </div>
+                    <div class="total-row final">
+                        <strong>TOTALE:</strong>
+                        <span id="prev-totale">0.00 CHF</span>
+                    </div>
+                </div>
+                <div class="dm-doc-notes notes">
+                    <strong>Note e condizioni</strong>
+                    <div style="white-space: pre-line;" id="prev-note"></div>
+                </div>
+                <div class="dm-doc-footer footer">Preventivo generato da 3DMAKES</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let db = null;
+        let firebaseInitialized = false;
+        let preventivoInModifica = null;
+        let modalitaModifica = false;
+
+        try {
+            db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
+            firebaseInitialized = !!db;
+            if (firebaseInitialized) {
+                console.log('✅ Firebase (Firestore) inizializzato');
+            } else {
+                console.warn('⚠️ Firebase non configurato in firebase-config.js');
+            }
+        } catch (error) {
+            console.error('❌ Errore inizializzazione Firebase:', error);
+        }
+
+        async function ottieniProssimoNumeroPreventivo() {
+            if (!firebaseInitialized) {
+                return document.getElementById('numeroOfferta').value;
+            }
+            const anno = new Date().getFullYear();
+            const counterRef = db.collection('counters').doc('preventivi');
+            const nuovoNumero = await db.runTransaction(async (transaction) => {
+                const counterDoc = await transaction.get(counterRef);
+                let counter = 1;
+                let currentYear = anno;
+                if (counterDoc.exists) {
+                    const data = counterDoc.data();
+                    currentYear = data.year || anno;
+                    if (currentYear !== anno) {
+                        counter = 1;
+                        currentYear = anno;
+                    } else {
+                        counter = (data.counter || 0) + 1;
+                    }
+                }
+                transaction.set(counterRef, {
+                    counter: counter,
+                    year: currentYear,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return `${anno}/${String(counter).padStart(3, '0')}`;
+            });
+            return nuovoNumero;
+        }
+
+        async function salvaPreventivoFirestore(datiPreventivo, idPreventivo = null) {
+            if (!firebaseInitialized) return null;
+            if (idPreventivo) {
+                await db.collection('preventivi').doc(idPreventivo).update({
+                    ...datiPreventivo,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return idPreventivo;
+            }
+            const docRef = await db.collection('preventivi').add({
+                ...datiPreventivo,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return docRef.id;
+        }
+
+        async function caricaPreventivoEsistente(idPreventivo) {
+            if (!firebaseInitialized) return null;
+            const doc = await db.collection('preventivi').doc(idPreventivo).get();
+            if (!doc.exists) return null;
+            return { id: doc.id, ...doc.data() };
+        }
+
+        let righe = [
+            { articolo: '1', descrizione: 'Stampa 3D in PLA\nModello personalizzato', quantita: 1, prezzoUnit: 50.00, sconto: 0 },
+            { articolo: '2', descrizione: 'Post-processing e finitura', quantita: 1, prezzoUnit: 25.00, sconto: 0 }
+        ];
+
+        document.getElementById('dataDoc').valueAsDate = new Date();
+
+        async function caricaProssimoNumeroPreventivo() {
+            try {
+                const nuovoNumero = await ottieniProssimoNumeroPreventivo();
+                document.getElementById('numeroOfferta').value = nuovoNumero;
+                aggiorna();
+            } catch (error) {
+                console.error('Errore nel caricamento del numero preventivo:', error);
+                const anno = new Date().getFullYear();
+                document.getElementById('numeroOfferta').value = `${anno}/001`;
+                aggiorna();
+            }
+        }
+
+        async function caricaDuplicato(idSorgente) {
+            try {
+                const preventivo = await caricaPreventivoEsistente(idSorgente);
+                if (!preventivo) {
+                    alert('Preventivo non trovato.');
+                    window.location.href = 'genera-preventivo.html';
+                    return;
+                }
+                preventivoInModifica = null;
+                modalitaModifica = false;
+                document.getElementById('numeroOfferta').value = '…';
+                document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
+                document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
+                document.getElementById('note').value = preventivo.note || '';
+                document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
+                if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
+                if (preventivo.righe && preventivo.righe.length > 0) {
+                    righe = preventivo.righe.map(r => ({
+                        articolo: r.articolo || '',
+                        descrizione: r.descrizione || '',
+                        quantita: r.quantita || 1,
+                        prezzoUnit: r.prezzoUnit || 0,
+                        sconto: r.sconto || 0
+                    }));
+                }
+                document.getElementById('dataDoc').valueAsDate = new Date();
+                renderEditor();
+                aggiorna();
+                const nuovoNumero = await ottieniProssimoNumeroPreventivo();
+                document.getElementById('numeroOfferta').value = nuovoNumero;
+                document.getElementById('infoNumeroOfferta').innerHTML =
+                    '<strong style="color:#00aeef;">Duplicato</strong> — nuovo numero; «Salva su cloud» crea un nuovo preventivo in archivio.';
+                aggiorna();
+            } catch (error) {
+                console.error('Errore duplicato:', error);
+                alert('Errore durante il caricamento della copia: ' + error.message);
+                window.location.href = 'genera-preventivo.html';
+            }
+        }
+
+        async function caricaDatiPreventivo(idPreventivo) {
+            try {
+                const preventivo = await caricaPreventivoEsistente(idPreventivo);
+                if (!preventivo) {
+                    alert('Preventivo non trovato!');
+                    window.location.href = 'genera-preventivo.html';
+                    return;
+                }
+                preventivoInModifica = idPreventivo;
+                modalitaModifica = true;
+                document.getElementById('numeroOfferta').value = preventivo.numeroOfferta || '';
+                document.getElementById('dataDoc').value = preventivo.data || '';
+                document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
+                document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
+                document.getElementById('note').value = preventivo.note || '';
+                document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
+                if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
+                if (preventivo.righe && preventivo.righe.length > 0) {
+                    righe = preventivo.righe.map(r => ({
+                        articolo: r.articolo || '',
+                        descrizione: r.descrizione || '',
+                        quantita: r.quantita || 1,
+                        prezzoUnit: r.prezzoUnit || 0,
+                        sconto: r.sconto || 0
+                    }));
+                }
+                document.getElementById('infoNumeroOfferta').innerHTML =
+                    '<strong style="color:#00aeef;">Modalità modifica</strong> — stai modificando un preventivo esistente';
+                if (firebaseInitialized) document.getElementById('btnSalva').style.display = 'block';
+                renderEditor();
+                aggiorna();
+            } catch (error) {
+                console.error('❌ Errore caricamento preventivo:', error);
+                alert('Errore durante il caricamento del preventivo: ' + error.message);
+                window.location.href = 'genera-preventivo.html';
+            }
+        }
+
+        function verificaModalitaModifica() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const duplicateId = urlParams.get('duplicate');
+            const editId = urlParams.get('edit');
+            if (duplicateId) {
+                if (!firebaseInitialized) {
+                    alert('Per duplicare un preventivo serve Firebase (firebase-config.js).');
+                    window.location.href = 'genera-preventivo.html';
+                    return;
+                }
+                document.getElementById('btnSalva').style.display = 'block';
+                caricaDuplicato(duplicateId);
+                return;
+            }
+            if (editId) {
+                if (firebaseInitialized) document.getElementById('btnSalva').style.display = 'block';
+                caricaDatiPreventivo(editId);
+            } else {
+                if (firebaseInitialized) document.getElementById('btnSalva').style.display = 'block';
+                caricaProssimoNumeroPreventivo();
+            }
+        }
+
+        function preparaDatiPreventivo() {
+            const subtotale = calcolaTotale();
+            const applicaIva = document.getElementById('applicaIva').value === 'si';
+            const aliquotaIva = parseFloat(document.getElementById('aliquotaIva').value) || 8.1;
+            const importoIva = applicaIva ? subtotale * (aliquotaIva / 100) : 0;
+            const totale = subtotale + importoIva;
+            return {
+                numeroOfferta: document.getElementById('numeroOfferta').value,
+                data: document.getElementById('dataDoc').value,
+                cliente: {
+                    nome: document.getElementById('nomeCliente').value,
+                    indirizzo: document.getElementById('indirizzoCliente').value
+                },
+                righe: righe.map(riga => ({
+                    articolo: riga.articolo,
+                    descrizione: riga.descrizione,
+                    quantita: riga.quantita,
+                    prezzoUnit: riga.prezzoUnit,
+                    sconto: riga.sconto,
+                    importo: (riga.quantita * riga.prezzoUnit) * (1 - riga.sconto / 100)
+                })),
+                note: document.getElementById('note').value,
+                subtotale: subtotale,
+                applicaIva: applicaIva,
+                aliquotaIva: applicaIva ? aliquotaIva : 0,
+                importoIva: importoIva,
+                totale: totale,
+                valuta: 'CHF'
+            };
+        }
+
+        function calcolaTotale() {
+            let totale = 0;
+            righe.forEach(riga => {
+                const importoSenzaSconto = riga.quantita * riga.prezzoUnit;
+                const importoSconto = importoSenzaSconto * (riga.sconto / 100);
+                totale += importoSenzaSconto - importoSconto;
+            });
+            return totale;
+        }
+
+        function aggiungiRiga() {
+            righe.push({
+                articolo: (righe.length + 1).toString(),
+                descrizione: 'Nuova voce',
+                quantita: 1,
+                prezzoUnit: 0,
+                sconto: 0
+            });
+            renderEditor();
+            aggiorna();
+        }
+
+        function rimuoviRiga(index) {
+            if (righe.length > 1) {
+                righe.splice(index, 1);
+                righe.forEach((riga, i) => { riga.articolo = (i + 1).toString(); });
+                renderEditor();
+                aggiorna();
+            } else {
+                alert('Devi mantenere almeno una riga!');
+            }
+        }
+
+        function aggiornaRiga(index, campo, valore) {
+            righe[index][campo] = valore;
+            aggiorna();
+        }
+
+        function renderEditor() {
+            const container = document.getElementById('righeEditor');
+            container.innerHTML = '';
+            righe.forEach((riga, index) => {
+                const rigaDiv = document.createElement('div');
+                rigaDiv.className = 'dm-riga-editor';
+                rigaDiv.innerHTML = `
+                    <div class="dm-riga-editor__head">
+                        <strong>Riga ${index + 1}</strong>
+                        <button type="button" class="dm-btn dm-btn--danger dm-btn--fit" onclick="rimuoviRiga(${index})">Elimina</button>
+                    </div>
+                    <div class="form-group">
+                        <label>Articolo:</label>
+                        <input type="text" value="${String(riga.articolo).replace(/"/g, '&quot;')}"
+                            onchange="aggiornaRiga(${index}, 'articolo', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Descrizione:</label>
+                        <textarea onchange="aggiornaRiga(${index}, 'descrizione', this.value)">${riga.descrizione.replace(/</g, '&lt;')}</textarea>
+                    </div>
+                    <div class="dm-grid-2 dm-grid-2--qty-price">
+                        <div class="form-group">
+                            <label>Quantità:</label>
+                            <input type="number" value="${riga.quantita}" min="1" step="1"
+                                onchange="aggiornaRiga(${index}, 'quantita', parseFloat(this.value))">
+                        </div>
+                        <div class="form-group">
+                            <label>Prezzo unit. (CHF):</label>
+                            <input type="number" value="${riga.prezzoUnit}" min="0" step="0.01"
+                                onchange="aggiornaRiga(${index}, 'prezzoUnit', parseFloat(this.value))">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Sconto (%):</label>
+                        <input type="number" value="${riga.sconto}" min="0" max="100" step="1"
+                            onchange="aggiornaRiga(${index}, 'sconto', parseFloat(this.value))">
+                    </div>`;
+                container.appendChild(rigaDiv);
+            });
+        }
+
+        function aggiorna() {
+            document.getElementById('prev-indirizzoAzienda').textContent = 'Via Cantonale 15\nCH-6918 Lugano';
+            document.getElementById('prev-contattiAzienda').textContent = 'Tel: 076 266 03 96\nEmail: info@3dmakes.ch\nWeb: www.3dmakes.ch';
+            document.getElementById('prev-nomeCliente').textContent = document.getElementById('nomeCliente').value;
+            document.getElementById('prev-indirizzoCliente').textContent = document.getElementById('indirizzoCliente').value;
+            document.getElementById('prev-numeroOfferta').textContent = document.getElementById('numeroOfferta').value;
+            const data = new Date(document.getElementById('dataDoc').value);
+            document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-IT');
+            document.getElementById('prev-note').textContent = document.getElementById('note').value;
+            const tbody = document.getElementById('prev-tbody');
+            tbody.innerHTML = '';
+            let subtotale = 0;
+            righe.forEach(riga => {
+                const importoSenzaSconto = riga.quantita * riga.prezzoUnit;
+                const importoSconto = importoSenzaSconto * (riga.sconto / 100);
+                const importo = importoSenzaSconto - importoSconto;
+                subtotale += importo;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${riga.articolo}</td>
+                    <td style="white-space: pre-line;">${riga.descrizione.replace(/</g, '&lt;')}</td>
+                    <td>${riga.quantita}</td>
+                    <td>${riga.prezzoUnit.toFixed(2)} CHF</td>
+                    <td>${riga.sconto > 0 ? riga.sconto + '%' : '-'}</td>
+                    <td><strong>${importo.toFixed(2)} CHF</strong></td>`;
+                tbody.appendChild(tr);
+            });
+            const applicaIva = document.getElementById('applicaIva').value === 'si';
+            const aliquotaIva = parseFloat(document.getElementById('aliquotaIva').value) || 8.1;
+            document.getElementById('aliquotaIvaContainer').style.display = applicaIva ? 'block' : 'none';
+            let importoIva = 0;
+            let totale = subtotale;
+            if (applicaIva) {
+                importoIva = subtotale * (aliquotaIva / 100);
+                totale = subtotale + importoIva;
+                document.getElementById('iva-row').style.display = 'flex';
+                document.getElementById('prev-aliquota-iva').textContent = aliquotaIva;
+                document.getElementById('prev-iva').textContent = importoIva.toFixed(2) + ' CHF';
+                document.getElementById('subtotale-row').style.display = 'flex';
+            } else {
+                document.getElementById('iva-row').style.display = 'none';
+                document.getElementById('subtotale-row').style.display = 'none';
+            }
+            document.getElementById('prev-subtotale').textContent = subtotale.toFixed(2) + ' CHF';
+            document.getElementById('prev-totale').textContent = totale.toFixed(2) + ' CHF';
+        }
+
+        async function salvaSuCloud() {
+            if (!firebaseInitialized) {
+                alert('Firebase non configurato: impossibile salvare su cloud.');
+                return;
+            }
+            const btnSalva = document.getElementById('btnSalva');
+            const textOriginale = btnSalva.textContent;
+            btnSalva.textContent = '⏳ Salvataggio...';
+            btnSalva.disabled = true;
+            try {
+                const datiPreventivo = preparaDatiPreventivo();
+                if (modalitaModifica && preventivoInModifica) {
+                    await salvaPreventivoFirestore(datiPreventivo, preventivoInModifica);
+                } else {
+                    const docId = await salvaPreventivoFirestore(datiPreventivo);
+                    if (docId) {
+                        preventivoInModifica = docId;
+                        modalitaModifica = true;
+                        history.replaceState(null, '', 'genera-preventivo.html?edit=' + encodeURIComponent(docId));
+                        document.getElementById('infoNumeroOfferta').innerHTML =
+                            '<strong style="color:#00aeef;">Salvato su cloud</strong> — puoi continuare a modificare';
+                    }
+                }
+                btnSalva.textContent = '✅ Salvato!';
+                setTimeout(() => {
+                    btnSalva.textContent = textOriginale;
+                    btnSalva.disabled = false;
+                    if (confirm('Preventivo salvato su Firestore. Aprire lo storico?')) {
+                        window.location.href = 'storico-preventivi.html';
+                    }
+                }, 1200);
+            } catch (error) {
+                console.error('Errore salvataggio:', error);
+                alert('Errore durante il salvataggio: ' + error.message);
+                btnSalva.textContent = textOriginale;
+                btnSalva.disabled = false;
+            }
+        }
+
+        function scaricaPdfBlob(pdf, nomeFile) {
+            const blob = pdf.output('blob');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nomeFile;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
+        }
+
+        async function scaricaPDF(btnPDF) {
+            const preventivo = document.getElementById('preventivo');
+            const textOriginale = btnPDF.textContent;
+            btnPDF.textContent = '⏳ Generazione PDF...';
+            btnPDF.disabled = true;
+            const isFile = window.location.protocol === 'file:';
+            try {
+                if (typeof html2canvas === 'undefined') throw new Error('html2canvas non è caricato.');
+                const canvas = await html2canvas(preventivo, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: false,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    foreignObjectRendering: false,
+                    onclone: function (doc) {
+                        if (isFile) {
+                            var logo = doc.getElementById('prev-logo');
+                            if (logo) logo.style.display = 'none';
+                        }
+                    }
+                });
+                let jsPDF;
+                if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+                else if (window.jsPDF && window.jsPDF.jsPDF) jsPDF = window.jsPDF.jsPDF;
+                else if (window.jsPDF) jsPDF = window.jsPDF;
+                else throw new Error('jsPDF non è caricato.');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                var imgData;
+                try {
+                    imgData = canvas.toDataURL('image/png');
+                } catch (sec) {
+                    throw new Error(
+                        'Impossibile esportare l’anteprima (blocco sicurezza del browser su file://). ' +
+                        'Avvia un server locale nella cartella del progetto: terminale → python3 -m http.server 8080 → apri http://localhost:8080/genera-preventivo.html'
+                    );
+                }
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                const numeroOfferta = document.getElementById('numeroOfferta').value.replace(/\//g, '-');
+                const nomeFile = 'Preventivo_' + numeroOfferta + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+                scaricaPdfBlob(pdf, nomeFile);
+                btnPDF.textContent = '✅ PDF pronto';
+                setTimeout(function () {
+                    btnPDF.textContent = textOriginale;
+                    btnPDF.disabled = false;
+                }, 2000);
+            } catch (error) {
+                console.error('Errore generazione PDF:', error);
+                var msg = error && error.message ? error.message : String(error);
+                alert('Errore durante la generazione del PDF: ' + msg);
+                btnPDF.textContent = textOriginale;
+                btnPDF.disabled = false;
+            }
+        }
+
+        window.addEventListener('load', function() {
+            verificaModalitaModifica();
+        });
+
+        renderEditor();
+        aggiorna();
+    </script>
+</body>
+</html>

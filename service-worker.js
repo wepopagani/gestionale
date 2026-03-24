@@ -1,13 +1,20 @@
 // Service Worker per 3DMAKES Gestionale
 // Versione 2.1
 
-const CACHE_NAME = '3dmakes-gestionale-v2.1';
+const CACHE_NAME = '3dmakes-gestionale-v3.15';
 const urlsToCache = [
   '/',
   '/index.html',
+  '/3dmakes-theme.css',
+  '/genera-preventivo.html',
+  '/storico-preventivi.html',
+  '/calcolatore-prezzi.html',
+  '/calcolatore.html',
+  '/migrazione-preventivi.html',
   '/app.js',
   '/style.css',
   '/firebase-config.js',
+  '/firestore-init.js',
   '/logo.png'
 ];
 

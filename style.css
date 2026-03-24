@@ -1,3 +1,5 @@
+@import url('3dmakes-theme.css');
+
 /* Reset e base */
 * {
     margin: 0;
@@ -6,24 +8,29 @@
 }
 
 :root {
-    --primary: #6366f1;
-    --primary-dark: #4f46e5;
-    --primary-light: #818cf8;
-    --secondary: #64748b;
-    --danger: #ef4444;
-    --success: #10b981;
-    --warning: #f59e0b;
+    /* Brand 3DMAKES — gestionale (override / integrazione con 3dmakes-theme.css) */
+    --font-brand: 'Montserrat', 'Inter', system-ui, sans-serif;
+    --primary: #00aeef;
+    --primary-dark: #003b5c;
+    --primary-light: #33c4ff;
+    --secondary: #5c6b7a;
+    --danger: #dc2626;
+    --success: #0d9488;
+    --warning: #d97706;
     --bg-primary: #ffffff;
-    --bg-secondary: #f8fafc;
-    --bg-tertiary: #f1f5f9;
-    --border: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-secondary: #64748b;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
-    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
-    --glow: 0 0 20px rgba(99, 102, 241, 0.3);
+    --bg-secondary: #f5f2ed;
+    --bg-tertiary: #eef2f6;
+    --border: #e8e4dc;
+    --text-primary: #1a2b3c;
+    --text-secondary: #5c6b7a;
+    --shadow: 0 2px 12px rgba(0, 59, 92, 0.06);
+    --shadow-md: 0 8px 24px rgba(0, 59, 92, 0.08);
+    --shadow-lg: 0 12px 32px rgba(0, 59, 92, 0.1);
+    --shadow-xl: 0 20px 48px rgba(0, 59, 92, 0.12);
+    --glow: 0 0 24px rgba(0, 174, 239, 0.25);
+    /* raggio coerente con 3dmakes-theme (--dm-radius) */
+    --radius-app: 14px;
+    --radius-pill: 9999px;
     --transition-fast: 0.15s ease;
     --transition-base: 0.3s ease;
     --transition-slow: 0.5s ease;
@@ -31,17 +38,17 @@
 
 /* Dark Mode */
 body.dark-mode {
-    --bg-primary: #1a1a1a;
-    --bg-secondary: #141414;
-    --bg-tertiary: #222222;
-    --border: #333333;
-    --text-primary: #f5f5f5;
-    --text-secondary: #a0a0a0;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.7);
-    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.8);
-    --glow: 0 0 20px rgba(99, 102, 241, 0.4);
+    --bg-primary: #121e2a;
+    --bg-secondary: #0f172a;
+    --bg-tertiary: #1b2a3a;
+    --border: #2d3b4d;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.55);
+    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.65);
+    --glow: 0 0 24px rgba(0, 174, 239, 0.35);
 }
 
 /* Logo resta normale in dark mode */
@@ -50,7 +57,7 @@ body.dark-mode .logo {
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-brand);
     background: var(--bg-secondary);
     color: var(--text-primary);
     line-height: 1.6;
@@ -73,6 +80,50 @@ body {
     user-select: none;
 }
 
+/* Con barra globale 3DMAKES sopra (index.html): l’area sotto è flex, non 100vh pieno */
+body.has-site-nav {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+}
+
+body.has-site-nav .app-site-header {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 200;
+}
+
+body.has-site-nav .app {
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+body.has-site-nav .btn-toggle-sidebar {
+    top: calc(16px + var(--app-global-header-height, 56px));
+}
+
+body.dark-mode .dm-header.app-site-header {
+    background: var(--bg-primary);
+    border-bottom-color: var(--border);
+}
+
+body.dark-mode .dm-header.app-site-header .dm-nav a {
+    color: var(--text-primary);
+    opacity: 0.9;
+}
+
+body.dark-mode .dm-header.app-site-header .dm-nav a:hover {
+    color: var(--primary);
+}
+
+body.dark-mode .dm-header.app-site-header .dm-nav a[aria-current="page"] {
+    color: var(--primary);
+    opacity: 1;
+}
+
 /* Ripristina selezione testo per input e textarea */
 input, textarea, [contenteditable] {
     -webkit-user-select: text;
@@ -90,6 +141,7 @@ input, textarea, [contenteditable] {
     min-width: 320px;
     background: var(--bg-primary);
     border-right: 1px solid var(--border);
+    box-shadow: 4px 0 24px rgba(0, 59, 92, 0.06);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -110,6 +162,37 @@ input, textarea, [contenteditable] {
 .sidebar-header .logo {
     height: 32px;
     width: auto;
+    object-fit: contain;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.sidebar-brand-text {
+    text-decoration: none;
+    font-family: var(--font-brand);
+    font-weight: 800;
+    font-size: 1.2rem;
+    letter-spacing: -0.03em;
+    line-height: 1;
+}
+
+.sidebar-brand-d {
+    color: var(--primary-dark);
+}
+
+.sidebar-brand-m {
+    color: var(--primary);
+}
+
+.sidebar-brand-logo {
+    height: 36px !important;
+    width: auto;
+    border-radius: 8px;
     object-fit: contain;
 }
 
@@ -203,7 +286,7 @@ body.dark-mode .theme-icon {
 .search-box input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
 /* Lista clienti */
@@ -247,7 +330,7 @@ body.dark-mode .theme-icon {
 }
 
 .client-item.active {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(0, 174, 239, 0.12) 0%, rgba(0, 59, 92, 0.06) 100%);
     border-color: var(--primary);
     box-shadow: var(--shadow-md);
 }
@@ -399,8 +482,10 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .tab-btn.active {
-    color: var(--primary);
+    color: var(--primary-dark);
+    font-weight: 700;
     border-bottom-color: var(--primary);
+    border-bottom-width: 3px;
 }
 
 .tab-content {
@@ -547,7 +632,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     right: -50%;
     width: 200%;
     height: 200%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(0, 174, 239, 0.12) 0%, transparent 70%);
     opacity: 0;
     transition: opacity var(--transition-base);
 }
@@ -664,7 +749,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
 .file-input-wrapper input[type="file"]:focus + .file-input-display {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
 .file-input-icon {
@@ -826,7 +911,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     right: 0;
     width: 100px;
     height: 100px;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(0, 174, 239, 0.12) 0%, transparent 70%);
     opacity: 0;
     transition: opacity var(--transition-base);
 }
@@ -865,7 +950,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-app);
     font-size: 13px;
     font-weight: 500;
 }
@@ -896,7 +981,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border-radius: 20px;
+    border-radius: var(--radius-app);
     font-size: 12px;
     font-weight: 500;
 }
@@ -1022,8 +1107,8 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .kpi-card {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    border-radius: 20px;
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    border-radius: var(--radius-app);
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -1067,7 +1152,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .kpi-card:nth-child(4) {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #003b5c 0%, #0e7490 100%);
 }
 
 .kpi-icon {
@@ -1114,7 +1199,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 .chart-container {
     background: var(--bg-primary);
     border: 1px solid var(--border);
-    border-radius: 20px;
+    border-radius: var(--radius-app);
     padding: 24px;
     box-shadow: var(--shadow-md);
     transition: all var(--transition-base);
@@ -1222,7 +1307,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 .dashboard-filters .filter-group select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
 /* Advanced Stats Widgets */
@@ -1484,7 +1569,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
 .calendar-day.today {
     border: 2px solid var(--primary);
-    background: rgba(99, 102, 241, 0.05);
+    background: rgba(0, 174, 239, 0.06);
 }
 
 .calendar-day-number {
@@ -1591,6 +1676,15 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     font-size: 14px;
 }
 
+.report-header .report-hint {
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    opacity: 0.92;
+    max-width: 42rem;
+}
+
 /* Report Filters */
 .report-filters {
     background: var(--bg-primary);
@@ -1629,7 +1723,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 .filter-group input[type="date"]:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
 .custom-dates {
@@ -1909,7 +2003,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .report-table tbody tr[onclick]:hover {
-    background: rgba(99, 102, 241, 0.05);
+    background: rgba(0, 174, 239, 0.06);
     transform: scale(1.005);
     transition: all 0.2s;
 }
@@ -1956,11 +2050,11 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
 /* Buttons */
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #005a8a 55%, var(--primary) 100%);
     color: white;
     border: none;
     padding: 12px 24px;
-    border-radius: 10px;
+    border-radius: var(--radius-pill);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -1995,11 +2089,11 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--primary-dark);
+    border: 2px solid var(--border);
     padding: 10px 20px;
-    border-radius: 10px;
+    border-radius: var(--radius-pill);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -2021,7 +2115,9 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .btn-secondary:hover {
-    background: var(--border);
+    background: rgba(0, 174, 239, 0.08);
+    border-color: var(--primary);
+    color: var(--primary-dark);
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
 }
@@ -2088,7 +2184,7 @@ body.dark-mode .btn-secondary::before {
 
 .modal-content {
     background: var(--bg-primary);
-    border-radius: 20px;
+    border-radius: var(--radius-app);
     box-shadow: var(--shadow-xl);
     width: 90%;
     max-width: 500px;
@@ -2107,7 +2203,7 @@ body.dark-mode .btn-secondary::before {
     right: 0;
     height: 4px;
     background: linear-gradient(90deg, var(--primary), var(--primary-light));
-    border-radius: 20px 20px 0 0;
+    border-radius: var(--radius-app) var(--radius-app) 0 0;
 }
 
 .modal-header {
@@ -2182,7 +2278,7 @@ body.dark-mode .btn-secondary::before {
 .form-group textarea:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
 .form-group textarea {
@@ -2473,6 +2569,18 @@ body.dark-mode .glass {
         border-right: none;
         border-bottom: 1px solid var(--border);
         transition: transform 0.3s ease;
+    }
+
+    /* Con header globale: la sidebar non deve superare l’area dell’app */
+    body.has-site-nav .sidebar {
+        height: auto;
+        max-height: min(44vh, 320px);
+    }
+
+    body.has-site-nav .main-content {
+        flex: 1;
+        min-height: 0;
+        height: auto;
     }
     
     /* Nascondi sidebar quando si visualizza un cliente */
