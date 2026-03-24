@@ -1,7 +1,7 @@
 // Service Worker per 3DMAKES Gestionale
 // Versione 2.1
 
-const CACHE_NAME = '3dmakes-gestionale-v3.15';
+const CACHE_NAME = '3dmakes-gestionale-v3.20';
 const urlsToCache = [
   '/',
   '/index.html',

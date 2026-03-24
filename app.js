@@ -109,27 +109,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
     console.log('💡 App installabile come PWA');
 });
 
-// ===== DARK MODE =====
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
-    
-    // Salva la preferenza
-    const isDark = document.body.classList.contains('dark-mode');
-    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
-    
-    // Aggiorna icona
-    const icon = document.getElementById('themeIcon');
-    icon.textContent = isDark ? '☀️' : '🌙';
-    
-    // Animazione
-    icon.style.transform = 'scale(1.2)';
-    setTimeout(() => {
-        icon.style.transform = 'scale(1)';
-    }, 200);
-    
-    console.log(isDark ? '🌙 Dark mode attivato' : '☀️ Light mode attivato');
-}
-
 // ===== TOGGLE SIDEBAR =====
 function toggleSidebar() {
     const sidebar = document.querySelector('.sidebar');
@@ -163,31 +142,38 @@ function loadSidebarState() {
     }
 }
 
-// Carica preferenza dark mode
-function loadDarkMode() {
-    const darkMode = localStorage.getItem('darkMode');
-    if (darkMode === 'enabled') {
-        document.body.classList.add('dark-mode');
-        document.getElementById('themeIcon').textContent = '☀️';
-    } else {
-        document.body.classList.remove('dark-mode');
-        document.getElementById('themeIcon').textContent = '🌙';
-    }
-}
-
 // ===== INIZIALIZZAZIONE =====
 document.addEventListener('DOMContentLoaded', () => {
-    loadDarkMode(); // Carica tema salvato
+    document.body.classList.remove('dark-mode');
+    try {
+        localStorage.removeItem('darkMode');
+    } catch (e) { /* ignore */ }
     loadSidebarState(); // Carica stato sidebar
     initFirebase();
     loadFromStorage();
     renderClients();
     setupEventListeners();
-    
-    // Se ci sono clienti, apri il report completo (vista predefinita)
-    if (state.clients.length > 0) {
-        openReportView();
+
+    function applyInitialViewFromHash() {
+        const h = (window.location.hash || '').toLowerCase();
+        if (h === '#dashboard') {
+            showDashboard();
+        } else if (h === '#report') {
+            openReportView();
+        } else if (state.clients.length > 0) {
+            openReportView();
+        }
     }
+    applyInitialViewFromHash();
+
+    window.addEventListener('hashchange', function () {
+        const h = (window.location.hash || '').toLowerCase();
+        if (h === '#dashboard') {
+            showDashboard();
+        } else if (h === '#report') {
+            openReportView();
+        }
+    });
 });
 
 // ===== FIREBASE FUNCTIONS =====
@@ -229,18 +215,7 @@ function initFirebase() {
 }
 
 function updateCloudStatus(connected) {
-    const statusEl = document.getElementById('cloudStatus');
-    const textEl = statusEl.querySelector('.cloud-text');
-    
     cloudSyncEnabled = connected;
-    
-    if (connected) {
-        statusEl.classList.add('connected');
-        textEl.textContent = 'Cloud';
-    } else {
-        statusEl.classList.remove('connected');
-        textEl.textContent = 'Locale';
-    }
 }
 
 function setupCloudSync() {
@@ -462,40 +437,6 @@ function showNotification(message, type = 'info') {
     }, 4000);
 }
 
-// ===== CLOUD SETTINGS =====
-function showCloudSettings() {
-    // Mostra info database condiviso
-    document.getElementById('currentUserId').value = 'shared_gestionale (Database Condiviso)';
-    
-    // Mostra stato sincronizzazione
-    updateCloudSyncStatusDisplay();
-    
-    openModal('cloudSettingsModal');
-}
-
-function updateCloudSyncStatusDisplay() {
-    const statusEl = document.getElementById('cloudSyncStatus');
-    
-    if (cloudSyncEnabled && firebaseDb) {
-        const clientsCount = state.clients.length;
-        statusEl.innerHTML = `✅ <strong>Database Condiviso Attivo</strong><br><small>Tutti vedono gli stessi ${clientsCount} clienti • Sync real-time</small>`;
-        statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
-        statusEl.style.color = 'var(--success)';
-    } else {
-        statusEl.innerHTML = '⚠️ <strong>Solo locale</strong><br><small>I dati sono salvati solo su questo dispositivo</small>';
-        statusEl.style.background = 'rgba(255, 170, 0, 0.1)';
-        statusEl.style.color = 'var(--warning)';
-    }
-}
-
-function copyUserId() {
-    showNotification('ℹ️ Database condiviso: tutti vedono gli stessi dati!', 'info');
-}
-
-function changeUserId() {
-    alert('ℹ️ Database Condiviso\n\nTutti gli utenti vedono automaticamente gli stessi dati.\nNon serve cambiare User ID!');
-}
-
 // ===== STORAGE =====
 function saveToStorage() {
     try {
@@ -627,9 +568,6 @@ function setupEventListeners() {
     document.getElementById('deleteClientBtn').addEventListener('click', deleteCurrentClient);
     document.getElementById('saveClientBtn').addEventListener('click', saveClient);
     
-    // Bottone backup
-    document.getElementById('backupBtn').addEventListener('click', () => openModal('backupModal'));
-
     // Bottoni documenti
     document.getElementById('addDocumentBtn').addEventListener('click', openAddDocumentModal);
     document.getElementById('saveDocumentBtn').addEventListener('click', saveDocument);
@@ -655,9 +593,7 @@ function setupEventListeners() {
     document.getElementById('saveFileBtn').addEventListener('click', saveFile);
     document.getElementById('modalFileInput').addEventListener('change', handleFileSelect);
 
-    // Bottoni dashboard e report
-    document.getElementById('viewDashboardBtn').addEventListener('click', showDashboard);
-    document.getElementById('viewReportsBtn').addEventListener('click', openReportView);
+    // Report (chiusura)
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
     document.getElementById('reportPeriod').addEventListener('change', handlePeriodChange);
     document.getElementById('exportCSVBtn').addEventListener('click', exportToCSV);
@@ -1890,9 +1826,8 @@ function createOrdersStatusChart(statusStats) {
     
     destroyCharts();
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
-    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    const textColor = '#0f172a';
+    const gridColor = '#e2e8f0';
     
     ordersStatusChart = new Chart(ctx, {
         type: 'doughnut',
@@ -1942,7 +1877,7 @@ function createOrdersStatusChart(statusStats) {
                     }
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
                     borderColor: gridColor,
@@ -2020,9 +1955,8 @@ function createRevenueChart() {
         });
     }
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
-    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    const textColor = '#0f172a';
+    const gridColor = '#e2e8f0';
     
     revenueChart = new Chart(ctx, {
         type: 'bar',
@@ -2056,7 +1990,7 @@ function createRevenueChart() {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
                     borderColor: gridColor,
@@ -2152,9 +2086,8 @@ function createRevenueTrendChart() {
         });
     }
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
-    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    const textColor = '#0f172a';
+    const gridColor = '#e2e8f0';
     
     revenueTrendChart = new Chart(ctx, {
         type: 'line',
@@ -2187,7 +2120,7 @@ function createRevenueTrendChart() {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
                     borderColor: gridColor,
@@ -2258,8 +2191,7 @@ function createPaymentsChart() {
         }
     });
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
+    const textColor = '#0f172a';
     
     paymentsChart = new Chart(ctx, {
         type: 'pie',
@@ -2304,10 +2236,10 @@ function createPaymentsChart() {
                     }
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
-                    borderColor: isDark ? '#475569' : '#e2e8f0',
+                    borderColor: '#e2e8f0',
                     borderWidth: 1,
                     padding: 12,
                     cornerRadius: 8,
@@ -2351,9 +2283,8 @@ function createTopClientsChart() {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10);
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
-    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    const textColor = '#0f172a';
+    const gridColor = '#e2e8f0';
     
     topClientsChart = new Chart(ctx, {
         type: 'bar',
@@ -2387,7 +2318,7 @@ function createTopClientsChart() {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
                     borderColor: gridColor,
@@ -2460,9 +2391,8 @@ function createOrdersDistributionChart() {
         });
     }
     
-    const isDark = document.body.classList.contains('dark-mode');
-    const textColor = isDark ? '#f1f5f9' : '#0f172a';
-    const gridColor = isDark ? '#475569' : '#e2e8f0';
+    const textColor = '#0f172a';
+    const gridColor = '#e2e8f0';
     
     ordersDistributionChart = new Chart(ctx, {
         type: 'bar',
@@ -2489,7 +2419,7 @@ function createOrdersDistributionChart() {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     titleColor: textColor,
                     bodyColor: textColor,
                     borderColor: gridColor,

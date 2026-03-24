@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.4">
+    <link rel="stylesheet" href="style.css?v=2.8">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -36,6 +36,8 @@
         <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
         <nav class="dm-nav" aria-label="Strumenti">
             <a href="index.html" aria-current="page">Gestionale</a>
+            <a href="index.html#dashboard">Dashboard</a>
+            <a href="index.html#report">Report</a>
             <a href="calcolatore.html">Calcolatore</a>
             <a href="genera-preventivo.html">Preventivo</a>
             <a href="storico-preventivi.html">Storico</a>
@@ -48,34 +50,11 @@
     <div class="app">
         <!-- Sidebar -->
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-brand">
-                    <a href="index.html" class="sidebar-brand-text" title="3DMAKES">
-                        <span class="sidebar-brand-d">3D</span><span class="sidebar-brand-m">MAKES</span>
-                    </a>
-                    <img src="logo.png" alt="" class="logo sidebar-brand-logo" width="36" height="36">
-                </div>
-                <div class="theme-toggle" id="themeToggle" onclick="toggleDarkMode()" title="Cambia tema">
-                    <span class="theme-icon" id="themeIcon">🌙</span>
-                    <span class="theme-text" id="themeText">Dark</span>
-                </div>
-                <div class="cloud-status" id="cloudStatus" onclick="showCloudSettings()">
-                    <span class="cloud-icon" title="Sincronizzazione cloud">☁️</span>
-                    <span class="cloud-text">Cloud</span>
-                </div>
-            </div>
-            
             <div class="sidebar-section">
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
-                <button class="btn-secondary" id="viewDashboardBtn" style="margin-top: 8px; width: 100%;">📊 Dashboard</button>
-                <button class="btn-secondary" id="viewReportsBtn" style="margin-top: 8px; width: 100%;">📈 Report Completo</button>
-                <button class="btn-secondary" id="backupBtn" style="margin-top: 8px; width: 100%;">💾 Backup Dati</button>
-                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='calcolatore.html'">🧮 Calcolatore prezzi 3D</button>
-                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='genera-preventivo.html'">📋 Genera Preventivo</button>
-                <button type="button" class="btn-secondary" style="margin-top: 8px; width: 100%;" onclick="window.location.href='storico-preventivi.html'">📑 Storico Preventivi</button>
             </div>
 
             <div class="clients-list" id="clientsList">
@@ -472,6 +451,7 @@
                     <div class="report-actions">
                         <h3>📦 Dettaglio Ordini</h3>
                         <div>
+                            <button type="button" class="btn-small" onclick="openModal('backupModal')">💾 Backup</button>
                             <button class="btn-small" id="exportCSVBtn">📄 Esporta CSV</button>
                             <button class="btn-small" id="printReportBtn">🖨️ Stampa</button>
                         </div>
@@ -874,53 +854,6 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeModal('orderModal')">Annulla</button>
                 <button class="btn-primary" id="saveOrderBtn">Salva</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Impostazioni Cloud -->
-    <div class="modal" id="cloudSettingsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>☁️ Impostazioni Cloud</h3>
-                <button class="modal-close" onclick="closeModal('cloudSettingsModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>User ID Attuale</label>
-                    <input type="text" id="currentUserId" readonly style="background: #f1f5f9;">
-                    <small style="color: var(--text-secondary); font-size: 12px;">
-                        ℹ️ Questo ID identifica i tuoi dati nel cloud
-                    </small>
-                </div>
-                
-                <div class="form-group">
-                    <label>👥 Database Condiviso</label>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                        <strong>✅ Tutti vedono gli stessi dati automaticamente!</strong><br>
-                        Tu e i tuoi colleghi avete accesso allo stesso database in tempo reale.
-                    </p>
-                    <div style="padding: 12px; background: rgba(0, 174, 239, 0.08); border-radius: 8px; border: 1px solid rgba(0, 174, 239, 0.25);">
-                        <div style="font-size: 13px; color: var(--primary-dark);">
-                            <strong>📊 Vantaggi:</strong><br>
-                            • Modifiche visibili istantaneamente<br>
-                            • Nessuna configurazione necessaria<br>
-                            • Sincronizzazione automatica<br>
-                            • Stesso database su tutti i dispositivi
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Stato Sincronizzazione</label>
-                    <div id="cloudSyncStatus" style="padding: 10px; background: var(--bg-tertiary); border-radius: 6px; font-size: 13px;">
-                        Caricamento...
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('cloudSettingsModal')">Chiudi</button>
-                <button class="btn-primary" onclick="changeUserId()">💾 Cambia User ID</button>
             </div>
         </div>
     </div>
