@@ -565,8 +565,11 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 else if (window.jsPDF) jsPDF = window.jsPDF;
                 else throw new Error('jsPDF non è caricato.');
                 const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgWidth = 210;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const marginMm = 8;
+                const maxW = pageWidth - 2 * marginMm;
+                const maxH = pageHeight - 2 * marginMm;
                 var imgData;
                 try {
                     imgData = canvas.toDataURL('image/png');
@@ -576,7 +579,17 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                         'Avvia un server locale nella cartella del progetto: terminale → python3 -m http.server 8080 → apri http://localhost:8080/genera-preventivo.html'
                     );
                 }
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                // Un solo foglio A4: scala l’anteprima in modo proporzionato per entrare in maxW × maxH.
+                var imgW = maxW;
+                var imgH = (canvas.height * imgW) / canvas.width;
+                if (imgH > maxH) {
+                    var s = maxH / imgH;
+                    imgW *= s;
+                    imgH = maxH;
+                }
+                var x = marginMm + (maxW - imgW) / 2;
+                var y = marginMm + (maxH - imgH) / 2;
+                pdf.addImage(imgData, 'PNG', x, y, imgW, imgH);
                 const numeroOfferta = document.getElementById('numeroOfferta').value.replace(/\//g, '-');
                 const nomeFile = 'Preventivo_' + numeroOfferta + '_' + new Date().toISOString().split('T')[0] + '.pdf';
                 scaricaPdfBlob(pdf, nomeFile);
