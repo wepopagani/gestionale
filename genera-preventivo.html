@@ -50,10 +50,19 @@
                 <input type="text" id="nomeCliente" value="Mario Rossi" oninput="aggiorna()">
             </div>
             <div class="form-group">
+                <label>Referente (c.a.):</label>
+                <input type="text" id="referenteCliente" value="Ing. Matteo Verdicchio" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
                 <label>Indirizzo Cliente:</label>
                 <textarea id="indirizzoCliente" oninput="aggiorna()">Via Roma 123
 6900 Lugano
 Svizzera</textarea>
+            </div>
+            <div class="dm-section-title">Riferimenti</div>
+            <div class="form-group">
+                <label>Vs Rif.:</label>
+                <input type="text" id="vsRif" value="mz e-mail" oninput="aggiorna()">
             </div>
             <div class="dm-section-title">Articoli</div>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
@@ -70,18 +79,30 @@ Svizzera</textarea>
                 <label>Aliquota IVA (%):</label>
                 <input type="number" id="aliquotaIva" value="8.1" min="0" max="100" step="0.1" onchange="aggiorna()">
             </div>
-            <div class="dm-section-title">Note e condizioni</div>
+            <div class="dm-section-title">Condizioni commerciali</div>
             <div class="form-group">
-                <label>Note:</label>
-                <textarea id="note" oninput="aggiorna()">Termine: 15 giorni lavorativi dall'ordinazione
-Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
+                <label>Pagamento:</label>
+                <input type="text" id="condPagamento" value="Da concordare" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Trasporto:</label>
+                <input type="text" id="condTrasporto" value="via Cantonale 15, 6918 Figino" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Validità (giorni lavorativi):</label>
+                <input type="number" id="validitaGiorni" min="1" step="1" value="30" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Nota personalizzata (opzionale):</label>
+                <textarea id="note" oninput="aggiorna()">Ordini ricevuti dopo le ore 12:00 del venerdì o prefestivi vengono processati dal primo giorno lavorativo successivo.</textarea>
             </div>
             <button type="button" class="dm-btn dm-btn--success dm-btn--block" id="btnSalva" onclick="salvaSuCloud()" style="display:none">Salva su cloud</button>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--block" id="btnScaricaPDF" onclick="scaricaPDF(this)">Scarica PDF</button>
             <a href="storico-preventivi.html" class="dm-btn dm-btn--outline dm-btn--block">Storico preventivi</a>
         </aside>
         <div class="dm-preview-shell dm-card">
-            <div class="dm-doc-preview" id="preventivo">
+            <div class="dm-doc-pages" id="preventivo">
+                <div class="dm-doc-preview dm-doc-page dm-doc-page--first">
                 <div class="dm-doc-header">
                     <div class="company-info">
                         <img src="./logo.png" alt="3DMAKES Logo" class="company-logo" id="prev-logo" onerror="this.style.display='none';">
@@ -91,24 +112,31 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                         </div>
                     </div>
                     <div class="client-info">
+                        <div style="font-size:12px; text-transform: uppercase; color:#5c6b7a;">Spett.le</div>
                         <div class="client-name" id="prev-nomeCliente">Mario Rossi</div>
                         <div style="white-space: pre-line;" id="prev-indirizzoCliente"></div>
+                        <div style="margin-top: 8px; font-size: 13px;"><strong>c.a.</strong> <span id="prev-referenteCliente">Ing. Matteo Verdicchio</span></div>
                     </div>
                 </div>
                 <div class="dm-doc-title">Offerta</div>
                 <div class="dm-doc-info document-info">
                     <div><strong>Offerta:</strong> <span id="prev-numeroOfferta">2024/001</span></div>
                     <div><strong>Data:</strong> <span id="prev-data"></span></div>
+                    <div><strong>Vs Rif.:</strong> <span id="prev-vs-rif">mz e-mail</span></div>
+                </div>
+                <div style="font-size: 13px; line-height: 1.6; margin-bottom: 14px;">
+                    Facendo seguito a Vs cortese richiesta, si formula la nostra migliore offerta per la realizzazione su Vs specifica in additive manufacturing dei seguenti items.
                 </div>
                 <table class="dm-items-table items-table" id="prev-table">
                     <thead>
                         <tr>
-                            <th style="width: 8%;">Art.</th>
-                            <th style="width: 42%;">Descrizione</th>
-                            <th style="width: 10%;">Quantità</th>
-                            <th style="width: 15%;">Prezzo unit.</th>
-                            <th style="width: 10%;">Sconto</th>
-                            <th style="width: 15%;">Importo</th>
+                            <th style="width: 30%;">Descrizione</th>
+                            <th style="width: 16%;">Tecnologia</th>
+                            <th style="width: 12%;">Materiale</th>
+                            <th style="width: 7%;">Q.tà</th>
+                            <th style="width: 11%;">Tempistica [giorni]</th>
+                            <th style="width: 12%;">Prezzo Unitario [CHF]</th>
+                            <th style="width: 12%;">Prezzo Totale [CHF]</th>
                         </tr>
                     </thead>
                     <tbody id="prev-tbody"></tbody>
@@ -127,11 +155,24 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                         <span id="prev-totale">0.00 CHF</span>
                     </div>
                 </div>
-                <div class="dm-doc-notes notes">
-                    <strong>Note e condizioni</strong>
-                    <div style="white-space: pre-line;" id="prev-note"></div>
+                <div class="dm-doc-footer footer">Pagina 1 / 3</div>
                 </div>
-                <div class="dm-doc-footer footer">Preventivo generato da 3DMAKES</div>
+
+                <div class="dm-doc-preview dm-doc-page dm-doc-page--legal">
+                <div class="dm-doc-title" style="margin-top: 0;">Note Tecniche</div>
+                <div class="dm-doc-notes dm-doc-notes--legal">
+                    <div id="prev-legal-page2"></div>
+                </div>
+                <div class="dm-doc-footer footer">Pagina 2 / 3</div>
+                </div>
+
+                <div class="dm-doc-preview dm-doc-page dm-doc-page--legal">
+                <div class="dm-doc-title" style="margin-top: 0;">Condizioni E Accettazione</div>
+                <div class="dm-doc-notes dm-doc-notes--legal">
+                    <div id="prev-legal-page3"></div>
+                </div>
+                <div class="dm-doc-footer footer">Pagina 3 / 3 - Preventivo generato da 3DMAKES</div>
+                </div>
             </div>
         </div>
     </div>
@@ -208,9 +249,73 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
         }
 
         let righe = [
-            { articolo: '1', descrizione: 'Stampa 3D in PLA\nModello personalizzato', quantita: 1, prezzoUnit: 50.00, sconto: 0 },
-            { articolo: '2', descrizione: 'Post-processing e finitura', quantita: 1, prezzoUnit: 25.00, sconto: 0 }
+            {
+                articolo: '1',
+                descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
+                tecnologia: 'MJF - Power bed melting',
+                materiale: 'Poliammide',
+                quantita: 1,
+                tempistica: '1-2',
+                prezzoUnit: 100.00
+            },
+            {
+                articolo: '2',
+                descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
+                tecnologia: 'SLA - Resin sintering',
+                materiale: 'ABS',
+                quantita: 3,
+                tempistica: '1-2',
+                prezzoUnit: 80.00
+            }
         ];
+        const testoLegalePagina2 = `
+            <div class="dm-doc-legal">
+                <p style="margin:0 0 8px;"><strong>*Note:</strong></p>
+                <ol style="margin:0 0 10px; padding-left:18px;">
+                    <li><strong>Lead Time e Validità:</strong> Il lead time indicato è stimato e verrà confermato solo al ricevimento dell'ordine d'acquisto, in funzione dei carichi di lavoro.</li>
+                    <li><strong>Riferimento File 3D:</strong> La quotazione è calcolata esclusivamente sulla base dei file in formato .stp (o altri formati CAD) trasmessi dal Cliente e considerata come prototipo. Qualsiasi modifica geometrica successiva comporterà una revisione del prezzo. In caso di discrepanze tra file 3D e tavole 2D, il file 3D sarà considerato prioritario salvo diversi accordi scritti.</li>
+                    <li><strong>Tolleranze e Requisiti Dimensionali:</strong> Si applicano le tolleranze generali tipiche del sistema di stampa utilizzato. Qualora siano richiesti accoppiamenti meccanici, tolleranze ristrette o misurazioni certificate, è indispensabile una revisione della quotazione. Non sono previsti controlli metrologici.</li>
+                    <li><strong>Orientamento e Finitura Superficiale:</strong> I componenti sono stati preventivati con orientamento ottimizzato per ridurre tempi. Questo approccio può comportare un'estetica non uniforme e la presenza di rugosità o "stair-stepping" (gradinatura). Requisiti estetici superiori o necessità di resistenza strutturale specifica (anisotropia del processo) richiedono un confronto tecnico e una possibile rielaborazione dell'offerta.</li>
+                    <li><strong>Vincoli Progettuali e Fattibilità:</strong> Per garantire la stabilità del processo, si raccomandano spessori minimi di 1 mm e dettagli non inferiori a 0.5 mm. Geometrie al di sotto di tali limiti potrebbero essere soggette a deformazioni, mancate fusioni o rotture durante la rimozione dei supporti, non garantendo la ripetibilità del risultato. Si consiglia il mantenimento di spessori costanti per minimizzare gli stress termici e le deformazioni in fase di raffreddamento.</li>
+                </ol>
+                <p style="margin:0 0 6px;"><strong>IVA</strong> da aggiungere</p>
+                <p style="margin:0 0 6px;"><strong>Trasporto</strong> ritiro presso la sede in via Cantonale 15, 6918 Figino</p>
+                <p style="margin:0 0 6px;"><strong>Pagamento</strong> Anticipato</p>
+                <p style="margin:0 0 10px;"><strong>Costi esclusi dall'offerta</strong> Qualsiasi altra condizione non esplicitamente indicata nell'offerta</p>
+                <p style="margin:0 0 12px; text-align:center;"><strong><u>Si precisa che l'accettazione dell'offerta implica l'accettazione integrale delle presenti note e condizioni di fornitura</u></strong></p>
+                <p style="margin:0 0 8px;"><strong>Condizioni di fornitura:</strong></p>
+                <p style="margin:0 0 6px;"><strong>1. Oggetto delle condizioni generali</strong></p>
+                <p style="margin:0 0 6px;">L'oggetto delle presenti Condizioni Generali è costituito dal complesso dei servizi di stampa 3D (collettivamente “Servizi”) che 3DMakes si impegna ad erogare, mediante la propria organizzazione aziendale, i propri mezzi, il personale e le risorse qualificate. I Servizi offerti da 3DMakes sono i seguenti:</p>
+                <p style="margin:0 0 2px 24px;">(i) Servizio di Scannerizzazione 3D: rilevamento delle geometrie di un oggetto al fine di riportarle in formato digitale;</p>
+                <p style="margin:0 0 2px 24px;">(ii) Servizio di Prototipazione e stampa 3D: stampa in 3D di modelli/file/disegni forniti dal Cliente;</p>
+                <p style="margin:0 0 6px 24px;">(iii) Servizio di Consulenza e progettazione 3D: collaborazione con il Cliente alla progettazione e/o modifica di Modelli 3D in base alle esigenze e specifiche dettate dal Cliente.</p>
+                <p style="margin:0;">Nel caso siano forniti servizi di stampa 3D (ii), i manufatti saranno realizzati come da file 3D trasmesso dal Cliente. È obbligo del cliente verificare prima dell'invio che tale file sia esente da ogni tipo di accessorio e/o componente aggiuntivo che debba essere montato successivamente, nonché la fattibilità del proprio progetto. Ove non indicato, tutte le tolleranze e parametri di produzione sono come da specifiche del sistema di stampa utilizzato e relativo materiale. Emettendo ordine, il Cliente dichiara di esserne a conoscenza e di accettarle. Il Cliente emettendo ordine a favore di 3DMakes, dichiara inoltre di essere informato sul tipo di materiale che verrà utilizzato, delle sue caratteristiche tecniche, nonché della finitura con esso ottenibile. 3DMakes ove offra servizi di cui al punto (iii) collabora con il Cliente alla modifica e/o progettazione dei Modelli 3D in base alle esigenze espresse dal Cliente o, comunque, condivise con lo stesso prestando il proprio know how e la necessaria strumentazione tecnica. Pertanto, ogni responsabilità relativa ai Modelli 3D predisposti a seguito del servizio di consulenza e progettazione 3D è in capo al Cliente.</p>
+            </div>
+        `;
+        const testoLegalePagina3 = `
+            <div class="dm-doc-legal">
+                <p style="margin:0 0 6px;"><strong>2. Controllo sui prototipi</strong></p>
+                <p style="margin:0 0 10px;">A meno che non sia espressamente e preventivamente richiesto dal cliente e concordato con 3DMakes con separata quotazione, sui prototipi realizzati non verranno eseguiti controlli dimensionali e non sarà emesso alcun certificato di conformità.</p>
+                <p style="margin:0 0 6px;"><strong>3. Consegna dei prodotti</strong></p>
+                <p style="margin:0 0 10px;">Al momento della ricezione, l'ordine verrà sottoposto a riesame e si intenderà automaticamente accettato decorsi 8 giorni dalla ricezione ove non intervenga comunicazione scritta a mezzo e-mail da parte di 3DMakes dell'esito negativo del riesame. In caso di comunicazione di esito negativo 3DMakes concorderà con il cliente, in forma scritta, diversi requisiti e/o condizioni reciprocamente accettabili. In nessun caso la data di consegna dei prodotti potrà essere ritenuta come vincolante ed essenziale per la corretta esecuzione dell'ordine a meno che il Cliente non la abbia espressamente indicata come tale in fase di richiesta di offerta. In ogni caso, la forza maggiore, il caso fortuito e tutti gli eventi eccezionali che possono pregiudicare la regolare evasione dell'ordine consentiranno a 3DMakes di prorogare in misura adeguata i termini di consegna o, se l'evasione dell'ordine sia compromessa o resa impossibile, di recedere totalmente o in parte dal contratto, senza diritto del compratore-cliente ad alcun risarcimento. È in ogni caso facoltà di 3DMakes non dare evasione all'ordine, anche se confermato, qualora il compratore-cliente sia divenuto insolvente anche con riferimento ad altre forniture o nei confronti di altri fornitori.</p>
+                <p style="margin:0 0 6px;"><strong>4. Proprietà Intellettuale ed Industriale</strong></p>
+                <p style="margin:0 0 10px;">È esclusivo compito e responsabilità del Cliente verificare che il Prodotto che intende commissionare a 3DMakes per la progettazione e la produzione non sia coperto da brevetto e/o da altro diritto di proprietà intellettuale e/o industriale di terzi. Il compratore-cliente deve svolgere tale verifica a proprie spese prima di ordinare la progettazione e/o la produzione del Prodotto. 3DMakes non potrà essere ritenuta in ogni caso responsabile della violazione dei diritti di proprietà intellettuale e/o industriale di terzi sui prodotti/servizi forniti al compratore-cliente il quale risponderà in proprio di tali violazioni impegnandosi a manlevare e tenere indenne 3DMakes da qualsiasi richiesta risarcitoria avanzata da terzi.</p>
+                <p style="margin:0 0 6px;"><strong>5. Esclusione di garanzie, limitazione di responsabilità e risarcimento del danno</strong></p>
+                <p style="margin:0 0 10px;">3DMakes, non essendo a conoscenza dell'utilizzo finale dei prototipi/servizi richiesti per ragioni di riservatezza, garantisce unicamente che il Risultato soddisfa le caratteristiche sostanziali del Modello 3D così come fornito dal Cliente o progettato insieme allo stesso, nei limiti di quanto fattibile dalla tecnologia di stampa 3D. Il Cliente è l'unico responsabile delle specifiche di progettazione e di prestazione del Modello 3D e del Risultato. 3DMakes non fornisce alcuna garanzia o assicurazione, espressa o tacita, di qualunque tipo, in riferimento al Modello 3D o Risultato, inclusa la commerciabilità del Risultato, la compatibilità con prodotti o apparecchiature utilizzate dal Cliente, la sua idoneità e funzionalità ad un particolare scopo, né 3DMakes potrà essere ritenuta responsabile ad alcun titolo di un utilizzo errato o improprio di essi e dei relativi eventuali danni a cose o persone. Il Cliente esonera e manleva espressamente 3DMakes da qualsiasi responsabilità per danni di qualsiasi natura che il Cliente o terzi possano, in qualunque modo, subire per l'uso o il mancato uso o l'uso errato o improprio dei Servizi e/o dei Risultati. È sempre esclusa la risarcibilità dei danni indiretti, tra i quali a titolo esemplificativo e non esaustivo: mancati profitti, mancati risparmi, perdita o risoluzione di contratti.</p>
+                <p style="margin:0 0 6px;"><strong>6. Non conformità</strong></p>
+                <p style="margin:0 0 10px;">Il termine per la comunicazione, in forma scritta, a 3DMakes dell'esistenza di un vizio o difetto o non conformità nei prodotti è fissato in 48 ore decorrenti dalla consegna dei prodotti. Il Cliente entro i successivi 5 giorni dalla comunicazione del difetto dovrà provvedere ad inviare presso la sede di 3DMakes il prodotto difettoso con un allegato rapporto elencante gli estremi del documento di fornitura, gli eventuali difetti riscontrati e tutti gli elementi utili ad individuare il difetto. Non saranno accettati resi senza autorizzazione preventiva (RMA).</p>
+                <p style="margin:0 0 6px;"><strong>7. Know how</strong></p>
+                <p style="margin:0 0 10px;">3DMakes rimane in via esclusiva proprietaria del know-how, delle tecniche, dei modelli e delle metodologie sia che risultino essere dalla stessa sviluppati prima ovvero durante lo svolgimento dei Servizi di cui alle presenti Condizioni Generali. Nella misura in cui il Know How sarà incluso in uno qualsiasi dei Risultati dei Servizi resi, viene riconosciuto da subito da parte di 3DMakes e a favore del Cliente la facoltà di utilizzare il know-how di 3DMakes in via esclusiva e senza alcuna facoltà di concedere la stessa a terzi, intendendosi i relativi corrispettivi già compresi in quelli pattuiti per lo svolgimento dei Servizi previsti nelle presenti Condizioni Generali.</p>
+                <p style="margin:0 0 6px;"><strong>8. Prezzi</strong></p>
+                <p style="margin:0 0 10px;">I prezzi potranno essere soggetti a variazioni fino al ricevimento dei progetti definitivi.</p>
+                <p style="margin:0 0 6px;"><strong>9. Legge applicabile e Foro Competente</strong></p>
+                <p style="margin:0 0 10px;">Le presenti Condizioni Generali, così come qualunque altro accordo con esse connesso, saranno disciplinate dalla Legge Svizzera. Qualsiasi controversia relativa alle presenti Condizioni Generali è devoluta alla competenza esclusiva del Foro di Lugano.</p>
+                <p style="margin:0 0 10px;">Validità della presente 20 giorni lavorativi</p>
+                <p style="margin:0 0 24px;">Nel ringraziarVi per la preferenza accordata, si porgono i migliori saluti.</p>
+                <p style="margin:0 0 24px;">Per accettazione, data ___ / ___ / ______</p>
+                <p style="margin:0;">(Timbro e firma) ________________________________________________</p>
+            </div>
+        `;
 
         document.getElementById('dataDoc').valueAsDate = new Date();
 
@@ -239,17 +344,24 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 modalitaModifica = false;
                 document.getElementById('numeroOfferta').value = '…';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
+                document.getElementById('referenteCliente').value = preventivo.cliente?.referente || '';
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
+                document.getElementById('vsRif').value = preventivo.vsRif || 'mz e-mail';
+                document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
+                document.getElementById('condTrasporto').value = preventivo.condizioni?.trasporto || 'via Cantonale 15, 6918 Figino';
+                document.getElementById('validitaGiorni').value = preventivo.condizioni?.validitaGiorni || 30;
                 document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
                 if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
                 if (preventivo.righe && preventivo.righe.length > 0) {
                     righe = preventivo.righe.map(r => ({
                         articolo: r.articolo || '',
                         descrizione: r.descrizione || '',
+                        tecnologia: r.tecnologia || '',
+                        materiale: r.materiale || '',
                         quantita: r.quantita || 1,
                         prezzoUnit: r.prezzoUnit || 0,
-                        sconto: r.sconto || 0
+                        tempistica: r.tempistica || '1-2'
                     }));
                 }
                 document.getElementById('dataDoc').valueAsDate = new Date();
@@ -280,17 +392,24 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 document.getElementById('numeroOfferta').value = preventivo.numeroOfferta || '';
                 document.getElementById('dataDoc').value = preventivo.data || '';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
+                document.getElementById('referenteCliente').value = preventivo.cliente?.referente || '';
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
+                document.getElementById('vsRif').value = preventivo.vsRif || 'mz e-mail';
+                document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
+                document.getElementById('condTrasporto').value = preventivo.condizioni?.trasporto || 'via Cantonale 15, 6918 Figino';
+                document.getElementById('validitaGiorni').value = preventivo.condizioni?.validitaGiorni || 30;
                 document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
                 if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
                 if (preventivo.righe && preventivo.righe.length > 0) {
                     righe = preventivo.righe.map(r => ({
                         articolo: r.articolo || '',
                         descrizione: r.descrizione || '',
+                        tecnologia: r.tecnologia || '',
+                        materiale: r.materiale || '',
                         quantita: r.quantita || 1,
                         prezzoUnit: r.prezzoUnit || 0,
-                        sconto: r.sconto || 0
+                        tempistica: r.tempistica || '1-2'
                     }));
                 }
                 document.getElementById('infoNumeroOfferta').innerHTML =
@@ -339,17 +458,26 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 data: document.getElementById('dataDoc').value,
                 cliente: {
                     nome: document.getElementById('nomeCliente').value,
+                    referente: document.getElementById('referenteCliente').value,
                     indirizzo: document.getElementById('indirizzoCliente').value
                 },
+                vsRif: document.getElementById('vsRif').value,
                 righe: righe.map(riga => ({
                     articolo: riga.articolo,
                     descrizione: riga.descrizione,
+                    tecnologia: riga.tecnologia,
+                    materiale: riga.materiale,
                     quantita: riga.quantita,
+                    tempistica: riga.tempistica,
                     prezzoUnit: riga.prezzoUnit,
-                    sconto: riga.sconto,
-                    importo: (riga.quantita * riga.prezzoUnit) * (1 - riga.sconto / 100)
+                    importo: riga.quantita * riga.prezzoUnit
                 })),
                 note: document.getElementById('note').value,
+                condizioni: {
+                    pagamento: document.getElementById('condPagamento').value,
+                    trasporto: document.getElementById('condTrasporto').value,
+                    validitaGiorni: parseInt(document.getElementById('validitaGiorni').value, 10) || 30
+                },
                 subtotale: subtotale,
                 applicaIva: applicaIva,
                 aliquotaIva: applicaIva ? aliquotaIva : 0,
@@ -362,9 +490,7 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
         function calcolaTotale() {
             let totale = 0;
             righe.forEach(riga => {
-                const importoSenzaSconto = riga.quantita * riga.prezzoUnit;
-                const importoSconto = importoSenzaSconto * (riga.sconto / 100);
-                totale += importoSenzaSconto - importoSconto;
+                totale += (riga.quantita || 0) * (riga.prezzoUnit || 0);
             });
             return totale;
         }
@@ -372,10 +498,12 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
         function aggiungiRiga() {
             righe.push({
                 articolo: (righe.length + 1).toString(),
-                descrizione: 'Nuova voce',
+                descrizione: 'KIT COMPLETO:\n- componente 1\n- componente 2',
+                tecnologia: 'MJF - Power bed melting',
+                materiale: 'Poliammide',
                 quantita: 1,
-                prezzoUnit: 0,
-                sconto: 0
+                tempistica: '1-2',
+                prezzoUnit: 0
             });
             renderEditor();
             aggiorna();
@@ -409,13 +537,20 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                         <button type="button" class="dm-btn dm-btn--danger dm-btn--fit" onclick="rimuoviRiga(${index})">Elimina</button>
                     </div>
                     <div class="form-group">
-                        <label>Articolo:</label>
-                        <input type="text" value="${String(riga.articolo).replace(/"/g, '&quot;')}"
-                            onchange="aggiornaRiga(${index}, 'articolo', this.value)">
-                    </div>
-                    <div class="form-group">
                         <label>Descrizione:</label>
                         <textarea onchange="aggiornaRiga(${index}, 'descrizione', this.value)">${riga.descrizione.replace(/</g, '&lt;')}</textarea>
+                    </div>
+                    <div class="dm-grid-2 dm-grid-2--qty-price">
+                        <div class="form-group">
+                            <label>Tecnologia:</label>
+                            <input type="text" value="${String(riga.tecnologia || '').replace(/"/g, '&quot;')}"
+                                onchange="aggiornaRiga(${index}, 'tecnologia', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>Materiale:</label>
+                            <input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}"
+                                onchange="aggiornaRiga(${index}, 'materiale', this.value)">
+                        </div>
                     </div>
                     <div class="dm-grid-2 dm-grid-2--qty-price">
                         <div class="form-group">
@@ -424,15 +559,22 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                                 onchange="aggiornaRiga(${index}, 'quantita', parseFloat(this.value))">
                         </div>
                         <div class="form-group">
+                            <label>Tempistica [giorni]:</label>
+                            <input type="text" value="${String(riga.tempistica || '').replace(/"/g, '&quot;')}"
+                                onchange="aggiornaRiga(${index}, 'tempistica', this.value)">
+                        </div>
+                    </div>
+                    <div class="dm-grid-2 dm-grid-2--qty-price">
+                        <div class="form-group">
                             <label>Prezzo unit. (CHF):</label>
                             <input type="number" value="${riga.prezzoUnit}" min="0" step="0.01"
                                 onchange="aggiornaRiga(${index}, 'prezzoUnit', parseFloat(this.value))">
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Sconto (%):</label>
-                        <input type="number" value="${riga.sconto}" min="0" max="100" step="1"
-                            onchange="aggiornaRiga(${index}, 'sconto', parseFloat(this.value))">
+                        <div class="form-group">
+                            <label>Codice voce (facoltativo):</label>
+                            <input type="text" value="${String(riga.articolo || '').replace(/"/g, '&quot;')}"
+                                onchange="aggiornaRiga(${index}, 'articolo', this.value)">
+                        </div>
                     </div>`;
                 container.appendChild(rigaDiv);
             });
@@ -443,25 +585,27 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
             document.getElementById('prev-contattiAzienda').textContent = 'Tel: 076 266 03 96\nEmail: info@3dmakes.ch\nWeb: www.3dmakes.ch';
             document.getElementById('prev-nomeCliente').textContent = document.getElementById('nomeCliente').value;
             document.getElementById('prev-indirizzoCliente').textContent = document.getElementById('indirizzoCliente').value;
+            document.getElementById('prev-referenteCliente').textContent = document.getElementById('referenteCliente').value;
             document.getElementById('prev-numeroOfferta').textContent = document.getElementById('numeroOfferta').value;
+            document.getElementById('prev-vs-rif').textContent = document.getElementById('vsRif').value;
             const data = new Date(document.getElementById('dataDoc').value);
             document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-IT');
-            document.getElementById('prev-note').textContent = document.getElementById('note').value;
+            document.getElementById('prev-legal-page2').innerHTML = testoLegalePagina2;
+            document.getElementById('prev-legal-page3').innerHTML = testoLegalePagina3;
             const tbody = document.getElementById('prev-tbody');
             tbody.innerHTML = '';
             let subtotale = 0;
             righe.forEach(riga => {
-                const importoSenzaSconto = riga.quantita * riga.prezzoUnit;
-                const importoSconto = importoSenzaSconto * (riga.sconto / 100);
-                const importo = importoSenzaSconto - importoSconto;
+                const importo = (riga.quantita || 0) * (riga.prezzoUnit || 0);
                 subtotale += importo;
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${riga.articolo}</td>
                     <td style="white-space: pre-line;">${riga.descrizione.replace(/</g, '&lt;')}</td>
+                    <td>${(riga.tecnologia || '').replace(/</g, '&lt;')}</td>
+                    <td>${(riga.materiale || '').replace(/</g, '&lt;')}</td>
                     <td>${riga.quantita}</td>
+                    <td>${(riga.tempistica || '').replace(/</g, '&lt;')}</td>
                     <td>${riga.prezzoUnit.toFixed(2)} CHF</td>
-                    <td>${riga.sconto > 0 ? riga.sconto + '%' : '-'}</td>
                     <td><strong>${importo.toFixed(2)} CHF</strong></td>`;
                 tbody.appendChild(tr);
             });
@@ -483,7 +627,38 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
             }
             document.getElementById('prev-subtotale').textContent = subtotale.toFixed(2) + ' CHF';
             document.getElementById('prev-totale').textContent = totale.toFixed(2) + ' CHF';
+            requestAnimationFrame(fitLegalPages);
         }
+
+        // Scala il font delle pagine legali per riempire il foglio A4 senza scroll.
+        // Cerca la misura massima (entro [minFs, maxFs]) per cui il contenuto non
+        // sborda dal contenitore, così l'utente vede sempre il testo più grande possibile.
+        function fitLegalPages() {
+            const containers = document.querySelectorAll('.dm-doc-notes--legal');
+            containers.forEach(function (cnt) {
+                const legal = cnt.querySelector('.dm-doc-legal');
+                if (!legal) return;
+                const maxFs = 10.5;
+                const minFs = 6.8;
+                const step = 0.1;
+                let best = minFs;
+                for (let fs = maxFs; fs >= minFs - 1e-6; fs -= step) {
+                    legal.style.setProperty('--dm-legal-fs', fs.toFixed(2) + 'pt');
+                    legal.style.setProperty('--dm-legal-lh', (fs >= 9 ? 1.38 : fs >= 8 ? 1.34 : 1.3).toFixed(2));
+                    if (cnt.scrollHeight <= cnt.clientHeight + 1) {
+                        best = fs;
+                        break;
+                    }
+                }
+                legal.style.setProperty('--dm-legal-fs', best.toFixed(2) + 'pt');
+                legal.style.setProperty('--dm-legal-lh', (best >= 9 ? 1.38 : best >= 8 ? 1.34 : 1.3).toFixed(2));
+            });
+        }
+
+        window.addEventListener('resize', function () {
+            if (window.__fitLegalRaf) cancelAnimationFrame(window.__fitLegalRaf);
+            window.__fitLegalRaf = requestAnimationFrame(fitLegalPages);
+        });
 
         async function salvaSuCloud() {
             if (!firebaseInitialized) {
@@ -543,22 +718,16 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
             btnPDF.textContent = '⏳ Generazione PDF...';
             btnPDF.disabled = true;
             const isFile = window.location.protocol === 'file:';
+            document.body.classList.add('dm-pdf-export');
+            await new Promise(function (resolve) {
+                requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+            });
+            fitLegalPages();
+            await new Promise(function (resolve) {
+                requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+            });
             try {
                 if (typeof html2canvas === 'undefined') throw new Error('html2canvas non è caricato.');
-                const canvas = await html2canvas(preventivo, {
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: false,
-                    logging: false,
-                    backgroundColor: '#ffffff',
-                    foreignObjectRendering: false,
-                    onclone: function (doc) {
-                        if (isFile) {
-                            var logo = doc.getElementById('prev-logo');
-                            if (logo) logo.style.display = 'none';
-                        }
-                    }
-                });
                 let jsPDF;
                 if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
                 else if (window.jsPDF && window.jsPDF.jsPDF) jsPDF = window.jsPDF.jsPDF;
@@ -567,29 +736,50 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pageWidth = 210;
                 const pageHeight = 297;
-                const marginMm = 8;
-                const maxW = pageWidth - 2 * marginMm;
-                const maxH = pageHeight - 2 * marginMm;
-                var imgData;
-                try {
-                    imgData = canvas.toDataURL('image/png');
-                } catch (sec) {
-                    throw new Error(
-                        'Impossibile esportare l’anteprima (blocco sicurezza del browser su file://). ' +
-                        'Avvia un server locale nella cartella del progetto: terminale → python3 -m http.server 8080 → apri http://localhost:8080/genera-preventivo.html'
-                    );
+                const pages = preventivo.querySelectorAll('.dm-doc-page');
+                for (let i = 0; i < pages.length; i++) {
+                    const canvas = await html2canvas(pages[i], {
+                        scale: 3,
+                        useCORS: true,
+                        allowTaint: false,
+                        logging: false,
+                        backgroundColor: '#ffffff',
+                        foreignObjectRendering: false,
+                        onclone: function (doc) {
+                            doc.body.classList.add('dm-pdf-export');
+                            var shell = doc.querySelector('.dm-preview-shell');
+                            if (shell) {
+                                shell.style.border = 'none';
+                                shell.style.boxShadow = 'none';
+                                shell.style.padding = '0';
+                                shell.style.borderRadius = '0';
+                            }
+                            doc.querySelectorAll('.dm-doc-preview').forEach(function (el) {
+                                el.style.border = 'none';
+                                el.style.boxShadow = 'none';
+                                el.style.borderRadius = '0';
+                            });
+                            doc.querySelectorAll('.dm-doc-page').forEach(function (el) {
+                                el.style.boxShadow = 'none';
+                            });
+                            if (isFile) {
+                                var logo = doc.getElementById('prev-logo');
+                                if (logo) logo.style.display = 'none';
+                            }
+                        }
+                    });
+                    let imgData;
+                    try {
+                        imgData = canvas.toDataURL('image/png');
+                    } catch (sec) {
+                        throw new Error(
+                            'Impossibile esportare l’anteprima (blocco sicurezza del browser su file://). ' +
+                            'Avvia un server locale nella cartella del progetto: terminale → python3 -m http.server 8080 → apri http://localhost:8080/genera-preventivo.html'
+                        );
+                    }
+                    if (i > 0) pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
                 }
-                // Un solo foglio A4: scala l’anteprima in modo proporzionato per entrare in maxW × maxH.
-                var imgW = maxW;
-                var imgH = (canvas.height * imgW) / canvas.width;
-                if (imgH > maxH) {
-                    var s = maxH / imgH;
-                    imgW *= s;
-                    imgH = maxH;
-                }
-                var x = marginMm + (maxW - imgW) / 2;
-                var y = marginMm + (maxH - imgH) / 2;
-                pdf.addImage(imgData, 'PNG', x, y, imgW, imgH);
                 const numeroOfferta = document.getElementById('numeroOfferta').value.replace(/\//g, '-');
                 const nomeFile = 'Preventivo_' + numeroOfferta + '_' + new Date().toISOString().split('T')[0] + '.pdf';
                 scaricaPdfBlob(pdf, nomeFile);
@@ -604,6 +794,8 @@ Pagamento: 30 giorni netto dalla ricezione della merce</textarea>
                 alert('Errore durante la generazione del PDF: ' + msg);
                 btnPDF.textContent = textOriginale;
                 btnPDF.disabled = false;
+            } finally {
+                document.body.classList.remove('dm-pdf-export');
             }
         }
 

@@ -371,19 +371,20 @@
 }
 
 /* ========== Layout preventivo ========== */
-/* Due colonne equilibrate: l’editor non resta “stretto” rispetto all’anteprima A4 centrata */
+/* Colonna destra = foglio A4 reale (210mm), colonna sinistra occupa il resto.
+   Così l'anteprima non viene mai rimpicciolita/scrollata orizzontalmente. */
 .dm-preventivo-wrap {
   max-width: 1680px;
   margin: 0 auto;
   padding: 24px clamp(16px, 3vw, 40px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) calc(210mm + 24px);
   gap: clamp(20px, 2.5vw, 40px);
   align-items: start;
 }
 
-/* Sotto questa larghezza due colonne affiancate stringono troppo l’editor: una colonna, più proporzionato */
-@media (max-width: 1280px) {
+/* Sotto questa larghezza non c'è spazio per editor + A4 affiancati: impiliamo */
+@media (max-width: 1300px) {
   .dm-preventivo-wrap {
     grid-template-columns: 1fr;
     padding: clamp(12px, 3vw, 20px);
@@ -413,9 +414,20 @@
 }
 
 .dm-preview-shell {
-  padding: clamp(20px, 2.5vw, 36px);
+  padding: 12px;
   border-radius: var(--dm-radius);
   min-width: 0;
+  /* Nessuno scroll orizzontale: la colonna è già dimensionata a 210mm */
+  overflow: visible;
+}
+
+.dm-doc-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 210mm;
+  margin: 0 auto;
 }
 
 @media (max-width: 768px) {
@@ -472,11 +484,123 @@
 /* ========== Documento preventivo (anteprima A4) ========== */
 .dm-doc-preview {
   background: var(--dm-white);
+  /* Dimensioni foglio reali: non usare min(210mm,100%) o in anteprima si “restringe” */
+  width: 210mm;
   max-width: 210mm;
   margin: 0 auto;
-  padding: 40px;
+  padding: 12mm 11mm;
   border: 1px solid var(--dm-border);
   border-radius: 4px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.dm-doc-page {
+  box-shadow: 0 10px 28px rgba(0, 59, 92, 0.12);
+}
+
+/* Pagina 1: formato A4 esatto (coerente con PDF). Flex column così il footer
+   "Pagina 1/3" resta sempre in fondo, come sulle pagine legali. */
+.dm-doc-page--first {
+  height: 297mm;
+  max-height: 297mm;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-doc-page--first > .dm-doc-footer {
+  margin-top: auto;
+}
+
+/* Pagine condizioni: altezza foglio fissa A4, testo scorre dentro se serve */
+.dm-doc-page--legal {
+  height: 297mm;
+  max-height: 297mm;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dm-doc-page--legal .dm-doc-title {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+
+.dm-doc-page--legal .dm-doc-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.dm-doc-notes--legal {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0 !important;
+  padding: 12px 14px !important;
+  overflow: hidden;
+}
+
+/* Testo condizioni: grandezza controllata via --dm-legal-fs (impostata da JS
+   per riempire la pagina senza scroll). Valori di fallback leggibili. */
+.dm-doc-legal {
+  font-size: var(--dm-legal-fs, 9.5pt);
+  line-height: var(--dm-legal-lh, 1.38);
+  color: var(--dm-text);
+}
+
+.dm-doc-legal strong {
+  font-size: inherit;
+}
+
+.dm-doc-legal ol {
+  padding-left: 14px;
+}
+
+.dm-doc-legal li {
+  margin-bottom: 0.35em;
+}
+
+/* Durante export PDF: formato A4 esatto, niente bordi/ombre (PDF pulito). */
+.dm-pdf-export .dm-preview-shell.dm-card,
+.dm-pdf-export .dm-preview-shell {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: #ffffff;
+  overflow: visible;
+}
+
+.dm-pdf-export .dm-doc-pages {
+  gap: 0;
+}
+
+.dm-pdf-export .dm-doc-preview {
+  width: 210mm;
+  max-width: 210mm;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.dm-pdf-export .dm-doc-page {
+  box-shadow: none !important;
+}
+
+/* In export PDF tutte le pagine sono A4 esatte (210x297mm) così l'immagine
+   catturata ha sempre aspect ratio A4 e riempie perfettamente il foglio. */
+.dm-pdf-export .dm-doc-page--first {
+  min-height: 297mm !important;
+  height: 297mm !important;
+  max-height: 297mm !important;
+  overflow: hidden !important;
+}
+
+.dm-pdf-export .dm-doc-page--legal {
+  height: 297mm !important;
+  max-height: 297mm !important;
+  overflow: hidden !important;
 }
 
 .dm-doc-header {
@@ -553,23 +677,30 @@
   width: 100%;
   border-collapse: collapse;
   margin: 28px 0;
+  table-layout: fixed;
 }
 
 .dm-items-table th {
   background: var(--dm-navy);
   color: var(--dm-white);
-  padding: 12px 8px;
+  padding: 10px 6px;
   text-align: left;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .dm-items-table td {
-  padding: 10px 8px;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--dm-border);
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.3;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dm-items-table tr:last-child td {
@@ -1357,6 +1488,11 @@
 
 /* ========== Print ========== */
 @media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
   .dm-header,
   .dm-sidebar,
   .dm-btn,
@@ -1376,14 +1512,63 @@
     max-width: none;
   }
 
+  .dm-preview-shell.dm-card,
   .dm-preview-shell {
-    box-shadow: none;
-    border: none;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
     padding: 0;
   }
 
+  .dm-doc-pages {
+    gap: 0;
+  }
+
   .dm-doc-preview {
-    border: none;
+    border: none !important;
     max-width: none;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0;
+    page-break-after: always;
+  }
+
+  .dm-doc-preview:last-child {
+    page-break-after: auto;
+  }
+
+  .dm-calc-adv-wrap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .dm-calc-card {
+    overflow: visible;
+    border: none;
+    box-shadow: none;
+  }
+
+  .dm-calc-adv-cols,
+  .dm-calc-charts {
+    display: block;
+  }
+
+  .dm-calc-panel,
+  .dm-calc-chart-box,
+  #results,
+  #charts {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 10mm;
+  }
+
+  .dm-calc-panel__head {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .dm-calc-results-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
