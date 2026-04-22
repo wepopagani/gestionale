@@ -51,7 +51,10 @@
             </div>
             <div class="form-group">
                 <label>Referente (c.a.):</label>
-                <input type="text" id="referenteCliente" value="Ing. Matteo Verdicchio" oninput="aggiorna()">
+                <select id="referenteCliente" onchange="aggiorna()">
+                    <option value="Marco Pagani">Marco Pagani</option>
+                    <option value="Matteo Verdicchio" selected>Matteo Verdicchio</option>
+                </select>
             </div>
             <div class="form-group">
                 <label>Indirizzo Cliente:</label>
@@ -59,14 +62,22 @@
 6900 Lugano
 Svizzera</textarea>
             </div>
-            <div class="dm-section-title">Riferimenti</div>
-            <div class="form-group">
-                <label>Vs Rif.:</label>
-                <input type="text" id="vsRif" value="mz e-mail" oninput="aggiorna()">
-            </div>
             <div class="dm-section-title">Articoli</div>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
             <div id="righeEditor"></div>
+            <div class="dm-section-title">Sconto</div>
+            <div class="form-group">
+                <label>Tipo sconto:</label>
+                <select id="tipoSconto" onchange="aggiorna()">
+                    <option value="nessuno" selected>Nessuno sconto</option>
+                    <option value="percentuale">Percentuale (%)</option>
+                    <option value="fisso">Importo fisso (CHF)</option>
+                </select>
+            </div>
+            <div class="form-group" id="valoreScontoContainer" style="display: none;">
+                <label>Valore sconto:</label>
+                <input type="number" id="valoreSconto" value="0" min="0" step="0.01" oninput="aggiorna()">
+            </div>
             <div class="dm-section-title">IVA</div>
             <div class="form-group">
                 <label>Applicare IVA:</label>
@@ -122,7 +133,6 @@ Svizzera</textarea>
                 <div class="dm-doc-info document-info">
                     <div><strong>Offerta:</strong> <span id="prev-numeroOfferta">2024/001</span></div>
                     <div><strong>Data:</strong> <span id="prev-data"></span></div>
-                    <div><strong>Vs Rif.:</strong> <span id="prev-vs-rif">mz e-mail</span></div>
                 </div>
                 <div style="font-size: 13px; line-height: 1.6; margin-bottom: 14px;">
                     Facendo seguito a Vs cortese richiesta, si formula la nostra migliore offerta per la realizzazione su Vs specifica in additive manufacturing dei seguenti items.
@@ -145,6 +155,14 @@ Svizzera</textarea>
                     <div class="total-row" id="subtotale-row">
                         <strong>Subtotale:</strong>
                         <span id="prev-subtotale">0.00 CHF</span>
+                    </div>
+                    <div class="total-row" id="sconto-row" style="display: none;">
+                        <strong>Sconto <span id="prev-sconto-label"></span>:</strong>
+                        <span id="prev-sconto">-0.00 CHF</span>
+                    </div>
+                    <div class="total-row" id="imponibile-row" style="display: none;">
+                        <strong>Imponibile:</strong>
+                        <span id="prev-imponibile">0.00 CHF</span>
                     </div>
                     <div class="total-row" id="iva-row" style="display: none;">
                         <strong>IVA (<span id="prev-aliquota-iva">8.1</span>%):</strong>
@@ -248,24 +266,111 @@ Svizzera</textarea>
             return { id: doc.id, ...doc.data() };
         }
 
+        // Tecnologie e materiali disponibili con prezzi unitari di default (CHF).
+        // Usare chiavi stabili per salvare su cloud in modo indipendente dalla label mostrata.
+        const TECNOLOGIE = {
+            FDM:  { label: 'FDM - Fused Deposition Modeling' },
+            SLA:  { label: 'SLA - Stereolithography' },
+            MJF:  { label: 'MJF - Power bed melting' },
+            ALTRO:{ label: 'Altro (personalizzato)' }
+        };
+
+        const MATERIALI = {
+            FDM: [
+                { key: 'PLA',       label: 'PLA',       prezzo: 20  },
+                { key: 'PETG',      label: 'PETG',      prezzo: 25  },
+                { key: 'ABS',       label: 'ABS',       prezzo: 30  },
+                { key: 'PA6',       label: 'PA6',       prezzo: 40  },
+                { key: 'PA12',      label: 'PA12',      prezzo: 50  },
+                { key: 'PETG-CF',   label: 'PETG-CF',   prezzo: 35  },
+                { key: 'PPS-CF10',  label: 'PPS-CF10',  prezzo: 150 },
+                { key: 'PA6-GF',    label: 'PA6-GF',    prezzo: 55  },
+                { key: 'PC',        label: 'PC',        prezzo: 50  },
+                { key: 'PAHT',      label: 'PAHT',      prezzo: 80  },
+                { key: 'ASA',       label: 'ASA',       prezzo: 30  },
+                { key: 'ASA-AERO',  label: 'ASA Aero',  prezzo: 60  }
+            ],
+            SLA: [
+                { key: 'ABS-LIKE',   label: 'ABS like',   prezzo: 30 },
+                { key: 'STANDARD',   label: 'Standard',   prezzo: 25 },
+                { key: 'HIGH-SPEED', label: 'High speed', prezzo: 30 },
+                { key: 'FLEX',       label: 'Flex',       prezzo: 50 }
+            ],
+            MJF: [
+                { key: 'POLIAMMIDE', label: 'Poliammide', prezzo: 0 }
+            ],
+            ALTRO: []
+        };
+
+        // Trova la chiave tecnologia a partire da un valore salvato (label o chiave)
+        function risolviTecnologia(valore) {
+            if (!valore) return 'FDM';
+            if (TECNOLOGIE[valore]) return valore;
+            const v = String(valore).toLowerCase();
+            for (const k of Object.keys(TECNOLOGIE)) {
+                if (TECNOLOGIE[k].label.toLowerCase() === v) return k;
+            }
+            if (v.includes('fdm')) return 'FDM';
+            if (v.includes('sla') || v.includes('resin')) return 'SLA';
+            if (v.includes('mjf') || v.includes('power bed')) return 'MJF';
+            return 'ALTRO';
+        }
+
+        // Trova il materiale (key) dato un valore e una tecnologia
+        function risolviMateriale(valore, tecKey) {
+            if (!valore) return '';
+            const lista = MATERIALI[tecKey] || [];
+            const v = String(valore).toLowerCase();
+            for (const m of lista) {
+                if (m.key.toLowerCase() === v || m.label.toLowerCase() === v) return m.key;
+            }
+            return '__CUSTOM__';
+        }
+
+        function labelTecnologia(tecKey) {
+            return (TECNOLOGIE[tecKey] && TECNOLOGIE[tecKey].label) || tecKey || '';
+        }
+
+        function labelMateriale(tecKey, matKey) {
+            const lista = MATERIALI[tecKey] || [];
+            const trovato = lista.find(m => m.key === matKey);
+            return trovato ? trovato.label : '';
+        }
+
+        // Imposta il valore di una select; se il valore non esiste tra le options,
+        // lo aggiunge dinamicamente (utile per caricare preventivi vecchi).
+        function setSelectValue(selectId, valore) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            const v = valore || '';
+            const esiste = Array.from(sel.options).some(o => o.value === v);
+            if (!esiste && v) {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                sel.appendChild(opt);
+            }
+            sel.value = v;
+        }
+
         let righe = [
             {
                 articolo: '1',
                 descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
-                tecnologia: 'MJF - Power bed melting',
-                materiale: 'Poliammide',
+                tecnologia: 'FDM',
+                materiale: 'PLA',
                 quantita: 1,
                 tempistica: '1-2',
-                prezzoUnit: 100.00
+                prezzoUnit: 20.00
             },
             {
                 articolo: '2',
                 descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
-                tecnologia: 'SLA - Resin sintering',
-                materiale: 'ABS',
+                tecnologia: 'SLA',
+                materiale: 'STANDARD',
                 quantita: 3,
                 tempistica: '1-2',
-                prezzoUnit: 80.00
+                prezzoUnit: 25.00
             }
         ];
         const testoLegalePagina2 = `
@@ -344,25 +449,32 @@ Svizzera</textarea>
                 modalitaModifica = false;
                 document.getElementById('numeroOfferta').value = '…';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                document.getElementById('referenteCliente').value = preventivo.cliente?.referente || '';
+                setSelectValue('referenteCliente', preventivo.cliente?.referente || '');
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
-                document.getElementById('vsRif').value = preventivo.vsRif || 'mz e-mail';
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
                 document.getElementById('condTrasporto').value = preventivo.condizioni?.trasporto || 'via Cantonale 15, 6918 Figino';
                 document.getElementById('validitaGiorni').value = preventivo.condizioni?.validitaGiorni || 30;
                 document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
                 if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
+                if (preventivo.sconto) {
+                    document.getElementById('tipoSconto').value = preventivo.sconto.tipo || 'nessuno';
+                    document.getElementById('valoreSconto').value = preventivo.sconto.valore || 0;
+                }
                 if (preventivo.righe && preventivo.righe.length > 0) {
-                    righe = preventivo.righe.map(r => ({
-                        articolo: r.articolo || '',
-                        descrizione: r.descrizione || '',
-                        tecnologia: r.tecnologia || '',
-                        materiale: r.materiale || '',
-                        quantita: r.quantita || 1,
-                        prezzoUnit: r.prezzoUnit || 0,
-                        tempistica: r.tempistica || '1-2'
-                    }));
+                    righe = preventivo.righe.map(r => {
+                        const tecKey = r.tecnologiaKey || risolviTecnologia(r.tecnologia || '');
+                        const matKey = r.materialeKey || risolviMateriale(r.materiale || '', tecKey);
+                        return {
+                            articolo: r.articolo || '',
+                            descrizione: r.descrizione || '',
+                            tecnologia: tecKey,
+                            materiale: matKey === '__CUSTOM__' ? (r.materiale || '') : matKey,
+                            quantita: r.quantita || 1,
+                            prezzoUnit: r.prezzoUnit || 0,
+                            tempistica: r.tempistica || '1-2'
+                        };
+                    });
                 }
                 document.getElementById('dataDoc').valueAsDate = new Date();
                 renderEditor();
@@ -392,25 +504,32 @@ Svizzera</textarea>
                 document.getElementById('numeroOfferta').value = preventivo.numeroOfferta || '';
                 document.getElementById('dataDoc').value = preventivo.data || '';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                document.getElementById('referenteCliente').value = preventivo.cliente?.referente || '';
+                setSelectValue('referenteCliente', preventivo.cliente?.referente || '');
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
-                document.getElementById('vsRif').value = preventivo.vsRif || 'mz e-mail';
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
                 document.getElementById('condTrasporto').value = preventivo.condizioni?.trasporto || 'via Cantonale 15, 6918 Figino';
                 document.getElementById('validitaGiorni').value = preventivo.condizioni?.validitaGiorni || 30;
                 document.getElementById('applicaIva').value = preventivo.applicaIva ? 'si' : 'no';
                 if (preventivo.aliquotaIva) document.getElementById('aliquotaIva').value = preventivo.aliquotaIva;
+                if (preventivo.sconto) {
+                    document.getElementById('tipoSconto').value = preventivo.sconto.tipo || 'nessuno';
+                    document.getElementById('valoreSconto').value = preventivo.sconto.valore || 0;
+                }
                 if (preventivo.righe && preventivo.righe.length > 0) {
-                    righe = preventivo.righe.map(r => ({
-                        articolo: r.articolo || '',
-                        descrizione: r.descrizione || '',
-                        tecnologia: r.tecnologia || '',
-                        materiale: r.materiale || '',
-                        quantita: r.quantita || 1,
-                        prezzoUnit: r.prezzoUnit || 0,
-                        tempistica: r.tempistica || '1-2'
-                    }));
+                    righe = preventivo.righe.map(r => {
+                        const tecKey = r.tecnologiaKey || risolviTecnologia(r.tecnologia || '');
+                        const matKey = r.materialeKey || risolviMateriale(r.materiale || '', tecKey);
+                        return {
+                            articolo: r.articolo || '',
+                            descrizione: r.descrizione || '',
+                            tecnologia: tecKey,
+                            materiale: matKey === '__CUSTOM__' ? (r.materiale || '') : matKey,
+                            quantita: r.quantita || 1,
+                            prezzoUnit: r.prezzoUnit || 0,
+                            tempistica: r.tempistica || '1-2'
+                        };
+                    });
                 }
                 document.getElementById('infoNumeroOfferta').innerHTML =
                     '<strong style="color:#00aeef;">Modalità modifica</strong> — stai modificando un preventivo esistente';
@@ -449,10 +568,17 @@ Svizzera</textarea>
 
         function preparaDatiPreventivo() {
             const subtotale = calcolaTotale();
+            const tipoSconto = document.getElementById('tipoSconto').value;
+            const valoreSconto = parseFloat(document.getElementById('valoreSconto').value) || 0;
+            let importoSconto = 0;
+            if (tipoSconto === 'percentuale') importoSconto = subtotale * (valoreSconto / 100);
+            else if (tipoSconto === 'fisso') importoSconto = valoreSconto;
+            if (importoSconto > subtotale) importoSconto = subtotale;
+            const imponibile = subtotale - importoSconto;
             const applicaIva = document.getElementById('applicaIva').value === 'si';
             const aliquotaIva = parseFloat(document.getElementById('aliquotaIva').value) || 8.1;
-            const importoIva = applicaIva ? subtotale * (aliquotaIva / 100) : 0;
-            const totale = subtotale + importoIva;
+            const importoIva = applicaIva ? imponibile * (aliquotaIva / 100) : 0;
+            const totale = imponibile + importoIva;
             return {
                 numeroOfferta: document.getElementById('numeroOfferta').value,
                 data: document.getElementById('dataDoc').value,
@@ -461,17 +587,26 @@ Svizzera</textarea>
                     referente: document.getElementById('referenteCliente').value,
                     indirizzo: document.getElementById('indirizzoCliente').value
                 },
-                vsRif: document.getElementById('vsRif').value,
-                righe: righe.map(riga => ({
-                    articolo: riga.articolo,
-                    descrizione: riga.descrizione,
-                    tecnologia: riga.tecnologia,
-                    materiale: riga.materiale,
-                    quantita: riga.quantita,
-                    tempistica: riga.tempistica,
-                    prezzoUnit: riga.prezzoUnit,
-                    importo: riga.quantita * riga.prezzoUnit
-                })),
+                righe: righe.map(riga => {
+                    const tecKey = risolviTecnologia(riga.tecnologia);
+                    const matKey = risolviMateriale(riga.materiale, tecKey);
+                    const tecLabel = tecKey === 'ALTRO' ? (riga.tecnologia || '') : labelTecnologia(tecKey);
+                    const matLabel = (matKey === '__CUSTOM__' || tecKey === 'ALTRO')
+                        ? (riga.materiale || '')
+                        : labelMateriale(tecKey, matKey);
+                    return {
+                        articolo: riga.articolo,
+                        descrizione: riga.descrizione,
+                        tecnologia: tecLabel,
+                        tecnologiaKey: tecKey,
+                        materiale: matLabel,
+                        materialeKey: matKey,
+                        quantita: riga.quantita,
+                        tempistica: riga.tempistica,
+                        prezzoUnit: riga.prezzoUnit,
+                        importo: riga.quantita * riga.prezzoUnit
+                    };
+                }),
                 note: document.getElementById('note').value,
                 condizioni: {
                     pagamento: document.getElementById('condPagamento').value,
@@ -479,6 +614,12 @@ Svizzera</textarea>
                     validitaGiorni: parseInt(document.getElementById('validitaGiorni').value, 10) || 30
                 },
                 subtotale: subtotale,
+                sconto: {
+                    tipo: tipoSconto,
+                    valore: valoreSconto,
+                    importo: importoSconto
+                },
+                imponibile: imponibile,
                 applicaIva: applicaIva,
                 aliquotaIva: applicaIva ? aliquotaIva : 0,
                 importoIva: importoIva,
@@ -499,11 +640,11 @@ Svizzera</textarea>
             righe.push({
                 articolo: (righe.length + 1).toString(),
                 descrizione: 'KIT COMPLETO:\n- componente 1\n- componente 2',
-                tecnologia: 'MJF - Power bed melting',
-                materiale: 'Poliammide',
+                tecnologia: 'FDM',
+                materiale: 'PLA',
                 quantita: 1,
                 tempistica: '1-2',
-                prezzoUnit: 0
+                prezzoUnit: 20
             });
             renderEditor();
             aggiorna();
@@ -525,10 +666,58 @@ Svizzera</textarea>
             aggiorna();
         }
 
+        // Cambia la tecnologia: resetta il materiale al primo disponibile e aggiorna il prezzo
+        function cambiaTecnologia(index, nuovaTecKey) {
+            righe[index].tecnologia = nuovaTecKey;
+            const lista = MATERIALI[nuovaTecKey] || [];
+            if (lista.length > 0) {
+                righe[index].materiale = lista[0].key;
+                righe[index].prezzoUnit = lista[0].prezzo;
+            } else {
+                righe[index].materiale = '';
+            }
+            renderEditor();
+            aggiorna();
+        }
+
+        // Cambia il materiale: se standard, auto-imposta il prezzo; se personalizzato lascia il prezzo
+        function cambiaMateriale(index, nuovoMatKey) {
+            if (nuovoMatKey === '__CUSTOM__') {
+                righe[index].materiale = '';
+                renderEditor();
+                aggiorna();
+                return;
+            }
+            const tecKey = righe[index].tecnologia;
+            const lista = MATERIALI[tecKey] || [];
+            const mat = lista.find(m => m.key === nuovoMatKey);
+            righe[index].materiale = nuovoMatKey;
+            if (mat && mat.prezzo) {
+                righe[index].prezzoUnit = mat.prezzo;
+            }
+            renderEditor();
+            aggiorna();
+        }
+
         function renderEditor() {
             const container = document.getElementById('righeEditor');
             container.innerHTML = '';
             righe.forEach((riga, index) => {
+                const tecKey = risolviTecnologia(riga.tecnologia);
+                if (tecKey !== riga.tecnologia) riga.tecnologia = tecKey;
+                const matKey = risolviMateriale(riga.materiale, tecKey);
+                const materialiLista = MATERIALI[tecKey] || [];
+
+                const optTec = Object.keys(TECNOLOGIE).map(k =>
+                    `<option value="${k}" ${k === tecKey ? 'selected' : ''}>${TECNOLOGIE[k].label}</option>`
+                ).join('');
+
+                const optMat = materialiLista.map(m =>
+                    `<option value="${m.key}" ${m.key === matKey ? 'selected' : ''}>${m.label}</option>`
+                ).join('');
+
+                const mostraCustomMat = tecKey === 'ALTRO';
+
                 const rigaDiv = document.createElement('div');
                 rigaDiv.className = 'dm-riga-editor';
                 rigaDiv.innerHTML = `
@@ -543,15 +732,21 @@ Svizzera</textarea>
                     <div class="dm-grid-2 dm-grid-2--qty-price">
                         <div class="form-group">
                             <label>Tecnologia:</label>
-                            <input type="text" value="${String(riga.tecnologia || '').replace(/"/g, '&quot;')}"
-                                onchange="aggiornaRiga(${index}, 'tecnologia', this.value)">
+                            <select onchange="cambiaTecnologia(${index}, this.value)">${optTec}</select>
                         </div>
                         <div class="form-group">
                             <label>Materiale:</label>
-                            <input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}"
-                                onchange="aggiornaRiga(${index}, 'materiale', this.value)">
+                            ${tecKey === 'ALTRO'
+                                ? `<input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}" onchange="aggiornaRiga(${index}, 'materiale', this.value)">`
+                                : `<select onchange="cambiaMateriale(${index}, this.value)">${optMat}</select>`}
                         </div>
                     </div>
+                    ${mostraCustomMat && tecKey !== 'ALTRO' ? `
+                    <div class="form-group">
+                        <label>Materiale personalizzato:</label>
+                        <input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}"
+                            onchange="aggiornaRiga(${index}, 'materiale', this.value)">
+                    </div>` : ''}
                     <div class="dm-grid-2 dm-grid-2--qty-price">
                         <div class="form-group">
                             <label>Quantità:</label>
@@ -587,7 +782,6 @@ Svizzera</textarea>
             document.getElementById('prev-indirizzoCliente').textContent = document.getElementById('indirizzoCliente').value;
             document.getElementById('prev-referenteCliente').textContent = document.getElementById('referenteCliente').value;
             document.getElementById('prev-numeroOfferta').textContent = document.getElementById('numeroOfferta').value;
-            document.getElementById('prev-vs-rif').textContent = document.getElementById('vsRif').value;
             const data = new Date(document.getElementById('dataDoc').value);
             document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-IT');
             document.getElementById('prev-legal-page2').innerHTML = testoLegalePagina2;
@@ -598,33 +792,72 @@ Svizzera</textarea>
             righe.forEach(riga => {
                 const importo = (riga.quantita || 0) * (riga.prezzoUnit || 0);
                 subtotale += importo;
+                // Risolvi label leggibili per la stampa, mantenendo eventuali valori personalizzati
+                const tecKey = risolviTecnologia(riga.tecnologia);
+                const tecOut = tecKey === 'ALTRO'
+                    ? (riga.tecnologia || '')
+                    : labelTecnologia(tecKey);
+                const matKey = risolviMateriale(riga.materiale, tecKey);
+                const matOut = (matKey === '__CUSTOM__' || tecKey === 'ALTRO')
+                    ? (riga.materiale || '')
+                    : labelMateriale(tecKey, matKey);
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="white-space: pre-line;">${riga.descrizione.replace(/</g, '&lt;')}</td>
-                    <td>${(riga.tecnologia || '').replace(/</g, '&lt;')}</td>
-                    <td>${(riga.materiale || '').replace(/</g, '&lt;')}</td>
+                    <td>${String(tecOut).replace(/</g, '&lt;')}</td>
+                    <td>${String(matOut).replace(/</g, '&lt;')}</td>
                     <td>${riga.quantita}</td>
                     <td>${(riga.tempistica || '').replace(/</g, '&lt;')}</td>
                     <td>${riga.prezzoUnit.toFixed(2)} CHF</td>
                     <td><strong>${importo.toFixed(2)} CHF</strong></td>`;
                 tbody.appendChild(tr);
             });
+
+            // Calcolo sconto
+            const tipoSconto = document.getElementById('tipoSconto').value;
+            const valoreSconto = parseFloat(document.getElementById('valoreSconto').value) || 0;
+            document.getElementById('valoreScontoContainer').style.display =
+                tipoSconto === 'nessuno' ? 'none' : 'block';
+            let importoSconto = 0;
+            if (tipoSconto === 'percentuale') {
+                importoSconto = subtotale * (valoreSconto / 100);
+            } else if (tipoSconto === 'fisso') {
+                importoSconto = valoreSconto;
+            }
+            if (importoSconto > subtotale) importoSconto = subtotale;
+            const imponibile = subtotale - importoSconto;
+
             const applicaIva = document.getElementById('applicaIva').value === 'si';
             const aliquotaIva = parseFloat(document.getElementById('aliquotaIva').value) || 8.1;
             document.getElementById('aliquotaIvaContainer').style.display = applicaIva ? 'block' : 'none';
             let importoIva = 0;
-            let totale = subtotale;
+            let totale = imponibile;
             if (applicaIva) {
-                importoIva = subtotale * (aliquotaIva / 100);
-                totale = subtotale + importoIva;
+                importoIva = imponibile * (aliquotaIva / 100);
+                totale = imponibile + importoIva;
                 document.getElementById('iva-row').style.display = 'flex';
                 document.getElementById('prev-aliquota-iva').textContent = aliquotaIva;
                 document.getElementById('prev-iva').textContent = importoIva.toFixed(2) + ' CHF';
-                document.getElementById('subtotale-row').style.display = 'flex';
             } else {
                 document.getElementById('iva-row').style.display = 'none';
-                document.getElementById('subtotale-row').style.display = 'none';
             }
+
+            // Mostra riga sconto/imponibile/subtotale solo se utili
+            const scontoAttivo = importoSconto > 0;
+            if (scontoAttivo) {
+                document.getElementById('subtotale-row').style.display = 'flex';
+                document.getElementById('sconto-row').style.display = 'flex';
+                document.getElementById('imponibile-row').style.display = 'flex';
+                const lbl = tipoSconto === 'percentuale' ? ` (${valoreSconto}%)` : '';
+                document.getElementById('prev-sconto-label').textContent = lbl;
+                document.getElementById('prev-sconto').textContent = '-' + importoSconto.toFixed(2) + ' CHF';
+                document.getElementById('prev-imponibile').textContent = imponibile.toFixed(2) + ' CHF';
+            } else {
+                document.getElementById('sconto-row').style.display = 'none';
+                document.getElementById('imponibile-row').style.display = 'none';
+                document.getElementById('subtotale-row').style.display = applicaIva ? 'flex' : 'none';
+            }
+
             document.getElementById('prev-subtotale').textContent = subtotale.toFixed(2) + ' CHF';
             document.getElementById('prev-totale').textContent = totale.toFixed(2) + ' CHF';
             requestAnimationFrame(fitLegalPages);
