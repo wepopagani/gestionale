@@ -1,7 +1,8 @@
 // Service Worker per 3DMAKES Gestionale
-// Versione 2.1
+// Versione 2.3 — refactor completo scritture per-path, counter transazionale,
+// listener real-time granulare. Fine perdita ordini in multi-utente.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.20';
+const CACHE_NAME = '3dmakes-gestionale-v3.22';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -11,6 +12,7 @@ const urlsToCache = [
   '/calcolatore-prezzi.html',
   '/calcolatore.html',
   '/migrazione-preventivi.html',
+  '/recupero.html',
   '/app.js',
   '/style.css',
   '/firebase-config.js',

@@ -55,6 +55,14 @@
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
+
+                <!-- Backup / Ripristino -->
+                <div class="backup-actions" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+                    <button class="btn-secondary" id="exportJsonBtn" title="Scarica un file JSON con tutti i dati (clienti, ordini, documenti, note)" style="flex:1 1 auto; font-size:12px; padding:6px 8px;">⬇️ Esporta JSON</button>
+                    <button class="btn-secondary" id="importJsonBtn" title="Ripristina i dati da un file JSON esportato in precedenza" style="flex:1 1 auto; font-size:12px; padding:6px 8px;">⬆️ Importa JSON</button>
+                    <button class="btn-secondary" id="viewBackupsBtn" title="Mostra i backup locali degli ultimi 7 giorni" style="flex:1 1 100%; font-size:12px; padding:6px 8px;">🕒 Backup locali</button>
+                </div>
+                <input type="file" id="importJsonFile" accept="application/json,.json" style="display:none;">
             </div>
 
             <div class="clients-list" id="clientsList">

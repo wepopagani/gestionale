@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🆘 Recupero dati gestionale</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f6f7fb;
+            color: #1f2937;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 80px;
+            line-height: 1.45;
+        }
+        h1 { font-size: 22px; margin: 0 0 8px; }
+        h2 { font-size: 16px; margin: 24px 0 10px; color: #111827; }
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .danger {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .ok {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        button {
+            background: #1e40af;
+            color: #fff;
+            border: 0;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 4px 4px 4px 0;
+        }
+        button.secondary { background: #6b7280; }
+        button.success { background: #059669; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        th, td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: top;
+        }
+        th { background: #f3f4f6; font-weight: 600; }
+        tr:last-child td { border-bottom: 0; }
+        .chip {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e5e7eb;
+            color: #374151;
+            margin-left: 6px;
+        }
+        pre {
+            background: #111827;
+            color: #d1fae5;
+            padding: 12px;
+            border-radius: 6px;
+            overflow: auto;
+            max-height: 320px;
+            font-size: 12px;
+        }
+        details { background: #fff; padding: 10px 14px; border-radius: 6px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        summary { cursor: pointer; font-weight: 600; }
+        .muted { color: #6b7280; font-size: 13px; }
+        input[type="file"] { margin: 6px 0; }
+    </style>
+</head>
+<body>
+    <h1>🆘 Recupero dati gestionale</h1>
+    <p class="muted">
+        Questa pagina legge SOLO il <code>localStorage</code> del browser attuale.
+        Non si collega a Firebase, non manda nulla online.
+        Usala per salvare una copia di quello che hai in locale PRIMA che venga sovrascritta dal cloud.
+    </p>
+
+    <div class="warning">
+        <strong>⚠️ Prima di tutto, metti il computer offline</strong> (disattiva WiFi / modalità aereo).
+        Se apri il gestionale con la rete attiva, il listener di Firebase scarica la versione del cloud
+        e sovrascrive quello che hai in locale, incluso eventualmente un ordine che qui è ancora presente.
+    </div>
+
+    <h2>Stato</h2>
+    <div id="status"></div>
+
+    <h2>Azioni</h2>
+    <button id="refreshBtn">🔁 Ricarica dati locali</button>
+    <button id="downloadBtn" class="success">⬇️ Scarica tutto come JSON</button>
+    <button id="copyBtn" class="secondary">📋 Copia JSON negli appunti</button>
+
+    <h2>Clienti trovati in localStorage</h2>
+    <div id="clientsTable"></div>
+
+    <h2>Tutti gli ordini trovati</h2>
+    <p class="muted">Ordina per data creazione (dal più recente). Qui puoi vedere a colpo d'occhio se un ordine che pensavi perso è presente.</p>
+    <div id="ordersTable"></div>
+
+    <h2>Backup interni presenti in questo browser</h2>
+    <p class="muted">
+        Se il gestionale è già stato aggiornato almeno una volta con la versione 2.2, trovi qui i backup
+        automatici giornalieri (ultimi 7) e rolling (ultimi 10 salvataggi).
+    </p>
+    <div id="backupsList"></div>
+
+    <h2>Dati grezzi (avanzato)</h2>
+    <details>
+        <summary>Mostra il JSON grezzo di <code>gestionale_data</code></summary>
+        <pre id="rawData"></pre>
+    </details>
+
+    <script>
+        const PRIMARY_KEY = 'gestionale_data';
+        const COUNTER_KEY = 'gestionale_order_counter';
+        const BACKUP_DAILY_PREFIX = 'gestionale_backup_daily_';
+        const BACKUP_ROLLING_KEY = 'gestionale_backup_rolling';
+
+        function readCurrent() {
+            try {
+                const raw = localStorage.getItem(PRIMARY_KEY);
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function readCounter() {
+            const v = localStorage.getItem(COUNTER_KEY);
+            return v ? parseInt(v, 10) : null;
+        }
+
+        function readBackups() {
+            const daily = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(BACKUP_DAILY_PREFIX)) {
+                    let parsed = null;
+                    try { parsed = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+                    daily.push({ key: k, date: k.slice(BACKUP_DAILY_PREFIX.length), data: parsed });
+                }
+            }
+            daily.sort((a, b) => a.date.localeCompare(b.date));
+
+            let rolling = [];
+            try {
+                const raw = localStorage.getItem(BACKUP_ROLLING_KEY);
+                if (raw) rolling = JSON.parse(raw) || [];
+            } catch (e) {}
+
+            return { daily, rolling };
+        }
+
+        function countOrders(clients) {
+            if (!Array.isArray(clients)) return 0;
+            let c = 0;
+            clients.forEach(cli => {
+                if (Array.isArray(cli.orders)) c += cli.orders.length;
+            });
+            return c;
+        }
+
+        function render() {
+            const clients = readCurrent();
+            const counter = readCounter();
+            const { daily, rolling } = readBackups();
+
+            const statusEl = document.getElementById('status');
+            if (!clients) {
+                statusEl.innerHTML = `
+                    <div class="danger">
+                        ❌ Nessun dato trovato in <code>gestionale_data</code>.<br>
+                        Questo può significare che:
+                        <ul>
+                            <li>Il browser non ha mai aperto il gestionale;</li>
+                            <li>Oppure il localStorage è stato cancellato;</li>
+                            <li>Oppure hai aperto questa pagina in un profilo / modalità incognito diverso.</li>
+                        </ul>
+                        Controlla nel browser dove di solito usi il gestionale.
+                    </div>`;
+            } else if (!Array.isArray(clients)) {
+                statusEl.innerHTML = `<div class="danger">❌ Dati trovati ma non sono un array valido.</div>`;
+            } else {
+                const nOrders = countOrders(clients);
+                statusEl.innerHTML = `
+                    <div class="ok">
+                        ✅ Trovati <strong>${clients.length} clienti</strong> e <strong>${nOrders} ordini</strong> in localStorage.
+                        ${counter ? `<br>Counter ordini: <strong>${counter}</strong>` : ''}
+                    </div>`;
+            }
+
+            const clientsTable = document.getElementById('clientsTable');
+            if (Array.isArray(clients) && clients.length > 0) {
+                let html = '<table><tr><th>#</th><th>Cliente</th><th>Ordini</th><th>Documenti</th><th>Note</th><th>File</th></tr>';
+                clients.forEach((c, i) => {
+                    html += `<tr>
+                        <td>${i + 1}</td>
+                        <td><strong>${escapeHtml(c.name || '(senza nome)')}</strong><br><span class="muted">${escapeHtml(c.email || '')}</span></td>
+                        <td>${Array.isArray(c.orders) ? c.orders.length : 0}</td>
+                        <td>${Array.isArray(c.documents) ? c.documents.length : 0}</td>
+                        <td>${Array.isArray(c.notes) ? c.notes.length : 0}</td>
+                        <td>${Array.isArray(c.files) ? c.files.length : 0}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+                clientsTable.innerHTML = html;
+            } else {
+                clientsTable.innerHTML = '<p class="muted">Nessun cliente trovato.</p>';
+            }
+
+            const ordersTable = document.getElementById('ordersTable');
+            if (Array.isArray(clients)) {
+                const rows = [];
+                clients.forEach(c => {
+                    if (Array.isArray(c.orders)) {
+                        c.orders.forEach(o => rows.push({ client: c.name || '?', order: o }));
+                    }
+                });
+                rows.sort((a, b) => {
+                    const da = a.order.createdAt || a.order.date || '';
+                    const db = b.order.createdAt || b.order.date || '';
+                    return db.localeCompare(da);
+                });
+                if (rows.length === 0) {
+                    ordersTable.innerHTML = '<p class="muted">Nessun ordine trovato.</p>';
+                } else {
+                    let html = '<table><tr><th>#</th><th>Data</th><th>Cliente</th><th>Numero</th><th>Descrizione</th><th>Importo</th><th>Stato</th></tr>';
+                    rows.forEach((r, i) => {
+                        const d = r.order.date || (r.order.createdAt ? r.order.createdAt.slice(0, 10) : '');
+                        html += `<tr>
+                            <td>${i + 1}</td>
+                            <td>${escapeHtml(d)}</td>
+                            <td>${escapeHtml(r.client)}</td>
+                            <td><strong>${escapeHtml(r.order.number || '')}</strong></td>
+                            <td>${escapeHtml(r.order.description || '')}</td>
+                            <td>${typeof r.order.amount === 'number' ? 'CHF ' + r.order.amount.toFixed(2) : ''}</td>
+                            <td><span class="chip">${escapeHtml(r.order.status || '')}</span></td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                    ordersTable.innerHTML = html;
+                }
+            }
+
+            const backupsList = document.getElementById('backupsList');
+            if (daily.length === 0 && rolling.length === 0) {
+                backupsList.innerHTML = '<p class="muted">Nessun backup interno in questo browser (il sistema di backup è attivo dalla versione 2.2).</p>';
+            } else {
+                let html = '';
+                if (daily.length) {
+                    html += '<h3 style="font-size:14px;margin:8px 0">📅 Giornalieri</h3><table><tr><th>Giorno</th><th>Clienti</th><th>Azioni</th></tr>';
+                    daily.forEach(b => {
+                        const n = b.data && typeof b.data.clientsCount === 'number' ? b.data.clientsCount : '?';
+                        html += `<tr>
+                            <td>${b.date}</td>
+                            <td>${n}</td>
+                            <td><button class="secondary" data-kind="daily" data-key="${b.key}">Scarica</button></td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                }
+                if (rolling.length) {
+                    html += '<h3 style="font-size:14px;margin:14px 0 8px">🕒 Ultimi salvataggi</h3><table><tr><th>#</th><th>Quando</th><th>Clienti</th><th>Azioni</th></tr>';
+                    rolling.forEach((r, i) => {
+                        const when = r && r.savedAt ? new Date(r.savedAt).toLocaleString('it-IT') : '?';
+                        const n = r && typeof r.clientsCount === 'number' ? r.clientsCount : (Array.isArray(r.clients) ? r.clients.length : '?');
+                        html += `<tr>
+                            <td>R${i + 1}</td>
+                            <td>${escapeHtml(when)}</td>
+                            <td>${n}</td>
+                            <td><button class="secondary" data-kind="rolling" data-idx="${i}">Scarica</button></td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                }
+                backupsList.innerHTML = html;
+
+                backupsList.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const kind = btn.dataset.kind;
+                        if (kind === 'daily') {
+                            const raw = localStorage.getItem(btn.dataset.key);
+                            downloadText(raw, btn.dataset.key + '.json');
+                        } else {
+                            const idx = parseInt(btn.dataset.idx, 10);
+                            downloadText(JSON.stringify(rolling[idx], null, 2), `rolling-${idx + 1}.json`);
+                        }
+                    });
+                });
+            }
+
+            const rawData = document.getElementById('rawData');
+            rawData.textContent = localStorage.getItem(PRIMARY_KEY) || '(nessun dato)';
+        }
+
+        function buildFullExport() {
+            return {
+                type: 'gestionale-3dmakes-recovery-dump',
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                orderCounter: readCounter(),
+                clients: readCurrent(),
+                backups: readBackups()
+            };
+        }
+
+        function downloadText(text, filename) {
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 500);
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', render);
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            downloadText(JSON.stringify(buildFullExport(), null, 2), `gestionale-recupero-${stamp}.json`);
+        });
+        document.getElementById('copyBtn').addEventListener('click', async () => {
+            const text = JSON.stringify(buildFullExport(), null, 2);
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('✅ JSON copiato negli appunti');
+            } catch (e) {
+                alert('❌ Impossibile copiare automaticamente. Usa il pulsante Scarica.');
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>

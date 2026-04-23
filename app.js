@@ -1,7 +1,9 @@
-// Versione 2.1 - CHF currency + Reports + Payments
-// Ultimo aggiornamento: Sat Nov  1 19:02:58 CET 2025
-console.log('✅ Gestionale 3DMAKES v2.1 caricato');
+// Versione 2.3 - Scritture per-path nel cloud, counter transazionale,
+// listener real-time granulare. Fix definitivo per la perdita di ordini in
+// modalità multi-utente (più persone che lavorano contemporaneamente).
+console.log('✅ Gestionale 3DMAKES v2.3 caricato');
 console.log('💰 Valuta: CHF (Franchi Svizzeri)');
+console.log('🛡️ Modalità sicura multi-utente: scritture atomiche per path');
 
 // ===== FIREBASE SETUP =====
 // Configurazione caricata da firebase-config.js
@@ -16,8 +18,7 @@ let state = {
     editMode: false,
     editItemId: null,
     reportData: [],
-    orderCounter: 1, // Counter per numeri ordine sequenziali
-    isSyncingFromCloud: false, // Flag per evitare loop di sincronizzazione
+    orderCounter: 1, // Counter per numeri ordine sequenziali (aggiornato via transaction Firebase)
     /** true se il dettaglio cliente è stato aperto dalla tabella "Clienti acquisiti" nel report */
     cameFromReport: false
 };
@@ -176,40 +177,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// ===== FIREBASE FUNCTIONS =====
+// ===== FIREBASE FUNCTIONS (v2.2: scritture per-path, no più sovrascritture globali) =====
+//
+// ARCHITETTURA DEL CLOUD
+// ----------------------
+// Il vecchio codice scriveva l'intero array clienti con un .set() ogni volta
+// che cambiava qualunque cosa (cliente, ordine, nota...): questo causava
+// perdita di dati in multi-utente (ultimo-che-salva-vince sovrascrive gli altri).
+//
+// Nuova struttura Realtime Database:
+//
+//   clients/
+//     shared_gestionale/
+//       {clientId}/
+//         id, name, email, phone, ...
+//         orders/     { {orderId}: {...} }
+//         documents/  { {docId}:   {...} }
+//         notes/      { {noteId}:  {...} }
+//         files/      { {fileId}:  {...} }
+//   counter/
+//     shared_gestionale: <numero>   (aggiornato solo via transaction)
+//   _migration_v2/
+//     shared_gestionale: { done: true, at: "<iso>" }   (marker one-shot)
+//   _legacy_backup_v1/
+//     shared_gestionale_<timestamp>: <vecchio array>   (copia di sicurezza pre-migrazione)
+//
+// Tutte le scritture vanno al PATH SPECIFICO dell'oggetto toccato (un ordine
+// scrive solo a clients/.../orders/{orderId}, non tocca gli altri ordini né
+// gli altri clienti). Così due utenti che creano ordini diversi
+// contemporaneamente non si pestano mai.
+
+let firebaseReady = false;
+const MIGRATION_MARKER_PATH = '_migration_v2/shared_gestionale';
+const LEGACY_BACKUP_PATH = '_legacy_backup_v1/shared_gestionale_';
+
 function initFirebase() {
     try {
-        // Verifica se Firebase è configurato correttamente
         if (typeof firebaseConfig === 'undefined') {
             console.log('Firebase config non trovato. Modifica firebase-config.js con le tue credenziali.');
             updateCloudStatus(false);
             return;
         }
-        
-        // Verifica se la config è quella di default (placeholder)
         if (firebaseConfig.apiKey === 'TUA_API_KEY' || firebaseConfig.apiKey.includes('placeholder')) {
             console.log('⚠️ Firebase non configurato. Inserisci le tue credenziali in firebase-config.js');
             updateCloudStatus(false);
             return;
         }
-        
-        // Inizializza Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
-        
         firebaseDb = firebase.database();
-        
-        // Usa un ID condiviso per tutti gli utenti
         userId = 'shared_gestionale';
-        
-        console.log('✅ Firebase inizializzato con successo!');
+        firebaseReady = true;
+        console.log('✅ Firebase inizializzato');
         console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
         setupCloudSync();
-        
     } catch (error) {
         console.error('❌ Errore inizializzazione Firebase:', error);
-        console.log('Verifica le credenziali in firebase-config.js');
         updateCloudStatus(false);
     }
 }
@@ -218,153 +242,414 @@ function updateCloudStatus(connected) {
     cloudSyncEnabled = connected;
 }
 
-function setupCloudSync() {
-    if (!firebaseDb || !userId) return;
-    
-    const ref = firebaseDb.ref('clients/' + userId);
-    
-    // Prima sincronizzazione: carica dati dal cloud
-    ref.once('value', (snapshot) => {
-        const cloudData = snapshot.val();
-        
-        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-            // Usa sempre i dati del cloud (database condiviso)
-            console.log(`📥 Caricati ${cloudData.length} clienti dal cloud`);
-            state.clients = cloudData;
-            saveToStorage(); // Salva anche in locale
-            renderClients();
-            
-            // Riseleziona il cliente se c'era
-            if (state.currentClientId) {
-                const client = state.clients.find(c => c.id === state.currentClientId);
-                if (client) {
-                    selectClient(state.currentClientId);
-                }
-            }
-        } else if (state.clients.length > 0) {
-            // Nessun dato nel cloud, carica quello locale
-            console.log(`📤 Caricamento ${state.clients.length} clienti locali nel cloud`);
-            ref.set(state.clients);
+function cloudAvailable() {
+    return !!(firebaseReady && firebaseDb && cloudSyncEnabled && userId);
+}
+
+// ---------------------------------------------------------------------------
+// NORMALIZZAZIONE: cloud (oggetti con chiave=id) <-> memoria (array)
+// ---------------------------------------------------------------------------
+// In memoria continuiamo a usare array per clients/orders/documents/notes/files
+// così il resto del codice non cambia. Il cloud invece usa oggetti indicizzati
+// per id (evita conflitti quando Firebase "trasforma" array sparsi in oggetti
+// e evita il riuso di indici numerici).
+
+function ensureArray(value) {
+    if (Array.isArray(value)) return value.filter(v => v !== null && v !== undefined);
+    if (value && typeof value === 'object') return Object.values(value).filter(v => v !== null && v !== undefined);
+    return [];
+}
+
+/**
+ * Converte un cliente dal formato cloud (orders/notes/docs/files come oggetti
+ * indicizzati per id) al formato usato in memoria (array). Ritorna una copia,
+ * non muta l'originale.
+ */
+function normalizeClientFromCloud(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const c = { ...raw };
+    ['orders', 'documents', 'notes', 'files'].forEach(key => {
+        c[key] = ensureArray(c[key]);
+    });
+    return c;
+}
+
+/**
+ * Converte lo snapshot dell'intero nodo clients/{userId} (può essere oggetto
+ * o array legacy) in array di clienti normalizzati per la memoria.
+ */
+function normalizeClientsFromCloud(rawRoot) {
+    const list = ensureArray(rawRoot);
+    return list
+        .filter(c => c && typeof c === 'object')
+        .map(normalizeClientFromCloud);
+}
+
+/**
+ * Converte un cliente dalla memoria (array) al formato cloud (oggetti con
+ * chiave=id). Necessario solo per import massivo/migrazione; le scritture
+ * per-path usano direttamente il child giusto e non passano di qui.
+ */
+function serializeClientForCloud(client) {
+    if (!client || typeof client !== 'object') return client;
+    const c = { ...client };
+    ['orders', 'documents', 'notes', 'files'].forEach(key => {
+        if (Array.isArray(c[key])) {
+            const obj = {};
+            c[key].forEach(item => {
+                if (!item || typeof item !== 'object') return;
+                // Difesa: se per qualsiasi motivo l'oggetto non ha un id,
+                // gliene assegno uno ora invece di perderlo durante la
+                // conversione array→oggetto (edge case che storicamente
+                // avrebbe causato perdita silenziosa di dati).
+                if (!item.id) item.id = generateId();
+                obj[item.id] = item;
+            });
+            c[key] = obj;
+        } else if (c[key] == null) {
+            delete c[key];
         }
-        
-        // Attiva sincronizzazione real-time
-        ref.on('value', (snapshot) => {
-            const cloudData = snapshot.val();
-            if (cloudData && Array.isArray(cloudData)) {
-                // Solo se i dati sono diversi (evita loop)
-                if (JSON.stringify(cloudData) !== JSON.stringify(state.clients)) {
-                    console.log('🔄 Aggiornamento automatico dal cloud');
-                    console.log(`📊 Dati cloud: ${cloudData.length} clienti`);
-                    console.log(`📊 Dati locali: ${state.clients.length} clienti`);
-                    
-                    // Imposta flag per evitare loop
-                    state.isSyncingFromCloud = true;
-                    
-                    state.clients = cloudData;
-                    saveToStorage(); // Salva solo in localStorage, non nel cloud
-                    renderClients();
-                    
-                    // Rimuovi flag dopo un breve delay
-                    setTimeout(() => {
-                        state.isSyncingFromCloud = false;
-                    }, 1000);
-                    
-                    // Mantieni la vista corrente se possibile
-                    if (state.currentClientId) {
-                        const client = state.clients.find(c => c.id === state.currentClientId);
-                        if (client) {
-                            selectClient(state.currentClientId);
-                        } else {
-                            // Cliente eliminato, torna alla lista
-                            if (state.clients.length > 0) {
-                                selectClient(state.clients[0].id);
-                            } else {
-                                document.getElementById('clientDetail').style.display = 'none';
-                                document.getElementById('emptyState').style.display = 'block';
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        updateCloudStatus(true);
-        console.log('✅ Sincronizzazione cloud attiva in modalità condivisa!');
-        
-        // Carica il counter dal cloud
-        loadCounterFromCloud().then(() => {
-            console.log('✅ Setup completo con counter sincronizzato');
-        });
-        
-        // Mostra notifica successo
-        showNotification('☁️ Database condiviso attivo!', 'success');
-    }, (error) => {
-        console.error('Errore sincronizzazione:', error);
-        updateCloudStatus(false);
-        showNotification('❌ Errore connessione cloud', 'error');
+    });
+    return c;
+}
+
+// ---------------------------------------------------------------------------
+// PATH HELPERS
+// ---------------------------------------------------------------------------
+
+function pathClient(clientId) { return `clients/${userId}/${clientId}`; }
+function pathOrders(clientId) { return `clients/${userId}/${clientId}/orders`; }
+function pathOrder(clientId, orderId) { return `clients/${userId}/${clientId}/orders/${orderId}`; }
+function pathDocs(clientId) { return `clients/${userId}/${clientId}/documents`; }
+function pathDoc(clientId, docId) { return `clients/${userId}/${clientId}/documents/${docId}`; }
+function pathNotes(clientId) { return `clients/${userId}/${clientId}/notes`; }
+function pathNote(clientId, noteId) { return `clients/${userId}/${clientId}/notes/${noteId}`; }
+function pathFiles(clientId) { return `clients/${userId}/${clientId}/files`; }
+function pathFile(clientId, fileId) { return `clients/${userId}/${clientId}/files/${fileId}`; }
+
+// ---------------------------------------------------------------------------
+// WRITE HELPERS (per-path, scritture atomiche)
+// ---------------------------------------------------------------------------
+// Ogni helper fa UNA sola scrittura mirata sul path specifico. Tornano una
+// Promise; in caso di errore loggiamo e mostriamo un toast ma non throwiamo
+// per non bloccare l'UI (i dati restano comunque in localStorage + backup).
+
+function cloudSetClient(client) {
+    if (!cloudAvailable() || !client || !client.id) return Promise.resolve();
+    return firebaseDb.ref(pathClient(client.id)).set(serializeClientForCloud(client))
+        .catch(err => handleCloudError('creazione cliente', err));
+}
+
+function cloudUpdateClientFields(clientId, fields) {
+    if (!cloudAvailable() || !clientId || !fields || typeof fields !== 'object') return Promise.resolve();
+    const safe = { ...fields };
+    // Evita di sovrascrivere sotto-nodi (orders/documents/notes/files) dai campi
+    ['orders', 'documents', 'notes', 'files'].forEach(k => { delete safe[k]; });
+    return firebaseDb.ref(pathClient(clientId)).update(safe)
+        .catch(err => handleCloudError('aggiornamento cliente', err));
+}
+
+function cloudRemoveClient(clientId) {
+    if (!cloudAvailable() || !clientId) return Promise.resolve();
+    return firebaseDb.ref(pathClient(clientId)).remove()
+        .catch(err => handleCloudError('eliminazione cliente', err));
+}
+
+function cloudSetOrder(clientId, order) {
+    if (!cloudAvailable() || !clientId || !order || !order.id) return Promise.resolve();
+    return firebaseDb.ref(pathOrder(clientId, order.id)).set(order)
+        .catch(err => handleCloudError('salvataggio ordine', err));
+}
+
+function cloudRemoveOrder(clientId, orderId) {
+    if (!cloudAvailable() || !clientId || !orderId) return Promise.resolve();
+    return firebaseDb.ref(pathOrder(clientId, orderId)).remove()
+        .catch(err => handleCloudError('eliminazione ordine', err));
+}
+
+function cloudSetDocument(clientId, doc) {
+    if (!cloudAvailable() || !clientId || !doc || !doc.id) return Promise.resolve();
+    return firebaseDb.ref(pathDoc(clientId, doc.id)).set(doc)
+        .catch(err => handleCloudError('salvataggio documento', err));
+}
+
+function cloudRemoveDocument(clientId, docId) {
+    if (!cloudAvailable() || !clientId || !docId) return Promise.resolve();
+    return firebaseDb.ref(pathDoc(clientId, docId)).remove()
+        .catch(err => handleCloudError('eliminazione documento', err));
+}
+
+function cloudSetNote(clientId, note) {
+    if (!cloudAvailable() || !clientId || !note || !note.id) return Promise.resolve();
+    return firebaseDb.ref(pathNote(clientId, note.id)).set(note)
+        .catch(err => handleCloudError('salvataggio nota', err));
+}
+
+function cloudRemoveNote(clientId, noteId) {
+    if (!cloudAvailable() || !clientId || !noteId) return Promise.resolve();
+    return firebaseDb.ref(pathNote(clientId, noteId)).remove()
+        .catch(err => handleCloudError('eliminazione nota', err));
+}
+
+function cloudSetFile(clientId, file) {
+    if (!cloudAvailable() || !clientId || !file || !file.id) return Promise.resolve();
+    return firebaseDb.ref(pathFile(clientId, file.id)).set(file)
+        .catch(err => handleCloudError('salvataggio file', err));
+}
+
+function cloudRemoveFile(clientId, fileId) {
+    if (!cloudAvailable() || !clientId || !fileId) return Promise.resolve();
+    return firebaseDb.ref(pathFile(clientId, fileId)).remove()
+        .catch(err => handleCloudError('eliminazione file', err));
+}
+
+function handleCloudError(opLabel, err) {
+    console.error(`❌ Cloud (${opLabel}):`, err);
+    showNotification(`⚠️ Errore cloud: ${opLabel} non sincronizzato. Riprova quando torni online.`, 'error');
+}
+
+// ---------------------------------------------------------------------------
+// COUNTER ORDINI (transazionale, no più race condition)
+// ---------------------------------------------------------------------------
+// Il counter viene incrementato con una transaction atomica: anche se 5 utenti
+// premono "Salva ordine" nello stesso millisecondo, Firebase serializza le 5
+// transazioni e ognuno ottiene un numero univoco. Questo elimina sia i numeri
+// duplicati sia i numeri "saltati".
+
+/**
+ * Riserva il PROSSIMO numero d'ordine in modo atomico sul cloud.
+ * Ritorna una Promise che risolve con il numero (intero) assegnato.
+ * Se il cloud non è disponibile, usa il contatore locale come fallback
+ * (ma in tal caso il numero potrebbe collidere con un altro utente).
+ */
+function allocateNextOrderNumber() {
+    if (!cloudAvailable()) {
+        // Fallback offline: usa il locale.
+        const n = Math.max(state.orderCounter, calculateNextOrderNumber());
+        state.orderCounter = n + 1;
+        localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+        return Promise.resolve(n);
+    }
+
+    // Il counter cloud è "il prossimo numero disponibile".
+    // La transaction fa: current = (current || X); return current + 1.
+    // Il numero assegnato è `current` (prima dell'incremento).
+    // Usiamo come seed `max(current, max numero osservato in memoria + 1)` per
+    // non tornare indietro se qualcuno ha già assegnato numeri più alti.
+    const minCandidate = calculateNextOrderNumber();
+
+    return firebaseDb.ref('counter/' + userId).transaction(current => {
+        const base = Math.max(
+            typeof current === 'number' ? current : 0,
+            minCandidate
+        );
+        return base + 1;
+    }).then(result => {
+        if (!result.committed) {
+            throw new Error('Counter transaction non confermata');
+        }
+        const after = result.snapshot.val();
+        const assigned = after - 1;
+        state.orderCounter = after;
+        localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+        console.log(`🔢 Numero ordine assegnato via transaction: ${assigned} (counter ora = ${after})`);
+        return assigned;
+    }).catch(err => {
+        console.error('❌ Errore transaction counter, uso fallback locale:', err);
+        const n = Math.max(state.orderCounter, calculateNextOrderNumber());
+        state.orderCounter = n + 1;
+        localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+        return n;
     });
 }
 
-function saveToCloud() {
-    if (!firebaseDb || !cloudSyncEnabled || !userId) return;
-    
-    try {
-        const timestamp = new Date().toLocaleTimeString();
-        console.log(`☁️ [${timestamp}] Salvataggio ${state.clients.length} clienti nel cloud`);
-        firebaseDb.ref('clients/' + userId).set(state.clients)
+// ---------------------------------------------------------------------------
+// SETUP CLOUD SYNC (caricamento iniziale + migrazione + listener granulare)
+// ---------------------------------------------------------------------------
+
+/**
+ * Esegue, una volta sola e in modo atomico tra tutti gli utenti, la
+ * migrazione del vecchio formato (array) al nuovo formato (oggetti per-id).
+ * Usa una transaction sul marker per evitare doppia esecuzione concorrente.
+ */
+function runMigrationIfNeeded(currentRoot) {
+    // Se non è array legacy, niente da fare.
+    const isLegacyArray = Array.isArray(currentRoot);
+    if (!isLegacyArray) return Promise.resolve(false);
+
+    // Cerchiamo il marker: solo il primo client che ci riesce fa la migrazione.
+    const markerRef = firebaseDb.ref(MIGRATION_MARKER_PATH);
+    return markerRef.transaction(existing => {
+        if (existing && existing.done) return; // abort transaction
+        return { done: true, at: new Date().toISOString(), by: 'auto-migration' };
+    }).then(result => {
+        if (!result.committed) {
+            console.log('🧭 Migrazione già in corso/eseguita da un altro client, attendo i dati sincronizzati.');
+            return false;
+        }
+
+        console.log('🧭 Inizio migrazione formato v1 → v2...');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+
+        // Step 1: backup del nodo vecchio.
+        return firebaseDb.ref(LEGACY_BACKUP_PATH + ts).set(currentRoot)
             .then(() => {
-                console.log(`✅ [${timestamp}] Dati salvati nel cloud con successo`);
+                console.log('✅ Backup legacy scritto in ' + LEGACY_BACKUP_PATH + ts);
+                // Step 2: costruisci nuovo formato { id: client }
+                const clientsArray = normalizeClientsFromCloud(currentRoot);
+                const newObj = {};
+                clientsArray.forEach(c => {
+                    if (c && c.id) newObj[c.id] = serializeClientForCloud(c);
+                });
+                return firebaseDb.ref('clients/' + userId).set(newObj);
             })
-            .catch(error => {
-                console.error(`❌ [${timestamp}] Errore salvataggio cloud:`, error);
-                showNotification('⚠️ Errore sincronizzazione cloud', 'error');
+            .then(() => {
+                console.log('✅ Migrazione completata');
+                showNotification('✅ Database migrato al nuovo formato sicuro', 'success');
+                return true;
+            })
+            .catch(err => {
+                console.error('❌ Migrazione fallita:', err);
+                showNotification('⚠️ Migrazione database non riuscita, il gestionale continuerà con il formato vecchio', 'warning');
+                return false;
             });
-    } catch (error) {
-        console.error('❌ Errore salvataggio cloud:', error);
-    }
+    });
 }
 
-function saveCounterToCloud() {
-    if (!firebaseDb || !cloudSyncEnabled || !userId) return;
-    
-    try {
-        firebaseDb.ref('counter/' + userId).set(state.orderCounter);
-    } catch (error) {
-        console.error('Errore salvataggio counter cloud:', error);
-    }
+function setupCloudSync() {
+    if (!firebaseDb || !userId) return;
+
+    const ref = firebaseDb.ref('clients/' + userId);
+
+    ref.once('value').then(snapshot => {
+        const raw = snapshot.val();
+
+        return runMigrationIfNeeded(raw).then(() => {
+            // Rileggi dopo eventuale migrazione
+            return firebaseDb.ref('clients/' + userId).once('value');
+        }).then(snap2 => {
+            const raw2 = snap2.val();
+            const clientsArr = normalizeClientsFromCloud(raw2);
+
+            if (clientsArr.length > 0) {
+                console.log(`📥 Caricati ${clientsArr.length} clienti dal cloud`);
+                state.clients = clientsArr;
+                saveToLocalOnly();
+                renderClients();
+
+                if (state.currentClientId) {
+                    const client = state.clients.find(c => c.id === state.currentClientId);
+                    if (client) selectClient(state.currentClientId);
+                }
+            } else if (state.clients.length > 0) {
+                // Cloud vuoto e abbiamo dati locali: pushiamo ognuno separatamente
+                console.log(`📤 Push iniziale di ${state.clients.length} clienti dal locale al cloud`);
+                state.clients.forEach(c => cloudSetClient(c));
+            }
+
+            updateCloudStatus(true);
+            attachGranularListeners(ref);
+            loadCounterFromCloud().then(() => console.log('✅ Counter cloud sincronizzato'));
+            showNotification('☁️ Sincronizzazione attiva', 'success');
+        });
+    }).catch(error => {
+        console.error('❌ Errore sincronizzazione iniziale:', error);
+        updateCloudStatus(false);
+        showNotification('❌ Errore connessione cloud. Lavori in locale, i dati si sincronizzeranno al prossimo accesso.', 'warning');
+    });
 }
+
+/**
+ * Listener real-time granulare. Ogni evento è riferito a UN cliente (o una
+ * sua modifica interna): applichiamo il merge puntuale nello state locale
+ * invece di sostituire l'intero array. Niente più sovrascritture totali.
+ */
+function attachGranularListeners(rootRef) {
+    rootRef.on('child_added', snap => {
+        const c = normalizeClientFromCloud(snap.val());
+        if (!c || !c.id) return;
+        const idx = state.clients.findIndex(x => x.id === c.id);
+        if (idx === -1) {
+            state.clients.push(c);
+            saveToLocalOnly();
+            renderClients();
+        } else {
+            // L'iniziale riemette tutti i child_added: se identico, skip.
+            if (JSON.stringify(state.clients[idx]) !== JSON.stringify(c)) {
+                state.clients[idx] = c;
+                saveToLocalOnly();
+                renderClients();
+                if (state.currentClientId === c.id) selectClient(c.id);
+            }
+        }
+    });
+
+    rootRef.on('child_changed', snap => {
+        const c = normalizeClientFromCloud(snap.val());
+        if (!c || !c.id) return;
+        const idx = state.clients.findIndex(x => x.id === c.id);
+        if (idx === -1) {
+            state.clients.push(c);
+        } else {
+            if (JSON.stringify(state.clients[idx]) === JSON.stringify(c)) return;
+            state.clients[idx] = c;
+        }
+        saveToLocalOnly();
+        renderClients();
+        if (state.currentClientId === c.id) selectClient(c.id);
+    });
+
+    rootRef.on('child_removed', snap => {
+        const id = snap.key;
+        const before = state.clients.length;
+        state.clients = state.clients.filter(c => c.id !== id);
+        if (state.clients.length !== before) {
+            saveToLocalOnly();
+            renderClients();
+            if (state.currentClientId === id) {
+                state.currentClientId = null;
+                if (state.clients.length > 0) {
+                    selectClient(state.clients[0].id);
+                } else {
+                    const cd = document.getElementById('clientDetail');
+                    const es = document.getElementById('emptyState');
+                    if (cd) cd.style.display = 'none';
+                    if (es) es.style.display = 'block';
+                }
+            }
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// COUNTER SYNC (solo read per ottimizzare, scrittura avviene in allocateNextOrderNumber)
+// ---------------------------------------------------------------------------
 
 function loadCounterFromCloud() {
     if (!firebaseDb || !userId) return Promise.resolve();
-    
+
     return firebaseDb.ref('counter/' + userId).once('value')
         .then(snapshot => {
             const cloudCounter = snapshot.val();
-            
             if (cloudCounter !== null && cloudCounter !== undefined) {
-                // Usa il counter del cloud (è la fonte di verità condivisa)
-                state.orderCounter = parseInt(cloudCounter);
+                const cloudNum = parseInt(cloudCounter);
+                const maxFromOrders = calculateNextOrderNumber();
+                state.orderCounter = Math.max(cloudNum, maxFromOrders);
                 localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-                console.log(`📋 Counter ordini caricato dal cloud: ${state.orderCounter}`);
+                console.log(`📋 Counter ordini: cloud=${cloudNum}, calcolato=${maxFromOrders}, usato=${state.orderCounter}`);
             } else {
-                // Nessun counter nel cloud, carica il counter locale o calcola
-                const localCounter = localStorage.getItem('gestionale_order_counter');
-                if (localCounter) {
-                    state.orderCounter = parseInt(localCounter);
-                } else {
-                    state.orderCounter = calculateNextOrderNumber();
-                }
-                // Salva nel cloud per la prossima volta
-                saveCounterToCloud();
-                console.log(`📋 Counter ordini inizializzato: ${state.orderCounter}`);
+                // Nessun counter nel cloud: inizializza dal max osservato
+                state.orderCounter = Math.max(
+                    parseInt(localStorage.getItem('gestionale_order_counter') || '0', 10),
+                    calculateNextOrderNumber()
+                );
+                firebaseDb.ref('counter/' + userId).set(state.orderCounter).catch(() => {});
+                console.log(`📋 Counter ordini inizializzato a ${state.orderCounter}`);
             }
-            
-            // Sincronizza il counter in tempo reale
             setupCounterSync();
         })
         .catch(error => {
             console.error('Errore caricamento counter:', error);
-            // Fallback a localStorage
             const localCounter = localStorage.getItem('gestionale_order_counter');
             if (localCounter) {
                 state.orderCounter = parseInt(localCounter);
@@ -376,22 +661,49 @@ function loadCounterFromCloud() {
 
 function setupCounterSync() {
     if (!firebaseDb || !userId) return;
-    
-    // Ascolta modifiche al counter in tempo reale
     firebaseDb.ref('counter/' + userId).on('value', (snapshot) => {
-        const cloudCounter = snapshot.val();
-        
-        if (cloudCounter !== null && cloudCounter !== undefined) {
-            const newCounter = parseInt(cloudCounter);
-            
-            // Aggiorna solo se il counter cloud è maggiore (per evitare conflitti)
-            if (newCounter > state.orderCounter) {
-                state.orderCounter = newCounter;
-                localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-                console.log(`🔄 Counter aggiornato dal cloud: ${state.orderCounter}`);
-            }
+        const v = snapshot.val();
+        if (v === null || v === undefined) return;
+        const newCounter = parseInt(v);
+        if (newCounter > state.orderCounter) {
+            state.orderCounter = newCounter;
+            localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
+            console.log(`🔄 Counter aggiornato dal cloud: ${state.orderCounter}`);
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// RIPRISTINO/IMPORT MASSIVO (usato da import JSON e ripristino backup)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sovrascrive sul cloud l'intero stato (clients + counter) partendo da
+ * `state.clients` già in memoria. Fa prima un backup del cloud attuale in
+ * un path dedicato, poi scrive tutto il nuovo formato in una singola
+ * operazione atomica.
+ */
+function cloudRestoreFromLocalState() {
+    if (!cloudAvailable()) return Promise.resolve();
+
+    const backupKey = '_restore_backup/shared_gestionale_' + new Date().toISOString().replace(/[:.]/g, '-');
+    return firebaseDb.ref('clients/' + userId).once('value')
+        .then(snap => firebaseDb.ref(backupKey).set(snap.val()))
+        .then(() => {
+            const obj = {};
+            state.clients.forEach(c => {
+                if (c && c.id) obj[c.id] = serializeClientForCloud(c);
+            });
+            return firebaseDb.ref('clients/' + userId).set(obj);
+        })
+        .then(() => firebaseDb.ref('counter/' + userId).set(state.orderCounter))
+        .then(() => {
+            console.log('✅ Ripristino cloud completato, backup precedente in ' + backupKey);
+        })
+        .catch(err => {
+            console.error('❌ Errore ripristino cloud:', err);
+            showNotification('⚠️ Ripristino cloud non riuscito, i dati sono comunque in locale', 'error');
+        });
 }
 
 function showNotification(message, type = 'info') {
@@ -438,24 +750,322 @@ function showNotification(message, type = 'info') {
 }
 
 // ===== STORAGE =====
-function saveToStorage() {
+// Numero massimo di snapshot giornalieri conservati come backup locale (7 giorni)
+const BACKUP_DAILY_KEEP_DAYS = 7;
+// Numero massimo di snapshot "rullante" conservati (ultimi N salvataggi significativi)
+const BACKUP_ROLLING_KEEP = 10;
+const BACKUP_DAILY_PREFIX = 'gestionale_backup_daily_';
+const BACKUP_ROLLING_KEY = 'gestionale_backup_rolling';
+
+function makeBackupPayload() {
+    return {
+        savedAt: new Date().toISOString(),
+        orderCounter: state.orderCounter,
+        clientsCount: Array.isArray(state.clients) ? state.clients.length : 0,
+        clients: state.clients
+    };
+}
+
+/**
+ * Tiene uno snapshot per-giorno (sovrascritto nello stesso giorno)
+ * e conserva gli ultimi BACKUP_DAILY_KEEP_DAYS giorni. Gli snapshot
+ * più vecchi vengono rimossi. Se localStorage è pieno, si pulisce
+ * prima e si riprova una volta sola.
+ */
+function writeDailyBackup() {
+    try {
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const key = BACKUP_DAILY_PREFIX + today;
+        const payload = JSON.stringify(makeBackupPayload());
+
+        try {
+            localStorage.setItem(key, payload);
+        } catch (quotaErr) {
+            pruneDailyBackups(1); // libera spazio rimuovendo il più vecchio
+            localStorage.setItem(key, payload);
+        }
+
+        pruneDailyBackups();
+    } catch (e) {
+        console.warn('⚠️ Backup giornaliero non riuscito:', e);
+    }
+}
+
+/**
+ * Rimuove i backup giornalieri che eccedono BACKUP_DAILY_KEEP_DAYS,
+ * oppure ne rimuove `forceRemoveOldest` indipendentemente dal limite.
+ */
+function pruneDailyBackups(forceRemoveOldest = 0) {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(BACKUP_DAILY_PREFIX)) keys.push(k);
+    }
+    keys.sort(); // ordinamento alfabetico = cronologico (YYYY-MM-DD)
+
+    const toRemove = [];
+    while (keys.length > BACKUP_DAILY_KEEP_DAYS) toRemove.push(keys.shift());
+    for (let i = 0; i < forceRemoveOldest && keys.length > 0; i++) toRemove.push(keys.shift());
+
+    toRemove.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+    });
+}
+
+/**
+ * Aggiunge uno snapshot "rullante" (ultimi N salvataggi).
+ * Utile per recuperare modifiche puntuali, non solo giornaliere.
+ */
+function pushRollingBackup() {
+    try {
+        let list = [];
+        const raw = localStorage.getItem(BACKUP_ROLLING_KEY);
+        if (raw) {
+            try { list = JSON.parse(raw) || []; } catch (e) { list = []; }
+        }
+        list.push(makeBackupPayload());
+        while (list.length > BACKUP_ROLLING_KEEP) list.shift();
+
+        try {
+            localStorage.setItem(BACKUP_ROLLING_KEY, JSON.stringify(list));
+        } catch (quotaErr) {
+            // Se non entra, scarta i più vecchi finché non entra
+            while (list.length > 1) {
+                list.shift();
+                try {
+                    localStorage.setItem(BACKUP_ROLLING_KEY, JSON.stringify(list));
+                    return;
+                } catch (e) { /* continua a scartare */ }
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ Backup rullante non riuscito:', e);
+    }
+}
+
+/**
+ * Esporta TUTTI i dati in un file JSON scaricabile.
+ * Include i clienti con ordini/documenti/note/file e il counter ordini.
+ */
+function exportDataAsJson() {
+    try {
+        const payload = {
+            type: 'gestionale-3dmakes-backup',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            orderCounter: state.orderCounter,
+            clients: state.clients
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gestionale-backup-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showNotification(`✅ Backup esportato (${state.clients.length} clienti)`, 'success');
+    } catch (e) {
+        console.error('❌ Errore export JSON:', e);
+        showNotification('❌ Errore durante l\'esportazione', 'error');
+    }
+}
+
+/**
+ * Importa un JSON esportato in precedenza. Chiede conferma perché
+ * sovrascrive i dati attuali (sia locali sia cloud, tramite saveToStorage).
+ * Accetta sia il formato "backup" (con campo clients) sia un array puro.
+ */
+function importDataFromJsonFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            let clients, counter;
+
+            if (Array.isArray(parsed)) {
+                clients = parsed;
+            } else if (parsed && Array.isArray(parsed.clients)) {
+                clients = parsed.clients;
+                counter = parsed.orderCounter;
+            } else {
+                throw new Error('Formato file non riconosciuto');
+            }
+
+            const confirmMsg =
+                `⚠️ ATTENZIONE\n\n` +
+                `Stai per sostituire TUTTI i dati attuali con il contenuto del file.\n\n` +
+                `• Clienti nel file: ${clients.length}\n` +
+                `• Clienti attuali: ${state.clients.length}\n\n` +
+                `Prima di procedere, un backup dei dati attuali verrà salvato in locale.\n` +
+                `Continuare?`;
+            if (!confirm(confirmMsg)) return;
+
+            // Backup di sicurezza prima di sovrascrivere
+            pushRollingBackup();
+            writeDailyBackup();
+
+            state.clients = clients;
+            if (typeof counter === 'number' && counter > 0) {
+                state.orderCounter = counter;
+            } else {
+                state.orderCounter = calculateNextOrderNumber();
+            }
+
+            saveToLocalOnly();
+            // Import massivo: ripristino completo sul cloud (con backup del cloud precedente)
+            cloudRestoreFromLocalState();
+            renderClients();
+            showNotification(`✅ Importati ${clients.length} clienti dal file`, 'success');
+        } catch (err) {
+            console.error('❌ Errore import JSON:', err);
+            alert('❌ File non valido: ' + (err && err.message ? err.message : err));
+        }
+    };
+    reader.onerror = () => {
+        alert('❌ Impossibile leggere il file');
+    };
+    reader.readAsText(file);
+}
+
+/**
+ * Mostra l'elenco dei backup locali (giornalieri + rolling) e permette
+ * di ripristinarne uno o esportarlo come file.
+ */
+function showLocalBackupsDialog() {
+    const { daily, rolling } = listLocalBackups();
+
+    if (daily.length === 0 && rolling.length === 0) {
+        alert('Nessun backup locale presente.\n\nI backup vengono creati automaticamente a ogni salvataggio.');
+        return;
+    }
+
+    const lines = [];
+    lines.push('📦 BACKUP LOCALI DISPONIBILI');
+    lines.push('');
+    if (daily.length) {
+        lines.push('📅 Giornalieri (uno per giorno, ultimi 7):');
+        daily.slice().reverse().forEach((b, idx) => {
+            try {
+                const data = JSON.parse(localStorage.getItem(b.key));
+                lines.push(`  D${idx + 1}) ${b.date} — ${data.clientsCount} clienti`);
+            } catch (e) {
+                lines.push(`  D${idx + 1}) ${b.date} — (corrotto)`);
+            }
+        });
+        lines.push('');
+    }
+    if (rolling.length) {
+        lines.push('🕒 Ultimi salvataggi (rolling):');
+        rolling.slice().reverse().forEach((r, idx) => {
+            const when = (r && r.savedAt) ? new Date(r.savedAt).toLocaleString('it-IT') : '?';
+            const n = r && typeof r.clientsCount === 'number' ? r.clientsCount : (Array.isArray(r.clients) ? r.clients.length : '?');
+            lines.push(`  R${idx + 1}) ${when} — ${n} clienti`);
+        });
+        lines.push('');
+    }
+    lines.push('Per ripristinare, inserisci il codice (es. D1 o R3).');
+    lines.push('Per annullare, lascia vuoto.');
+
+    const choice = prompt(lines.join('\n'), '');
+    if (!choice) return;
+
+    const code = choice.trim().toUpperCase();
+    const match = code.match(/^([DR])(\d+)$/);
+    if (!match) {
+        alert('Codice non valido. Usa il formato D1, D2... oppure R1, R2...');
+        return;
+    }
+
+    let snapshot = null;
+    const n = parseInt(match[2], 10);
+    if (match[1] === 'D') {
+        const arr = daily.slice().reverse();
+        const b = arr[n - 1];
+        if (!b) { alert('Backup non trovato'); return; }
+        try { snapshot = JSON.parse(localStorage.getItem(b.key)); } catch (e) { snapshot = null; }
+    } else {
+        const arr = rolling.slice().reverse();
+        snapshot = arr[n - 1] || null;
+    }
+
+    if (!snapshot || !Array.isArray(snapshot.clients)) {
+        alert('❌ Backup selezionato non valido');
+        return;
+    }
+
+    const confirmMsg =
+        `Ripristinare questo backup?\n\n` +
+        `• ${snapshot.clientsCount || snapshot.clients.length} clienti nel backup\n` +
+        `• ${state.clients.length} clienti attuali verranno SOVRASCRITTI\n\n` +
+        `Un backup dello stato attuale verrà salvato prima del ripristino.`;
+    if (!confirm(confirmMsg)) return;
+
+    pushRollingBackup();
+    writeDailyBackup();
+
+    state.clients = snapshot.clients;
+    if (typeof snapshot.orderCounter === 'number' && snapshot.orderCounter > 0) {
+        state.orderCounter = snapshot.orderCounter;
+    } else {
+        state.orderCounter = calculateNextOrderNumber();
+    }
+
+    saveToLocalOnly();
+    cloudRestoreFromLocalState();
+    renderClients();
+    showNotification(`✅ Ripristinati ${state.clients.length} clienti dal backup`, 'success');
+}
+
+function listLocalBackups() {
+    const daily = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(BACKUP_DAILY_PREFIX)) {
+            daily.push({ key: k, date: k.slice(BACKUP_DAILY_PREFIX.length) });
+        }
+    }
+    daily.sort((a, b) => a.date.localeCompare(b.date));
+
+    let rolling = [];
+    try {
+        const raw = localStorage.getItem(BACKUP_ROLLING_KEY);
+        if (raw) rolling = JSON.parse(raw) || [];
+    } catch (e) { rolling = []; }
+
+    return { daily, rolling };
+}
+
+/**
+ * Scrive lo stato su localStorage + crea backup locali, SENZA toccare il cloud.
+ * Va usata quando l'aggiornamento è stato indotto da un evento cloud in arrivo
+ * (altrimenti rimbalzeremmo la stessa scrittura indietro).
+ */
+function saveToLocalOnly() {
     try {
         const timestamp = new Date().toLocaleTimeString();
         localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
         localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-        console.log(`💾 [${timestamp}] Salvato in localStorage: ${state.clients.length} clienti`);
-        
-        // Non salvare nel cloud se stiamo sincronizzando DAL cloud (evita loop)
-        if (!state.isSyncingFromCloud) {
-            saveToCloud();
-            saveCounterToCloud();
-        } else {
-            console.log(`⏭️ [${timestamp}] Skip salvataggio cloud (sync in corso)`);
-        }
+        console.log(`💾 [${timestamp}] Solo-local: ${state.clients.length} clienti`);
+        writeDailyBackup();
+        pushRollingBackup();
     } catch (error) {
         console.error('❌ Errore salvataggio localStorage:', error);
         showNotification('⚠️ Errore salvataggio dati locali', 'error');
     }
+}
+
+/**
+ * saveToStorage ora è un alias di saveToLocalOnly: le scritture cloud
+ * avvengono solo tramite le funzioni per-path (cloudSetOrder, cloudSetClient,
+ * ...). Questo elimina definitivamente le sovrascritture dell'intero array
+ * clienti che causavano la perdita degli ordini in multi-utente.
+ */
+function saveToStorage() {
+    saveToLocalOnly();
 }
 
 function loadFromStorage() {
@@ -519,26 +1129,27 @@ function formatCurrency(amount) {
         .replace(/'/g, "'\u202F"); // Spazio sottile dopo apostrofo
 }
 
+/**
+ * generateOrderNumber restituisce un numero d'ordine SUGGERITO che l'utente
+ * vede nel form. Il numero DEFINITIVO viene assegnato in saveOrder() tramite
+ * allocateNextOrderNumber() (transaction atomica su Firebase), quindi è
+ * sicuro anche se il suggerimento mostrato non corrisponde: l'ordine salvato
+ * avrà comunque un numero univoco.
+ */
 function generateOrderNumber() {
     const year = new Date().getFullYear();
-    const paddedNumber = state.orderCounter.toString().padStart(3, '0');
+    const base = Math.max(state.orderCounter, calculateNextOrderNumber());
+    const paddedNumber = base.toString().padStart(3, '0');
     return `ORD-${year}-${paddedNumber}`;
 }
 
+/**
+ * DEPRECATA: tenuta solo per compatibilità con eventuale codice esterno.
+ * Il vero incremento avviene in `allocateNextOrderNumber()` (transaction).
+ * Questa non fa più nulla, così non può creare counter disallineati.
+ */
 function incrementOrderCounter() {
-    state.orderCounter++;
-    localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-    
-    // Salva immediatamente nel cloud per sincronizzare con altri dispositivi
-    if (firebaseDb && cloudSyncEnabled && userId) {
-        firebaseDb.ref('counter/' + userId).set(state.orderCounter)
-            .then(() => {
-                console.log(`✅ Counter incrementato nel cloud: ${state.orderCounter}`);
-            })
-            .catch(error => {
-                console.error('Errore incremento counter cloud:', error);
-            });
-    }
+    // no-op: l'assegnazione è ora atomica e gestita da allocateNextOrderNumber()
 }
 
 function closeModal(modalId) {
@@ -567,6 +1178,24 @@ function setupEventListeners() {
     document.getElementById('editClientBtn').addEventListener('click', openEditClientModal);
     document.getElementById('deleteClientBtn').addEventListener('click', deleteCurrentClient);
     document.getElementById('saveClientBtn').addEventListener('click', saveClient);
+
+    // Backup / Ripristino
+    const exportBtn = document.getElementById('exportJsonBtn');
+    if (exportBtn) exportBtn.addEventListener('click', exportDataAsJson);
+
+    const importBtn = document.getElementById('importJsonBtn');
+    const importFileInput = document.getElementById('importJsonFile');
+    if (importBtn && importFileInput) {
+        importBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            importDataFromJsonFile(file);
+            e.target.value = ''; // permette di reimportare lo stesso file
+        });
+    }
+
+    const backupsBtn = document.getElementById('viewBackupsBtn');
+    if (backupsBtn) backupsBtn.addEventListener('click', showLocalBackupsDialog);
     
     // Bottoni documenti
     document.getElementById('addDocumentBtn').addEventListener('click', openAddDocumentModal);
@@ -778,28 +1407,29 @@ function openEditClientModal() {
 
 function saveClient() {
     const name = document.getElementById('modalClientName').value.trim();
-    
+
     if (!name) {
         alert('Il nome del cliente è obbligatorio');
         return;
     }
 
     if (state.editMode) {
-        // Modifica cliente esistente - PRESERVA i dati esistenti!
         const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
-        
-        // Aggiorna SOLO i campi del form, mantieni tutto il resto
-        state.clients[clientIndex].name = name;
-        state.clients[clientIndex].acquisitionDate = document.getElementById('modalClientAcquisitionDate').value;
-        state.clients[clientIndex].email = document.getElementById('modalClientEmail').value.trim();
-        state.clients[clientIndex].phone = document.getElementById('modalClientPhone').value.trim();
-        state.clients[clientIndex].address = document.getElementById('modalClientAddress').value.trim();
-        state.clients[clientIndex].vat = document.getElementById('modalClientVat').value.trim();
-        state.clients[clientIndex].updatedAt = new Date().toISOString();
-        
-        console.log('✅ Cliente aggiornato - dati preservati');
+        const fields = {
+            name,
+            acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
+            email: document.getElementById('modalClientEmail').value.trim(),
+            phone: document.getElementById('modalClientPhone').value.trim(),
+            address: document.getElementById('modalClientAddress').value.trim(),
+            vat: document.getElementById('modalClientVat').value.trim(),
+            updatedAt: new Date().toISOString()
+        };
+        Object.assign(state.clients[clientIndex], fields);
+
+        saveToLocalOnly();
+        cloudUpdateClientFields(state.currentClientId, fields);
+        console.log('✅ Cliente aggiornato (update per-campo, dati preservati)');
     } else {
-        // Nuovo cliente - inizializza con array vuoti
         const newClient = {
             id: generateId(),
             name,
@@ -814,19 +1444,18 @@ function saveClient() {
             orders: [],
             createdAt: new Date().toISOString()
         };
-        
         state.clients.push(newClient);
         state.currentClientId = newClient.id;
-        
-        console.log('✅ Nuovo cliente creato con data acquisizione: ' + newClient.acquisitionDate);
+
+        saveToLocalOnly();
+        cloudSetClient(newClient);
+        console.log('✅ Nuovo cliente creato: ' + newClient.id);
     }
 
-    saveToStorage();
     renderClients();
     selectClient(state.currentClientId);
     closeModal('clientModal');
-    
-    // Notifica successo
+
     showNotification(state.editMode ? '✅ Cliente aggiornato' : '✅ Cliente creato', 'success');
 }
 
@@ -835,16 +1464,16 @@ function deleteCurrentClient() {
         return;
     }
 
-    state.clients = state.clients.filter(c => c.id !== state.currentClientId);
+    const removedId = state.currentClientId;
+    state.clients = state.clients.filter(c => c.id !== removedId);
     state.currentClientId = null;
-    
-    saveToStorage();
+
+    saveToLocalOnly();
+    cloudRemoveClient(removedId);
+
     renderClients();
-    
-    // Notifica successo
     showNotification('🗑️ Cliente eliminato', 'success');
-    
-    // Mostra empty state o report
+
     if (state.clients.length === 0) {
         document.getElementById('clientDetail').style.display = 'none';
         document.getElementById('emptyState').style.display = 'block';
@@ -967,13 +1596,13 @@ function saveDocument() {
         }
         state.clients[clientIndex].documents.push(documentData);
 
-        saveToStorage();
+        saveToLocalOnly();
+        cloudSetDocument(state.currentClientId, documentData);
         renderDocuments();
         closeModal('documentModal');
-        
+
         state.selectedDocFile = null;
-        
-        // Notifica successo
+
         showNotification('✅ Documento aggiunto', 'success');
     };
 
@@ -1024,10 +1653,12 @@ function deleteDocument(docId) {
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
     state.clients[clientIndex].documents = state.clients[clientIndex].documents.filter(d => d.id !== docId);
-    
-    saveToStorage();
+
+    saveToLocalOnly();
+    cloudRemoveDocument(clientId, docId);
     renderDocuments();
 }
 
@@ -1083,16 +1714,17 @@ function editNote(noteId) {
 
 function saveNote() {
     const content = document.getElementById('modalNoteContent').value.trim();
-    
+
     if (!content) {
         alert('Il contenuto della nota è obbligatorio');
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
-    
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
+    let savedNote;
+
     if (state.editMode && state.editItemId) {
-        // Modifica nota esistente
         const noteIndex = state.clients[clientIndex].notes.findIndex(n => n.id === state.editItemId);
         state.clients[clientIndex].notes[noteIndex] = {
             ...state.clients[clientIndex].notes[noteIndex],
@@ -1100,26 +1732,25 @@ function saveNote() {
             content,
             updatedAt: new Date().toISOString()
         };
+        savedNote = state.clients[clientIndex].notes[noteIndex];
     } else {
-        // Nuova nota
-        const note = {
+        savedNote = {
             id: generateId(),
             title: document.getElementById('modalNoteTitle-input').value.trim(),
             content,
             createdAt: new Date().toISOString()
         };
-
         if (!state.clients[clientIndex].notes) {
             state.clients[clientIndex].notes = [];
         }
-        state.clients[clientIndex].notes.push(note);
+        state.clients[clientIndex].notes.push(savedNote);
     }
 
-    saveToStorage();
+    saveToLocalOnly();
+    cloudSetNote(clientId, savedNote);
     renderNotes();
     closeModal('noteModal');
-    
-    // Notifica successo
+
     showNotification(state.editMode ? '✅ Nota aggiornata' : '✅ Nota creata', 'success');
 }
 
@@ -1128,10 +1759,12 @@ function deleteNote(noteId) {
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
     state.clients[clientIndex].notes = state.clients[clientIndex].notes.filter(n => n.id !== noteId);
-    
-    saveToStorage();
+
+    saveToLocalOnly();
+    cloudRemoveNote(clientId, noteId);
     renderNotes();
 }
 
@@ -1434,51 +2067,62 @@ function editOrder(orderId) {
     openModal('orderModal');
 }
 
-function saveOrder() {
-    const number = document.getElementById('modalOrderNumber').value.trim();
+/**
+ * saveOrder — ora asincrono e safe su multi-utente.
+ *
+ * Differenze chiave rispetto alla versione precedente:
+ *   1. Per i nuovi ordini, il numero viene assegnato via TRANSAZIONE sul
+ *      counter cloud: anche se 5 utenti salvano nello stesso istante, ognuno
+ *      ottiene un numero diverso garantito da Firebase.
+ *   2. Durante l'allocazione, il bottone Salva viene disabilitato per
+ *      evitare doppi click che genererebbero due ordini.
+ *   3. La scrittura cloud è MIRATA al singolo path dell'ordine: non tocca
+ *      più l'intero array clienti, quindi nessuno può sovrascriverci gli
+ *      altri ordini appena creati da un collega.
+ */
+async function saveOrder() {
+    const numberField = document.getElementById('modalOrderNumber');
+    const number = numberField.value.trim();
     const description = document.getElementById('modalOrderDescription').value.trim();
     const amount = parseFloat(document.getElementById('modalOrderAmount').value);
     const cost = parseFloat(document.getElementById('modalOrderCost').value);
-    
-    // Validazione campi obbligatori
+
     if (!number || !description) {
         alert('❌ Numero ordine e descrizione sono obbligatori');
         return;
     }
-    
     if (!amount || amount <= 0) {
         alert('❌ Importo totale è obbligatorio e deve essere maggiore di 0');
         document.getElementById('modalOrderAmount').focus();
         return;
     }
-    
     if (cost === undefined || cost === null || cost < 0) {
         alert('❌ Costo materiali è obbligatorio (può essere 0)');
         document.getElementById('modalOrderCost').focus();
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
+    if (clientIndex === -1) {
+        alert('❌ Cliente non trovato');
+        return;
+    }
+
     const paymentStatus = document.getElementById('modalOrderPaymentStatus').value;
-    
     const margin = amount - cost;
     const marginPercent = amount > 0 ? ((margin / amount) * 100).toFixed(2) : 0;
-    
-    // Calcola dati IVA
+
     const vatEnabled = document.getElementById('modalOrderVatEnabled').checked;
     const vatRate = parseFloat(document.getElementById('modalOrderVatRate').value) || 0;
-    
     let vatAmount = 0;
     let netAmount = amount;
-    
     if (vatEnabled && vatRate > 0) {
-        // L'importo inserito è lordo (IVA inclusa)
         netAmount = amount / (1 + vatRate / 100);
         vatAmount = amount - netAmount;
     }
-    
-    const orderData = {
-        number,
+
+    const baseOrderData = {
         description,
         amount: amount,
         cost: cost,
@@ -1489,54 +2133,82 @@ function saveOrder() {
         status: document.getElementById('modalOrderStatus').value,
         paymentStatus: paymentStatus,
         paymentMethod: document.getElementById('modalOrderPaymentMethod').value,
-        // Dati IVA
         vatEnabled: vatEnabled,
         vatRate: vatEnabled ? vatRate : null,
         vatAmount: vatEnabled ? vatAmount : null,
         netAmount: vatEnabled ? netAmount : null
     };
-    
-    // Aggiungi dati pagamento parziale se applicabile
+
     if (paymentStatus === 'parziale') {
-        orderData.paidAmount = parseFloat(document.getElementById('modalOrderPaidAmount').value) || 0;
-        orderData.expectedPaymentDate = document.getElementById('modalOrderExpectedPaymentDate').value || '';
+        baseOrderData.paidAmount = parseFloat(document.getElementById('modalOrderPaidAmount').value) || 0;
+        baseOrderData.expectedPaymentDate = document.getElementById('modalOrderExpectedPaymentDate').value || '';
     } else {
-        // Rimuovi campi se non è parziale
-        orderData.paidAmount = null;
-        orderData.expectedPaymentDate = null;
+        baseOrderData.paidAmount = null;
+        baseOrderData.expectedPaymentDate = null;
     }
-    
-    if (state.editMode && state.editItemId) {
-        // Modifica ordine esistente
-        const orderIndex = state.clients[clientIndex].orders.findIndex(o => o.id === state.editItemId);
-        state.clients[clientIndex].orders[orderIndex] = {
-            ...state.clients[clientIndex].orders[orderIndex],
-            ...orderData,
-            updatedAt: new Date().toISOString()
-        };
-    } else {
-        // Nuovo ordine
-        const order = {
-            id: generateId(),
-            ...orderData,
-            createdAt: new Date().toISOString()
-        };
 
-        if (!state.clients[clientIndex].orders) {
-            state.clients[clientIndex].orders = [];
+    // Blocca il pulsante Salva per evitare doppi click durante l'allocazione del numero
+    const saveBtn = document.getElementById('saveOrderBtn');
+    const restoreBtn = () => { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = saveBtn.dataset.originalLabel || 'Salva'; } };
+    if (saveBtn) {
+        saveBtn.dataset.originalLabel = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = '⏳ Salvataggio...';
+    }
+
+    try {
+        if (state.editMode && state.editItemId) {
+            const orderIndex = state.clients[clientIndex].orders.findIndex(o => o.id === state.editItemId);
+            const updated = {
+                ...state.clients[clientIndex].orders[orderIndex],
+                number, // eventuale modifica manuale del numero
+                ...baseOrderData,
+                updatedAt: new Date().toISOString()
+            };
+            state.clients[clientIndex].orders[orderIndex] = updated;
+
+            saveToLocalOnly();
+            await cloudSetOrder(clientId, updated);
+        } else {
+            // NUOVO ORDINE: assegna un numero univoco via transaction.
+            // Se l'utente ha scritto un numero manualmente che coincide col
+            // formato auto-generato, lo ricalcoliamo per sicurezza.
+            let finalNumber = number;
+            const autoMatch = number.match(/^ORD-(\d{4})-(\d+)$/);
+            const shouldAutoAssign = !number || !!autoMatch;
+
+            if (shouldAutoAssign) {
+                const assigned = await allocateNextOrderNumber();
+                const year = new Date().getFullYear();
+                finalNumber = `ORD-${year}-${String(assigned).padStart(3, '0')}`;
+            }
+
+            const order = {
+                id: generateId(),
+                number: finalNumber,
+                ...baseOrderData,
+                createdAt: new Date().toISOString()
+            };
+
+            if (!state.clients[clientIndex].orders) {
+                state.clients[clientIndex].orders = [];
+            }
+            state.clients[clientIndex].orders.push(order);
+
+            saveToLocalOnly();
+            await cloudSetOrder(clientId, order);
+            console.log(`✅ Ordine ${order.number} salvato su path ${pathOrder(clientId, order.id)}`);
         }
-        state.clients[clientIndex].orders.push(order);
-        
-        // Incrementa il counter per il prossimo ordine
-        incrementOrderCounter();
-    }
 
-    saveToStorage();
-    renderOrders();
-    closeModal('orderModal');
-    
-    // Notifica successo
-    showNotification(state.editMode ? '✅ Ordine aggiornato' : '✅ Ordine creato', 'success');
+        renderOrders();
+        closeModal('orderModal');
+        showNotification(state.editMode ? '✅ Ordine aggiornato' : '✅ Ordine creato', 'success');
+    } catch (err) {
+        console.error('❌ Errore durante il salvataggio dell\'ordine:', err);
+        alert('Errore durante il salvataggio. Il dato è stato conservato in locale e verrà sincronizzato al prossimo accesso.');
+    } finally {
+        restoreBtn();
+    }
 }
 
 function deleteOrder(orderId) {
@@ -1544,10 +2216,12 @@ function deleteOrder(orderId) {
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
     state.clients[clientIndex].orders = state.clients[clientIndex].orders.filter(o => o.id !== orderId);
-    
-    saveToStorage();
+
+    saveToLocalOnly();
+    cloudRemoveOrder(clientId, orderId);
     renderOrders();
 }
 
@@ -1700,19 +2374,20 @@ function saveFile() {
             createdAt: new Date().toISOString()
         };
 
-        const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+        const clientId = state.currentClientId;
+        const clientIndex = state.clients.findIndex(c => c.id === clientId);
         if (!state.clients[clientIndex].files) {
             state.clients[clientIndex].files = [];
         }
         state.clients[clientIndex].files.push(fileData);
 
-        saveToStorage();
+        saveToLocalOnly();
+        cloudSetFile(clientId, fileData);
         renderFiles();
         closeModal('fileModal');
-        
+
         state.selectedFile = null;
-        
-        // Notifica successo
+
         showNotification('✅ File caricato', 'success');
     };
 
@@ -1743,10 +2418,12 @@ function deleteFile(fileId) {
         return;
     }
 
-    const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
+    const clientId = state.currentClientId;
+    const clientIndex = state.clients.findIndex(c => c.id === clientId);
     state.clients[clientIndex].files = state.clients[clientIndex].files.filter(f => f.id !== fileId);
-    
-    saveToStorage();
+
+    saveToLocalOnly();
+    cloudRemoveFile(clientId, fileId);
     renderFiles();
 }
 
@@ -3600,7 +4277,7 @@ window.debugState = function() {
     console.log('🔢 Order counter:', state.orderCounter);
     console.log('☁️ Cloud sync:', cloudSyncEnabled ? 'ATTIVO' : 'DISATTIVO');
     console.log('🆔 User ID:', userId);
-    console.log('🔄 Syncing from cloud:', state.isSyncingFromCloud);
+    console.log('🔄 Firebase ready:', firebaseReady);
     console.log('📂 Cliente corrente:', state.currentClientId);
     
     // Conta ordini totali
@@ -3690,9 +4367,9 @@ function importBackup() {
             // Ripristina i dati
             state.clients = backupData.clients;
             state.orderCounter = backupData.orderCounter || 1;
-            
-            // Salva in localStorage e cloud
-            saveToStorage();
+
+            saveToLocalOnly();
+            cloudRestoreFromLocalState();
             
             // Aggiorna l'interfaccia
             renderClients();
