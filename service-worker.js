@@ -1,8 +1,9 @@
 // Service Worker per 3DMAKES Gestionale
-// Versione 2.3 — refactor completo scritture per-path, counter transazionale,
+// Versione 2.3.1 — refactor completo scritture per-path, counter transazionale,
 // listener real-time granulare. Fine perdita ordini in multi-utente.
+// Aggiunto sblocco manuale numero ordine per reinserire ordini persi.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.22';
+const CACHE_NAME = '3dmakes-gestionale-v3.23';
 const urlsToCache = [
   '/',
   '/index.html',

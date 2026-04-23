@@ -1209,6 +1209,42 @@ function setupEventListeners() {
     // Bottoni ordini
     document.getElementById('addOrderBtn').addEventListener('click', openAddOrderModal);
     document.getElementById('saveOrderBtn').addEventListener('click', saveOrder);
+
+    // Sblocco/blocco del numero ordine manuale (serve per reinserire ordini
+    // persi con il loro numero originale).
+    const unlockBtn = document.getElementById('modalOrderNumberUnlock');
+    if (unlockBtn) {
+        unlockBtn.addEventListener('click', () => {
+            const nf = document.getElementById('modalOrderNumber');
+            const hint = document.getElementById('modalOrderNumberHint');
+            const currentlyLocked = nf.hasAttribute('readonly');
+            if (currentlyLocked) {
+                nf.removeAttribute('readonly');
+                nf.dataset.auto = '0';
+                nf.style.background = '';
+                nf.style.cursor = '';
+                nf.focus();
+                nf.select();
+                unlockBtn.textContent = '🔒 Auto';
+                if (hint) hint.style.display = 'block';
+            } else {
+                nf.value = generateOrderNumber();
+                nf.dataset.auto = '1';
+                nf.setAttribute('readonly', true);
+                nf.style.background = '#f1f5f9';
+                nf.style.cursor = 'not-allowed';
+                unlockBtn.textContent = '✏️ Modifica';
+                if (hint) hint.style.display = 'none';
+            }
+        });
+    }
+    // Se l'utente digita nel campo (dopo averlo sbloccato), marca come manuale.
+    const orderNumInput = document.getElementById('modalOrderNumber');
+    if (orderNumInput) {
+        orderNumInput.addEventListener('input', () => {
+            orderNumInput.dataset.auto = '0';
+        });
+    }
     
     // Calcolo margine e IVA in tempo reale
     document.getElementById('modalOrderAmount').addEventListener('input', () => {
@@ -1889,12 +1925,25 @@ function openAddOrderModal() {
     state.editMode = false;
     state.editItemId = null;
     document.getElementById('modalOrderTitle').textContent = 'Nuovo Ordine';
-    
-    // Auto-compila numero ordine sequenziale
-    document.getElementById('modalOrderNumber').value = generateOrderNumber();
-    document.getElementById('modalOrderNumber').setAttribute('readonly', true);
-    document.getElementById('modalOrderNumber').style.background = '#f1f5f9';
-    document.getElementById('modalOrderNumber').style.cursor = 'not-allowed';
+
+    // Auto-compila numero ordine: il numero mostrato è solo un suggerimento,
+    // quello definitivo viene allocato via transaction al momento del salvataggio.
+    // Il campo è bloccato di default; il pulsante "Modifica" sblocca il campo
+    // per permettere l'inserimento manuale (utile per reinserire ordini persi
+    // con il loro numero originale).
+    const nf = document.getElementById('modalOrderNumber');
+    nf.value = generateOrderNumber();
+    nf.dataset.auto = '1';
+    nf.setAttribute('readonly', true);
+    nf.style.background = '#f1f5f9';
+    nf.style.cursor = 'not-allowed';
+    const unlockBtn = document.getElementById('modalOrderNumberUnlock');
+    const hint = document.getElementById('modalOrderNumberHint');
+    if (unlockBtn) {
+        unlockBtn.style.display = 'inline-flex';
+        unlockBtn.textContent = '✏️ Modifica';
+    }
+    if (hint) hint.style.display = 'none';
     
     document.getElementById('modalOrderDescription').value = '';
     document.getElementById('modalOrderAmount').value = '';
@@ -2170,17 +2219,29 @@ async function saveOrder() {
             saveToLocalOnly();
             await cloudSetOrder(clientId, updated);
         } else {
-            // NUOVO ORDINE: assegna un numero univoco via transaction.
-            // Se l'utente ha scritto un numero manualmente che coincide col
-            // formato auto-generato, lo ricalcoliamo per sicurezza.
+            // NUOVO ORDINE: se il numero è rimasto quello auto-suggerito
+            // (dataset.auto === '1'), lo rialloca via transaction atomica per
+            // garantire univocità tra utenti. Se invece l'utente ha sbloccato
+            // il campo e inserito un numero manualmente (dataset.auto === '0'),
+            // rispettiamo esattamente quello che ha scritto — utile per
+            // reinserire ordini persi con il loro numero originale.
             let finalNumber = number;
-            const autoMatch = number.match(/^ORD-(\d{4})-(\d+)$/);
-            const shouldAutoAssign = !number || !!autoMatch;
+            const isAuto = numberField.dataset.auto === '1';
+            const shouldAutoAssign = isAuto || !number;
 
             if (shouldAutoAssign) {
                 const assigned = await allocateNextOrderNumber();
                 const year = new Date().getFullYear();
                 finalNumber = `ORD-${year}-${String(assigned).padStart(3, '0')}`;
+            } else {
+                // Numero manuale: controlla che non collida con un ordine esistente.
+                const exists = state.clients.some(c =>
+                    (c.orders || []).some(o => o.number === number)
+                );
+                if (exists) {
+                    alert(`⚠️ Esiste già un ordine con numero ${number}. Scegli un numero diverso.`);
+                    return;
+                }
             }
 
             const order = {
