@@ -277,12 +277,77 @@ function normalizeClientFromCloud(raw) {
 /**
  * Converte lo snapshot dell'intero nodo clients/{userId} (può essere oggetto
  * o array legacy) in array di clienti normalizzati per la memoria.
+ *
+ * Filtra i client "fantasma": oggetti che non hanno né id né name (spesso
+ * sono frammenti creati quando una scrittura per-path usa un clientId che
+ * non esiste ancora nel root, es. in fase di migrazione incompleta).
  */
 function normalizeClientsFromCloud(rawRoot) {
-    const list = ensureArray(rawRoot);
-    return list
-        .filter(c => c && typeof c === 'object')
+    const merged = reconcileCloudRoot(rawRoot);
+    return Object.values(merged)
+        .filter(c => c && typeof c === 'object' && c.id && c.name)
         .map(normalizeClientFromCloud);
+}
+
+/**
+ * Ricostruisce una mappa { id -> cliente completo } partendo da uno snapshot
+ * del root `clients/{userId}`, gestendo correttamente i formati:
+ *   - array legacy (chiavi numeriche)
+ *   - oggetto indicizzato per id (formato nuovo v2)
+ *   - MISTO (stato intermedio se la migrazione è parziale)
+ *
+ * Se lo stesso cliente appare sia come elemento array (con name+orders+...)
+ * sia come nodo-fantasma con chiave id (solo orders, senza name), li
+ * fonde in un unico record: preserviamo il name dal nodo "pieno" e
+ * aggreghiamo orders/documents/notes/files da entrambi.
+ */
+function reconcileCloudRoot(rawRoot) {
+    const byId = {};
+
+    const ensureSub = (id, sub) => {
+        if (!byId[id][sub] || typeof byId[id][sub] !== 'object' || Array.isArray(byId[id][sub])) {
+            byId[id][sub] = {};
+        }
+    };
+
+    const merge = (id, piece) => {
+        if (!byId[id]) byId[id] = { id };
+        ['orders', 'documents', 'notes', 'files'].forEach(sub => {
+            if (piece[sub] == null) return;
+            ensureSub(id, sub);
+            const items = ensureArray(piece[sub]);
+            items.forEach(item => {
+                if (!item || typeof item !== 'object') return;
+                const key = item.id || generateId();
+                item.id = key;
+                byId[id][sub][key] = item;
+            });
+        });
+        Object.keys(piece).forEach(k => {
+            if (['orders', 'documents', 'notes', 'files', 'id'].includes(k)) return;
+            const incoming = piece[k];
+            if (incoming === null || incoming === undefined || incoming === '') return;
+            if (byId[id][k] === undefined || byId[id][k] === null || byId[id][k] === '') {
+                byId[id][k] = incoming;
+            }
+        });
+    };
+
+    const handle = (key, value) => {
+        if (!value || typeof value !== 'object') return;
+        const numericKey = /^\d+$/.test(String(key));
+        const id = value.id || (!numericKey ? key : null);
+        if (!id) return; // nodo senza id identificabile → scartato
+        merge(id, value);
+    };
+
+    if (Array.isArray(rawRoot)) {
+        rawRoot.forEach((v, i) => handle(i, v));
+    } else if (rawRoot && typeof rawRoot === 'object') {
+        Object.keys(rawRoot).forEach(k => handle(k, rawRoot[k]));
+    }
+
+    return byId;
 }
 
 /**
@@ -468,49 +533,90 @@ function allocateNextOrderNumber() {
 // ---------------------------------------------------------------------------
 
 /**
- * Esegue, una volta sola e in modo atomico tra tutti gli utenti, la
- * migrazione del vecchio formato (array) al nuovo formato (oggetti per-id).
- * Usa una transaction sul marker per evitare doppia esecuzione concorrente.
+ * Rileva se il root è "sano" (tutti gli entry hanno id+name coerenti) o
+ * "da riconciliare" (array legacy, oppure nodi frammentati dove la
+ * migrazione non è completata).
+ */
+function needsReconciliation(rawRoot) {
+    if (!rawRoot || typeof rawRoot !== 'object') return false;
+    if (Array.isArray(rawRoot)) return true;
+
+    let hasPhantom = false;
+    Object.keys(rawRoot).forEach(k => {
+        const v = rawRoot[k];
+        if (!v || typeof v !== 'object') return;
+        const numericKey = /^\d+$/.test(String(k));
+        if (numericKey) hasPhantom = true;       // nodo ancora ad indice numerico
+        if (!v.name) hasPhantom = true;          // nodo senza name → frammento orfano
+        if (v.id && v.id !== k) hasPhantom = true; // chiave e id disallineati
+    });
+    return hasPhantom;
+}
+
+/**
+ * Esegue la riconciliazione/migrazione: fonde eventuali frammenti
+ * (es. nodi fantasma da scritture per-path su un formato ancora array)
+ * e riscrive il root nel nuovo formato pulito { id: cliente }.
+ *
+ * Usa una transaction sul marker `_migration_v2/shared_gestionale` per
+ * evitare che 2 client facciano la migrazione allo stesso tempo; ma
+ * diversamente dalla versione precedente, il marker viene aggiornato
+ * anche se "done" era già true, per forzare una nuova riconciliazione
+ * nel caso in cui siano apparsi frammenti dopo una migrazione parziale.
  */
 function runMigrationIfNeeded(currentRoot) {
-    // Se non è array legacy, niente da fare.
-    const isLegacyArray = Array.isArray(currentRoot);
-    if (!isLegacyArray) return Promise.resolve(false);
+    if (!needsReconciliation(currentRoot)) return Promise.resolve(false);
 
-    // Cerchiamo il marker: solo il primo client che ci riesce fa la migrazione.
+    console.log('🧭 Riconciliazione formato cloud necessaria (array legacy o frammenti).');
+
     const markerRef = firebaseDb.ref(MIGRATION_MARKER_PATH);
+    const myToken = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+
     return markerRef.transaction(existing => {
-        if (existing && existing.done) return; // abort transaction
-        return { done: true, at: new Date().toISOString(), by: 'auto-migration' };
+        // Se un altro client è attivo (token scritto meno di 30s fa), non intralciare.
+        if (existing && existing.inProgressUntil && existing.inProgressUntil > Date.now()) {
+            return; // abort
+        }
+        return {
+            done: existing && existing.done ? true : false,
+            inProgressUntil: Date.now() + 30000,
+            by: myToken
+        };
     }).then(result => {
         if (!result.committed) {
-            console.log('🧭 Migrazione già in corso/eseguita da un altro client, attendo i dati sincronizzati.');
+            console.log('🧭 Un altro client sta già riconciliando, attendo aggiornamenti in tempo reale.');
             return false;
         }
+        const committed = result.snapshot.val();
+        if (committed.by !== myToken) return false;
 
-        console.log('🧭 Inizio migrazione formato v1 → v2...');
+        console.log('🧭 Inizio riconciliazione…');
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
 
-        // Step 1: backup del nodo vecchio.
         return firebaseDb.ref(LEGACY_BACKUP_PATH + ts).set(currentRoot)
             .then(() => {
-                console.log('✅ Backup legacy scritto in ' + LEGACY_BACKUP_PATH + ts);
-                // Step 2: costruisci nuovo formato { id: client }
-                const clientsArray = normalizeClientsFromCloud(currentRoot);
+                console.log('✅ Backup pre-riconciliazione in ' + LEGACY_BACKUP_PATH + ts);
+                const merged = reconcileCloudRoot(currentRoot);
                 const newObj = {};
-                clientsArray.forEach(c => {
-                    if (c && c.id) newObj[c.id] = serializeClientForCloud(c);
+                Object.values(merged).forEach(c => {
+                    if (c && c.id && c.name) {
+                        // c.orders/... sono già oggetti {id: item} per costruzione di reconcileCloudRoot
+                        newObj[c.id] = c;
+                    } else if (c && c.id && !c.name) {
+                        console.warn('🧭 Scartato frammento senza name per id=' + c.id + ' (gli eventuali ordini sono nel backup).');
+                    }
                 });
                 return firebaseDb.ref('clients/' + userId).set(newObj);
             })
+            .then(() => markerRef.set({ done: true, at: new Date().toISOString(), by: myToken }))
             .then(() => {
-                console.log('✅ Migrazione completata');
-                showNotification('✅ Database migrato al nuovo formato sicuro', 'success');
+                console.log('✅ Riconciliazione completata');
+                showNotification('✅ Database riconciliato al nuovo formato sicuro', 'success');
                 return true;
             })
             .catch(err => {
-                console.error('❌ Migrazione fallita:', err);
-                showNotification('⚠️ Migrazione database non riuscita, il gestionale continuerà con il formato vecchio', 'warning');
+                console.error('❌ Riconciliazione fallita:', err);
+                showNotification('⚠️ Riconciliazione database non riuscita, il gestionale continuerà comunque a funzionare', 'warning');
                 return false;
             });
     });
@@ -565,16 +671,30 @@ function setupCloudSync() {
  * invece di sostituire l'intero array. Niente più sovrascritture totali.
  */
 function attachGranularListeners(rootRef) {
+    /**
+     * Converte il valore di un child del root in un cliente "usabile" per
+     * lo state. Usa snap.key come fallback per id (se il nodo non ha un
+     * proprio campo id) e scarta i frammenti senza name (nodi orfani
+     * creati quando scritture per-path precedono la migrazione completa).
+     */
+    const snapToClient = (snap) => {
+        const v = snap.val();
+        if (!v || typeof v !== 'object') return null;
+        const c = normalizeClientFromCloud(v);
+        if (!c.id) c.id = snap.key;
+        if (!c.name) return null; // frammento orfano → ignora in UI
+        return c;
+    };
+
     rootRef.on('child_added', snap => {
-        const c = normalizeClientFromCloud(snap.val());
-        if (!c || !c.id) return;
+        const c = snapToClient(snap);
+        if (!c) return;
         const idx = state.clients.findIndex(x => x.id === c.id);
         if (idx === -1) {
             state.clients.push(c);
             saveToLocalOnly();
             renderClients();
         } else {
-            // L'iniziale riemette tutti i child_added: se identico, skip.
             if (JSON.stringify(state.clients[idx]) !== JSON.stringify(c)) {
                 state.clients[idx] = c;
                 saveToLocalOnly();
@@ -585,8 +705,8 @@ function attachGranularListeners(rootRef) {
     });
 
     rootRef.on('child_changed', snap => {
-        const c = normalizeClientFromCloud(snap.val());
-        if (!c || !c.id) return;
+        const c = snapToClient(snap);
+        if (!c) return;
         const idx = state.clients.findIndex(x => x.id === c.id);
         if (idx === -1) {
             state.clients.push(c);
@@ -1315,7 +1435,11 @@ function switchTab(tabName) {
 // ===== CLIENTI =====
 function renderClients(searchTerm = '') {
     const clientsList = document.getElementById('clientsList');
-    const filteredClients = state.clients.filter(client => 
+    // Difesa: scarta dal rendering eventuali client senza id/name (frammenti
+    // di cloud non riconciliati). Così l'UI non crasha mai anche se il
+    // database è temporaneamente in stato inconsistente.
+    const validClients = state.clients.filter(c => c && c.id && c.name);
+    const filteredClients = validClients.filter(client =>
         client.name.toLowerCase().includes(searchTerm) ||
         (client.email && client.email.toLowerCase().includes(searchTerm))
     );
@@ -1325,7 +1449,6 @@ function renderClients(searchTerm = '') {
         return;
     }
 
-    // Ordina alfabeticamente per nome
     filteredClients.sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }));
 
     clientsList.innerHTML = filteredClients.map(client => `
