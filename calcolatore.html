@@ -87,6 +87,22 @@
                         </div>
 
                         <div class="dm-calc-panel" style="margin-top:16px;">
+                            <div class="dm-calc-panel__head">IVA</div>
+                            <div class="dm-calc-panel__body">
+                                <div class="dm-calc-form-row">
+                                    <label for="applicaIva">Calcolo prezzo</label>
+                                    <select id="applicaIva" class="dm-calc-input" style="flex:1;min-width:0;">
+                                        <option value="si" selected>Con IVA (8.1%)</option>
+                                        <option value="no">Senza IVA</option>
+                                    </select>
+                                </div>
+                                <p class="dm-calc-muted dm-calc-calc-hint" style="margin-top:8px;">
+                                    Scegli se aggiungere l'IVA al prezzo finale (uso interno o offerte forfettarie).
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="dm-calc-panel" style="margin-top:16px;">
                             <div class="dm-calc-panel__head">Parametri di calcolo</div>
                             <div class="dm-calc-panel__body">
                                 <div id="riepilogoInfo" class="dm-calc-riepilogo"></div>
@@ -123,12 +139,12 @@
                                     <input type="number" id="markup" class="dm-calc-input" value="30" min="0" step="1">
                                 </div>
                                 <div class="dm-calc-markup-box">
-                                    <div class="dm-muted-inline" style="margin:0 0 4px;">Prezzo da markup (IVA incl.)</div>
+                                    <div class="dm-muted-inline" style="margin:0 0 4px;" id="prezzoDaMarkupLabel">Prezzo da markup (IVA incl.)</div>
                                     <div id="prezzoDaMarkup" style="font-size:1.25rem;font-weight:800;color:var(--dm-success);">0.00 CHF</div>
                                 </div>
                                 <div class="dm-calc-subhead" style="margin-top:8px;">Prezzo obiettivo → markup implicito</div>
                                 <div class="dm-calc-form-row">
-                                    <label for="prezzoManuale">Totale desiderato (CHF, IVA incl.)</label>
+                                    <label for="prezzoManuale" id="prezzoManualeLabel">Totale desiderato (CHF, IVA incl.)</label>
                                     <input type="number" id="prezzoManuale" class="dm-calc-input" value="" min="0" step="0.01" placeholder="Opzionale">
                                 </div>
                                 <div class="dm-calc-markup-box dm-calc-markup-box--inverse">
@@ -202,23 +218,23 @@
                                         <td id="profitto"><strong>—</strong></td>
                                         <td>Dopo costi e markup</td>
                                     </tr>
-                                    <tr class="dm-row-final">
-                                        <td><strong>Subtotale (IVA esclusa)</strong></td>
+                                    <tr class="dm-row-final" id="subtotaleRow">
+                                        <td><strong id="subtotaleLabel">Subtotale (IVA esclusa)</strong></td>
                                         <td id="prezzoFinale"><strong>—</strong></td>
-                                        <td>Totale vendita senza IVA</td>
+                                        <td id="subtotaleNote">Totale vendita senza IVA</td>
                                     </tr>
-                                    <tr class="dm-row-iva">
+                                    <tr class="dm-row-iva" id="ivaRow">
                                         <td><strong>IVA (<span id="aliquotaIvaDisplay">8.1</span>%)</strong></td>
                                         <td id="importoIva"><strong>—</strong></td>
                                         <td>Imposta</td>
                                     </tr>
                                     <tr class="dm-row-grand">
-                                        <td><strong>Totale con IVA</strong></td>
+                                        <td><strong id="totaleLabel">Totale con IVA</strong></td>
                                         <td id="prezzoConIva"><strong>—</strong></td>
                                         <td>Prezzo finale</td>
                                     </tr>
                                     <tr class="dm-row-unit" id="unitPriceRow" style="display:none;">
-                                        <td><strong>Prezzo / pezzo (IVA incl.)</strong></td>
+                                        <td><strong id="prezzoUnitarioLabel">Prezzo / pezzo (IVA incl.)</strong></td>
                                         <td id="prezzoUnitario"><strong>—</strong></td>
                                         <td>Unitario</td>
                                     </tr>
@@ -338,6 +354,11 @@
         return s;
     }
 
+    function isIvaApplicata() {
+        const sel = document.getElementById('applicaIva');
+        return !sel || sel.value !== 'no';
+    }
+
     function calculateForQuantity(quantita) {
         try {
             const oreStampa = parseFloat(document.getElementById('oreStampa').value) || 0;
@@ -378,7 +399,9 @@
             const scontoPerPezzo = scontoPercentuale > 0 ? (prezzoSenzaScontoPezzo - prezzoFinalePezzo) : 0;
 
             const prezzoFinaleTotale = prezzoFinalePezzo * quantita;
-            const importoIva = prezzoFinaleTotale * (impostazioni.iva / 100);
+            const applicaIva = isIvaApplicata();
+            const aliquotaIva = applicaIva ? impostazioni.iva : 0;
+            const importoIva = applicaIva ? prezzoFinaleTotale * (impostazioni.iva / 100) : 0;
             const prezzoConIva = prezzoFinaleTotale + importoIva;
             const prezzoUnitarioConIva = prezzoConIva / quantita;
 
@@ -394,7 +417,8 @@
                 profittoTotale: profittoPezzo * quantita,
                 prezzoUnitario: prezzoFinalePezzo,
                 scontoApplicato: scontoPerPezzo * quantita,
-                aliquotaIva: impostazioni.iva,
+                applicaIva: applicaIva,
+                aliquotaIva: aliquotaIva,
                 importoIva: importoIva,
                 prezzoConIva: prezzoConIva,
                 prezzoUnitarioConIva: prezzoUnitarioConIva
@@ -404,11 +428,37 @@
         }
     }
 
+    // Aggiorna le etichette UI in funzione dell'IVA attiva o no.
+    function aggiornaLabelIva() {
+        const conIva = isIvaApplicata();
+        const suffix = conIva ? '(IVA incl.)' : '(senza IVA)';
+        document.getElementById('prezzoDaMarkupLabel').textContent = 'Prezzo da markup ' + suffix;
+        document.getElementById('prezzoManualeLabel').textContent = 'Totale desiderato (CHF, ' + (conIva ? 'IVA incl.' : 'senza IVA') + ')';
+        const subLabel = document.getElementById('subtotaleLabel');
+        const subNote = document.getElementById('subtotaleNote');
+        const totLabel = document.getElementById('totaleLabel');
+        const unitLabel = document.getElementById('prezzoUnitarioLabel');
+        if (conIva) {
+            subLabel.textContent = 'Subtotale (IVA esclusa)';
+            subNote.textContent = 'Totale vendita senza IVA';
+            totLabel.textContent = 'Totale con IVA';
+            unitLabel.textContent = 'Prezzo / pezzo (IVA incl.)';
+        } else {
+            subLabel.textContent = 'Subtotale';
+            subNote.textContent = 'Totale vendita';
+            totLabel.textContent = 'Totale';
+            unitLabel.textContent = 'Prezzo / pezzo';
+        }
+        document.getElementById('ivaRow').style.display = conIva ? '' : 'none';
+        document.getElementById('subtotaleRow').style.display = conIva ? '' : 'none';
+    }
+
     function fmt(n) {
         return (typeof n === 'number' && !isNaN(n) ? n : 0).toFixed(2) + ' CHF';
     }
 
     window.calcolaPrezzi = function () {
+        aggiornaLabelIva();
         const quantita = parseInt(document.getElementById('quantita').value, 10) || 1;
         const result = calculateForQuantity(quantita);
         if (!result) {
@@ -449,11 +499,18 @@
         if (quantita > 1 && result.scontoApplicato > 0) {
             scontoHtml = '<div style="font-size:12px;color:#ea580c;margin-top:6px;">Sconto quantità (totale): -' + result.scontoApplicato.toFixed(2) + ' CHF</div>';
         }
+        const labelTotPreview = result.applicaIva
+            ? 'Totale IVA inclusa (' + result.aliquotaIva + '%)'
+            : 'Totale (senza IVA)';
+        const dettaglioPreview = result.applicaIva
+            ? '<div style="font-size:12px;color:var(--dm-text-muted);margin-top:4px;">Subtotale ' + result.prezzoFinaleTotale.toFixed(2) + ' CHF + IVA ' + result.importoIva.toFixed(2) + ' CHF</div>'
+            : '';
+        const labelUnitPreview = result.applicaIva ? ' / pezzo (IVA incl.)' : ' / pezzo';
         document.getElementById('preview-price').innerHTML =
             '<div class="dm-calc-big-price" style="color:var(--dm-cyan);">' + result.prezzoConIva.toFixed(2) + ' CHF</div>' +
-            '<div class="dm-calc-muted">Totale IVA inclusa (' + result.aliquotaIva + '%)</div>' +
-            '<div style="font-size:12px;color:var(--dm-text-muted);margin-top:4px;">Subtotale ' + result.prezzoFinaleTotale.toFixed(2) + ' CHF + IVA ' + result.importoIva.toFixed(2) + ' CHF</div>' +
-            (quantita > 1 ? '<div style="font-size:14px;margin-top:6px;color:var(--dm-navy);font-weight:600;">' + result.prezzoUnitarioConIva.toFixed(2) + ' CHF / pezzo (IVA incl.)</div>' : '') +
+            '<div class="dm-calc-muted">' + labelTotPreview + '</div>' +
+            dettaglioPreview +
+            (quantita > 1 ? '<div style="font-size:14px;margin-top:6px;color:var(--dm-navy);font-weight:600;">' + result.prezzoUnitarioConIva.toFixed(2) + ' CHF' + labelUnitPreview + '</div>' : '') +
             scontoHtml;
 
         document.getElementById('prezzoDaMarkup').textContent = result.prezzoConIva.toFixed(2) + ' CHF';
@@ -474,6 +531,7 @@
     }
 
     function calcolaMarkupInverso() {
+        aggiornaLabelIva();
         const prezzoManuale = parseFloat(document.getElementById('prezzoManuale').value);
         if (!prezzoManuale || prezzoManuale <= 0) {
             document.getElementById('markupCalcolato').textContent = '— %';
@@ -488,15 +546,17 @@
             document.getElementById('markupCalcolato').textContent = 'N/D';
             return;
         }
+        const conIva = isIvaApplicata();
+        const aliquota = conIva ? impostazioni.iva : 0;
         const costoBase = resultBase.totaleConFailure * quantita;
-        const markupCalcolato = ((prezzoManuale / (1 + impostazioni.iva / 100)) / costoBase - 1) * 100;
+        const prezzoSenzaIva = conIva ? prezzoManuale / (1 + impostazioni.iva / 100) : prezzoManuale;
+        const importoIva = conIva ? prezzoManuale - prezzoSenzaIva : 0;
+        const markupCalcolato = (prezzoSenzaIva / costoBase - 1) * 100;
         if (markupCalcolato < 0) {
             document.getElementById('markupCalcolato').innerHTML = '<span style="color:#dc2626;">' + markupCalcolato.toFixed(1) + ' %</span>';
         } else {
             document.getElementById('markupCalcolato').textContent = markupCalcolato.toFixed(1) + ' %';
         }
-        const prezzoSenzaIva = prezzoManuale / (1 + impostazioni.iva / 100);
-        const importoIva = prezzoManuale - prezzoSenzaIva;
         const prezzoUnitario = prezzoManuale / quantita;
         const profittoTotale = prezzoSenzaIva - costoBase;
 
@@ -508,7 +568,7 @@
         document.getElementById('failureCost').textContent = fmt(resultBase.failureCost);
         document.getElementById('profitto').innerHTML = '<strong>' + fmt(profittoTotale).replace(' CHF', '') + ' CHF</strong>';
         document.getElementById('prezzoFinale').innerHTML = '<strong>' + prezzoSenzaIva.toFixed(2) + ' CHF</strong>';
-        document.getElementById('aliquotaIvaDisplay').textContent = String(impostazioni.iva);
+        document.getElementById('aliquotaIvaDisplay').textContent = String(aliquota);
         document.getElementById('importoIva').innerHTML = '<strong>' + importoIva.toFixed(2) + ' CHF</strong>';
         document.getElementById('prezzoConIva').innerHTML = '<strong>' + prezzoManuale.toFixed(2) + ' CHF</strong>';
 
@@ -521,9 +581,10 @@
         }
         document.getElementById('discountRow').style.display = 'none';
 
+        const labelTot = conIva ? 'Totale IVA inclusa (' + impostazioni.iva + '%)' : 'Totale (senza IVA)';
         document.getElementById('preview-price').innerHTML =
             '<div class="dm-calc-big-price" style="color:var(--dm-cyan);">' + prezzoManuale.toFixed(2) + ' CHF</div>' +
-            '<div class="dm-calc-muted">Totale IVA inclusa (' + impostazioni.iva + '%)</div>' +
+            '<div class="dm-calc-muted">' + labelTot + '</div>' +
             '<div style="font-size:12px;margin-top:4px;">Markup implicito: ' + markupCalcolato.toFixed(1) + '%</div>';
 
         document.getElementById('prezzoDaMarkup').textContent = '—';
@@ -575,12 +636,13 @@
             const r = calculateForQuantity(q);
             return r ? r.prezzoUnitarioConIva : 0;
         });
+        const labelChart = isIvaApplicata() ? 'CHF / pezzo (IVA incl.)' : 'CHF / pezzo (senza IVA)';
         window.quantityChartInstance = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: quantities.map(function (q) { return q + ' pz'; }),
                 datasets: [{
-                    label: 'CHF / pezzo (IVA incl.)',
+                    label: labelChart,
                     data: prices,
                     backgroundColor: 'rgba(0, 174, 239, 0.65)',
                     borderColor: '#003b5c',
@@ -612,6 +674,14 @@
     document.getElementById('btnCalcola').addEventListener('click', calcolaPrezzi);
     document.getElementById('markup').addEventListener('input', calcolaConMarkup);
     document.getElementById('prezzoManuale').addEventListener('input', calcolaMarkupInverso);
+    document.getElementById('applicaIva').addEventListener('change', function () {
+        const prezzoManuale = parseFloat(document.getElementById('prezzoManuale').value);
+        if (prezzoManuale > 0) {
+            calcolaMarkupInverso();
+        } else {
+            calcolaPrezzi();
+        }
+    });
 
     ['pesoMateriale', 'quantita', 'oreStampa', 'minStampa', 'manoOre', 'manoMin'].forEach(function (id) {
         const el = document.getElementById(id);
@@ -628,6 +698,7 @@
         const ms = document.getElementById('materiale');
         if (ms.options.length > 1) ms.selectedIndex = 1;
         aggiornaRiepilogoInfo();
+        aggiornaLabelIva();
         calcolaPrezzi();
     });
 })();

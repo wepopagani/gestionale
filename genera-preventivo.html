@@ -50,13 +50,6 @@
                 <input type="text" id="nomeCliente" value="Mario Rossi" oninput="aggiorna()">
             </div>
             <div class="form-group">
-                <label>Referente (c.a.):</label>
-                <select id="referenteCliente" onchange="aggiorna()">
-                    <option value="Marco Pagani">Marco Pagani</option>
-                    <option value="Matteo Verdicchio" selected>Matteo Verdicchio</option>
-                </select>
-            </div>
-            <div class="form-group">
                 <label>Indirizzo Cliente:</label>
                 <textarea id="indirizzoCliente" oninput="aggiorna()">Via Roma 123
 6900 Lugano
@@ -126,7 +119,6 @@ Svizzera</textarea>
                         <div style="font-size:12px; text-transform: uppercase; color:#5c6b7a;">Spett.le</div>
                         <div class="client-name" id="prev-nomeCliente">Mario Rossi</div>
                         <div style="white-space: pre-line;" id="prev-indirizzoCliente"></div>
-                        <div style="margin-top: 8px; font-size: 13px;"><strong>c.a.</strong> <span id="prev-referenteCliente">Ing. Matteo Verdicchio</span></div>
                     </div>
                 </div>
                 <div class="dm-doc-title">Offerta</div>
@@ -449,7 +441,6 @@ Svizzera</textarea>
                 modalitaModifica = false;
                 document.getElementById('numeroOfferta').value = '…';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                setSelectValue('referenteCliente', preventivo.cliente?.referente || '');
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
@@ -504,7 +495,6 @@ Svizzera</textarea>
                 document.getElementById('numeroOfferta').value = preventivo.numeroOfferta || '';
                 document.getElementById('dataDoc').value = preventivo.data || '';
                 document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                setSelectValue('referenteCliente', preventivo.cliente?.referente || '');
                 document.getElementById('indirizzoCliente').value = preventivo.cliente?.indirizzo || '';
                 document.getElementById('note').value = preventivo.note || '';
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
@@ -584,7 +574,6 @@ Svizzera</textarea>
                 data: document.getElementById('dataDoc').value,
                 cliente: {
                     nome: document.getElementById('nomeCliente').value,
-                    referente: document.getElementById('referenteCliente').value,
                     indirizzo: document.getElementById('indirizzoCliente').value
                 },
                 righe: righe.map(riga => {
@@ -780,7 +769,6 @@ Svizzera</textarea>
             document.getElementById('prev-contattiAzienda').textContent = 'Tel: 076 266 03 96\nEmail: info@3dmakes.ch\nWeb: www.3dmakes.ch';
             document.getElementById('prev-nomeCliente').textContent = document.getElementById('nomeCliente').value;
             document.getElementById('prev-indirizzoCliente').textContent = document.getElementById('indirizzoCliente').value;
-            document.getElementById('prev-referenteCliente').textContent = document.getElementById('referenteCliente').value;
             document.getElementById('prev-numeroOfferta').textContent = document.getElementById('numeroOfferta').value;
             const data = new Date(document.getElementById('dataDoc').value);
             document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-IT');
@@ -892,6 +880,22 @@ Svizzera</textarea>
             if (window.__fitLegalRaf) cancelAnimationFrame(window.__fitLegalRaf);
             window.__fitLegalRaf = requestAnimationFrame(fitLegalPages);
         });
+
+        // Misura l'altezza reale dell'header (sticky, può essere alta su mobile o
+        // wrap-pare i bottoni) e la espone come var CSS, così le colonne dell'editor
+        // e dell'anteprima riempiono esattamente il resto del viewport.
+        function syncHeaderHeight() {
+            const header = document.querySelector('.dm-header');
+            if (!header) return;
+            const h = Math.round(header.getBoundingClientRect().height);
+            document.documentElement.style.setProperty('--dm-header-h', h + 'px');
+        }
+        window.addEventListener('load', syncHeaderHeight);
+        window.addEventListener('resize', syncHeaderHeight);
+        if (window.ResizeObserver) {
+            const headerEl = document.querySelector('.dm-header');
+            if (headerEl) new ResizeObserver(syncHeaderHeight).observe(headerEl);
+        }
 
         async function salvaSuCloud() {
             if (!firebaseInitialized) {

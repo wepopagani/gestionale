@@ -31,6 +31,20 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Sulla pagina del generatore preventivi le due colonne riempiono il viewport
+   e gestiscono lo scroll internamente: niente padding-bottom della pagina. */
+.dm-page:has(.dm-preventivo-wrap) {
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1300px) {
+  .dm-page:has(.dm-preventivo-wrap) {
+    padding-bottom: 48px;
+    overflow: visible;
+  }
+}
+
 .dm-page *,
 .dm-page *::before,
 .dm-page *::after {
@@ -372,32 +386,40 @@
 
 /* ========== Layout preventivo ========== */
 /* Colonna destra = foglio A4 reale (210mm), colonna sinistra occupa il resto.
-   Così l'anteprima non viene mai rimpicciolita/scrollata orizzontalmente. */
+   Ogni colonna ha il proprio scroll verticale indipendente, così editor e
+   anteprima si possono scorrere liberamente senza far scorrere la pagina. */
 .dm-preventivo-wrap {
   max-width: 1680px;
   margin: 0 auto;
-  padding: 24px clamp(16px, 3vw, 40px);
+  padding: 16px clamp(16px, 3vw, 40px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) calc(210mm + 24px);
   gap: clamp(20px, 2.5vw, 40px);
-  align-items: start;
+  align-items: stretch;
+  height: calc(100vh - var(--dm-header-h, 80px));
+  height: calc(100dvh - var(--dm-header-h, 80px));
+  overflow: hidden;
 }
 
-/* Sotto questa larghezza non c'è spazio per editor + A4 affiancati: impiliamo */
+/* Sotto questa larghezza non c'è spazio per editor + A4 affiancati: impiliamo
+   e ripristiniamo lo scroll della pagina. */
 @media (max-width: 1300px) {
   .dm-preventivo-wrap {
     grid-template-columns: 1fr;
     padding: clamp(12px, 3vw, 20px);
+    height: auto;
+    overflow: visible;
   }
 }
 
 .dm-sidebar {
   padding: 26px 28px;
-  position: sticky;
-  top: 76px;
-  height: fit-content;
   min-width: 0;
   max-width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .dm-preventivo-wrap #righeEditor {
@@ -417,8 +439,10 @@
   padding: 12px;
   border-radius: var(--dm-radius);
   min-width: 0;
-  /* Nessuno scroll orizzontale: la colonna è già dimensionata a 210mm */
-  overflow: visible;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .dm-doc-pages {
@@ -430,10 +454,11 @@
   margin: 0 auto;
 }
 
-@media (max-width: 768px) {
-  .dm-sidebar {
-    position: relative;
-    top: 0;
+@media (max-width: 1300px) {
+  .dm-sidebar,
+  .dm-preview-shell {
+    height: auto;
+    overflow: visible;
   }
 }
 
