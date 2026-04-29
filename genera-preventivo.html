@@ -350,6 +350,7 @@ Svizzera</textarea>
                 articolo: '1',
                 descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
                 tecnologia: 'FDM',
+                tecnologiaCustom: '',
                 materiale: 'PLA',
                 quantita: 1,
                 tempistica: '1-2',
@@ -359,6 +360,7 @@ Svizzera</textarea>
                 articolo: '2',
                 descrizione: 'KIT COMPLETO:\n- Battery_pack_bezel\n- Cartridge_inf\n- Cartridge_sup\n- Mag_inf\n- Mag_sup\n- Lcd case\n- Pulsante A\n- Pulsante B',
                 tecnologia: 'SLA',
+                tecnologiaCustom: '',
                 materiale: 'STANDARD',
                 quantita: 3,
                 tempistica: '1-2',
@@ -460,6 +462,7 @@ Svizzera</textarea>
                             articolo: r.articolo || '',
                             descrizione: r.descrizione || '',
                             tecnologia: tecKey,
+                            tecnologiaCustom: r.tecnologiaCustom || '',
                             materiale: matKey === '__CUSTOM__' ? (r.materiale || '') : matKey,
                             quantita: r.quantita || 1,
                             prezzoUnit: r.prezzoUnit || 0,
@@ -514,6 +517,7 @@ Svizzera</textarea>
                             articolo: r.articolo || '',
                             descrizione: r.descrizione || '',
                             tecnologia: tecKey,
+                            tecnologiaCustom: r.tecnologiaCustom || '',
                             materiale: matKey === '__CUSTOM__' ? (r.materiale || '') : matKey,
                             quantita: r.quantita || 1,
                             prezzoUnit: r.prezzoUnit || 0,
@@ -579,7 +583,8 @@ Svizzera</textarea>
                 righe: righe.map(riga => {
                     const tecKey = risolviTecnologia(riga.tecnologia);
                     const matKey = risolviMateriale(riga.materiale, tecKey);
-                    const tecLabel = tecKey === 'ALTRO' ? (riga.tecnologia || '') : labelTecnologia(tecKey);
+                    const tecLabel =
+                        tecKey === 'ALTRO' ? (String(riga.tecnologiaCustom || '').trim()) : labelTecnologia(tecKey);
                     const matLabel = (matKey === '__CUSTOM__' || tecKey === 'ALTRO')
                         ? (riga.materiale || '')
                         : labelMateriale(tecKey, matKey);
@@ -588,6 +593,7 @@ Svizzera</textarea>
                         descrizione: riga.descrizione,
                         tecnologia: tecLabel,
                         tecnologiaKey: tecKey,
+                        tecnologiaCustom: tecKey === 'ALTRO' ? String(riga.tecnologiaCustom || '').trim() : '',
                         materiale: matLabel,
                         materialeKey: matKey,
                         quantita: riga.quantita,
@@ -630,6 +636,7 @@ Svizzera</textarea>
                 articolo: (righe.length + 1).toString(),
                 descrizione: 'KIT COMPLETO:\n- componente 1\n- componente 2',
                 tecnologia: 'FDM',
+                tecnologiaCustom: '',
                 materiale: 'PLA',
                 quantita: 1,
                 tempistica: '1-2',
@@ -658,6 +665,7 @@ Svizzera</textarea>
         // Cambia la tecnologia: resetta il materiale al primo disponibile e aggiorna il prezzo
         function cambiaTecnologia(index, nuovaTecKey) {
             righe[index].tecnologia = nuovaTecKey;
+            if (nuovaTecKey !== 'ALTRO') righe[index].tecnologiaCustom = '';
             const lista = MATERIALI[nuovaTecKey] || [];
             if (lista.length > 0) {
                 righe[index].materiale = lista[0].key;
@@ -705,8 +713,6 @@ Svizzera</textarea>
                     `<option value="${m.key}" ${m.key === matKey ? 'selected' : ''}>${m.label}</option>`
                 ).join('');
 
-                const mostraCustomMat = tecKey === 'ALTRO';
-
                 const rigaDiv = document.createElement('div');
                 rigaDiv.className = 'dm-riga-editor';
                 rigaDiv.innerHTML = `
@@ -726,15 +732,16 @@ Svizzera</textarea>
                         <div class="form-group">
                             <label>Materiale:</label>
                             ${tecKey === 'ALTRO'
-                                ? `<input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}" onchange="aggiornaRiga(${index}, 'materiale', this.value)">`
+                                ? `<input type="text" placeholder="Descrizione materiale" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}" onchange="aggiornaRiga(${index}, 'materiale', this.value)">`
                                 : `<select onchange="cambiaMateriale(${index}, this.value)">${optMat}</select>`}
                         </div>
                     </div>
-                    ${mostraCustomMat && tecKey !== 'ALTRO' ? `
+                    ${tecKey === 'ALTRO' ? `
                     <div class="form-group">
-                        <label>Materiale personalizzato:</label>
-                        <input type="text" value="${String(riga.materiale || '').replace(/"/g, '&quot;')}"
-                            onchange="aggiornaRiga(${index}, 'materiale', this.value)">
+                        <label>Specifica tecnologia (personalizzata):</label>
+                        <input type="text" placeholder="Es. SLS, stampa elastomeri, ..."
+                            value="${String(riga.tecnologiaCustom || '').replace(/"/g, '&quot;')}"
+                            onchange="aggiornaRiga(${index}, 'tecnologiaCustom', this.value)">
                     </div>` : ''}
                     <div class="dm-grid-2 dm-grid-2--qty-price">
                         <div class="form-group">
@@ -783,7 +790,7 @@ Svizzera</textarea>
                 // Risolvi label leggibili per la stampa, mantenendo eventuali valori personalizzati
                 const tecKey = risolviTecnologia(riga.tecnologia);
                 const tecOut = tecKey === 'ALTRO'
-                    ? (riga.tecnologia || '')
+                    ? String(riga.tecnologiaCustom || '').trim()
                     : labelTecnologia(tecKey);
                 const matKey = risolviMateriale(riga.materiale, tecKey);
                 const matOut = (matKey === '__CUSTOM__' || tecKey === 'ALTRO')
