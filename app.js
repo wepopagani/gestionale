@@ -110,36 +110,13 @@ window.addEventListener('beforeinstallprompt', (e) => {
     console.log('💡 App installabile come PWA');
 });
 
-// ===== TOGGLE SIDEBAR =====
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const icon = document.getElementById('toggleSidebarIcon');
-    const body = document.body;
-    const isCollapsed = sidebar.classList.toggle('collapsed');
-    
-    // Aggiungi/rimuovi classe al body per gestire il layout
-    if (isCollapsed) {
-        body.classList.add('sidebar-collapsed');
+// ===== Scorciatoia: freccia in alto a sinistra → Report =====
+function goToReport() {
+    const h = (window.location.hash || '').toLowerCase();
+    if (h === '#report') {
+        openReportView();
     } else {
-        body.classList.remove('sidebar-collapsed');
-    }
-    
-    // Cambia icona
-    icon.textContent = isCollapsed ? '▶' : '◀';
-    
-    // Salva preferenza
-    localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
-    
-    console.log(isCollapsed ? '◀ Sidebar nascosta' : '▶ Sidebar visibile');
-}
-
-// Carica preferenza sidebar
-function loadSidebarState() {
-    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-    if (isCollapsed) {
-        document.querySelector('.sidebar').classList.add('collapsed');
-        document.body.classList.add('sidebar-collapsed');
-        document.getElementById('toggleSidebarIcon').textContent = '▶';
+        window.location.hash = '#report';
     }
 }
 
@@ -149,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         localStorage.removeItem('darkMode');
     } catch (e) { /* ignore */ }
-    loadSidebarState(); // Carica stato sidebar
     initFirebase();
     loadFromStorage();
     renderClients();
