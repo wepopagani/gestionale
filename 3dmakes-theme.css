@@ -384,6 +384,25 @@
   color: var(--dm-text-muted);
 }
 
+/* Editor preventivo: avviso visivo se il campo è ancora al segnaposto */
+.dm-preventivo-wrap .dm-sidebar.dm-form .form-group.dm-field-alert > label {
+  color: #c62828;
+}
+.dm-preventivo-wrap .dm-sidebar.dm-form .form-group.dm-field-alert input,
+.dm-preventivo-wrap .dm-sidebar.dm-form .form-group.dm-field-alert textarea,
+.dm-preventivo-wrap .dm-sidebar.dm-form .form-group.dm-field-alert select {
+  border-color: #e53935;
+  box-shadow: 0 0 0 1px rgba(229, 57, 53, 0.22);
+}
+.dm-preventivo-wrap .dm-riga-editor.dm-riga-editor--alert {
+  outline: 2px solid rgba(229, 57, 53, 0.45);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.dm-preventivo-wrap .dm-riga-editor.dm-riga-editor--alert .dm-riga-editor__head + .form-group > label {
+  color: #c62828;
+}
+
 /* ========== Layout preventivo ========== */
 /* Colonna destra = foglio A4 reale (210mm), colonna sinistra occupa il resto.
    Ogni colonna ha il proprio scroll verticale indipendente, così editor e
