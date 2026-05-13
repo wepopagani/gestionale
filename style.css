@@ -4019,7 +4019,10 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     .modal-content {
         max-width: 560px;
         border-radius: 18px;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: 90vh;
+        overscroll-behavior: contain;
     }
 
     .modal-header {
