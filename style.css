@@ -270,6 +270,28 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     margin-bottom: 32px;
 }
 
+/* Hint desktop "seleziona dalla sidebar" */
+.client-pick-hint .client-pick-hint__keys {
+    white-space: nowrap;
+}
+
+.client-pick-hint .client-pick-hint__keys kbd,
+.client-pick-hint p kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 2px 7px;
+    margin: 0 2px;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
 /* Client detail */
 .client-detail {
     max-width: 1000px;
@@ -3522,6 +3544,12 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
 /* ---------- Desktop only (>= 769px) ---------- */
 @media (min-width: 769px) {
+    /* Voce «Clienti» ridondante: la lista è già nella sidebar (resta su mobile) */
+    .dm-nav a[href$="#clients"],
+    .dm-nav a[href*="index.html#clients"] {
+        display: none !important;
+    }
+
     /* ============ HEADER ============ */
     .dm-search-trigger { display: inline-flex; }
 

@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css?v=3.1">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -87,6 +87,14 @@
                 <h2>Benvenuto nel tuo Gestionale</h2>
                 <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
+            </div>
+
+            <!-- Desktop: lista clienti è già a sinistra — solo suggerimento nel pannello principale -->
+            <div class="empty-state client-pick-hint" id="clientPickHint" style="display: none;" aria-live="polite">
+                <div class="empty-state-icon">👥</div>
+                <h2>Seleziona un cliente</h2>
+                <p>Usa la colonna a sinistra o premi <span class="client-pick-hint__keys"><kbd>⌘</kbd><kbd>K</kbd></span> (Mac) / <span class="client-pick-hint__keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> (Windows) per cercare.</p>
+                <button type="button" class="btn-primary" onclick="showDashboard()">📊 Apri dashboard</button>
             </div>
 
             <!-- Dashboard View -->
@@ -1016,7 +1024,7 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=3.0"></script>
+    <script src="app.js?v=3.1"></script>
 </body>
 </html>
 

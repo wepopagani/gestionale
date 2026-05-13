@@ -1430,15 +1430,22 @@ function setMobileView(view) {
     updateFab();
 }
 
-/** Mostra la lista clienti (utile da bottom nav o quando si vuole tornare alla lista). */
+/** Nasconde il pannello "seleziona un cliente" (solo desktop / #clients). */
+function hideClientPickHint() {
+    const el = document.getElementById('clientPickHint');
+    if (el) el.style.display = 'none';
+}
+
+/** Mostra la lista clienti (mobile: schermo lista; desktop: sidebar già visibile + hint nel main). */
 function showClientsList() {
-    // Su mobile: rendiamo la sidebar full-screen e nascondiamo main content
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('reportView').style.display = 'none';
 
-    // Mostra la sidebar (rimuovi hidden-mobile/fullscreen-mobile)
+    const pickHint = document.getElementById('clientPickHint');
+    if (pickHint) pickHint.style.display = 'none';
+
     const sidebar = document.querySelector('.sidebar');
     const main = document.querySelector('.main-content');
     if (sidebar) sidebar.classList.remove('hidden-mobile');
@@ -1449,11 +1456,14 @@ function showClientsList() {
     renderClients(document.getElementById('searchInput').value || '');
     setMobileView('clients');
 
-    // Su desktop, mostra anche un empty state se non ci sono clienti
-    if (!isMobileViewport()) {
-        if (state.clients.length === 0) {
-            document.getElementById('emptyState').style.display = 'block';
-        }
+    if (isMobileViewport()) {
+        return;
+    }
+
+    if (state.clients.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+    } else if (pickHint) {
+        pickHint.style.display = 'block';
     }
 }
 
@@ -1860,6 +1870,7 @@ function selectClient(clientId, options = {}) {
     }
 
     // Nascondi TUTTO tranne il client detail
+    hideClientPickHint();
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('reportView').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
@@ -1944,8 +1955,18 @@ function backToClientList() {
     state.currentClientId = null;
     renderClients(document.getElementById('searchInput').value || '');
 
-    if (state.clients.length === 0) {
+    document.getElementById('emptyState').style.display = 'none';
+    hideClientPickHint();
+
+    if (isMobileViewport()) {
+        if (state.clients.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+        }
+    } else if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
+    } else {
+        const pickHint = document.getElementById('clientPickHint');
+        if (pickHint) pickHint.style.display = 'block';
     }
 
     // Aggiorna stato mobile nav
@@ -3826,6 +3847,7 @@ function calculateAdvancedStats() {
 // ===== DASHBOARD SYSTEM =====
 function showDashboard() {
     // Nascondi tutto tranne la dashboard
+    hideClientPickHint();
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('reportView').style.display = 'none';
@@ -4045,6 +4067,7 @@ function renderDashboardRecentClients(clients) {
 
 // ===== REPORT SYSTEM =====
 function openReportView() {
+    hideClientPickHint();
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
@@ -4086,6 +4109,7 @@ function closeReportView() {
     document.querySelector('.main-content').classList.remove('fullscreen-mobile');
     
     if (state.clients.length === 0) {
+        hideClientPickHint();
         document.getElementById('emptyState').style.display = 'block';
     } else if (state.currentClientId) {
         document.getElementById('clientDetail').style.display = 'block';
