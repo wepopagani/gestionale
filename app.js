@@ -133,12 +133,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function applyInitialViewFromHash() {
         const h = (window.location.hash || '').toLowerCase();
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
         if (h === '#dashboard') {
             showDashboard();
         } else if (h === '#report') {
             openReportView();
+        } else if (h === '#clients') {
+            if (typeof showClientsList === 'function') showClientsList();
         } else if (state.clients.length > 0) {
-            openReportView();
+            // Default: dashboard (più amichevole) sia su mobile sia su desktop.
+            // Il report rimane accessibile dal menu/bottom-nav.
+            if (isMobile) {
+                showDashboard();
+            } else {
+                openReportView();
+            }
         }
     }
     applyInitialViewFromHash();
@@ -149,6 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showDashboard();
         } else if (h === '#report') {
             openReportView();
+        } else if (h === '#clients') {
+            if (typeof showClientsList === 'function') showClientsList();
         }
     });
 });
@@ -1381,6 +1392,390 @@ function setupEventListeners() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('modalDocDate').value = today;
     document.getElementById('modalOrderDate').value = today;
+
+    // === Setup mobile web-app UX (bottom nav + FAB + backup toggle) ===
+    setupMobileUX();
+}
+
+// ============================================================
+// MOBILE WEB-APP UX (bottom nav, FAB, view routing su mobile)
+// ============================================================
+function isMobileViewport() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+/** Imposta la "tab" attiva su mobile (dashboard | clients | report | client-detail) */
+function setMobileView(view) {
+    state.mobileView = view;
+    const body = document.body;
+    body.classList.remove(
+        'mobile-view-dashboard',
+        'mobile-view-clients',
+        'mobile-view-report',
+        'mobile-view-client-detail'
+    );
+    body.classList.add('mobile-view-' + view);
+
+    // Aggiorna bottoni bottom nav
+    document.querySelectorAll('.mobile-bottom-nav .mbn-btn').forEach(btn => {
+        const target = btn.dataset.mbn;
+        let active = false;
+        if (view === 'dashboard' && target === 'dashboard') active = true;
+        else if (view === 'clients' && target === 'clients') active = true;
+        else if (view === 'client-detail' && target === 'clients') active = true;
+        else if (view === 'report' && target === 'report') active = true;
+        btn.classList.toggle('is-active', active);
+    });
+
+    updateFab();
+}
+
+/** Mostra la lista clienti (utile da bottom nav o quando si vuole tornare alla lista). */
+function showClientsList() {
+    // Su mobile: rendiamo la sidebar full-screen e nascondiamo main content
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('clientDetail').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'none';
+    document.getElementById('reportView').style.display = 'none';
+
+    // Mostra la sidebar (rimuovi hidden-mobile/fullscreen-mobile)
+    const sidebar = document.querySelector('.sidebar');
+    const main = document.querySelector('.main-content');
+    if (sidebar) sidebar.classList.remove('hidden-mobile');
+    if (main) main.classList.remove('fullscreen-mobile');
+
+    state.currentClientId = null;
+    state.cameFromReport = false;
+    renderClients(document.getElementById('searchInput').value || '');
+    setMobileView('clients');
+
+    // Su desktop, mostra anche un empty state se non ci sono clienti
+    if (!isMobileViewport()) {
+        if (state.clients.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+        }
+    }
+}
+
+/** Aggiorna il FAB in base alla view corrente */
+function updateFab() {
+    const fab = document.getElementById('fabAction');
+    const label = document.getElementById('fabActionLabel');
+    if (!fab || !label) return;
+
+    const view = state.mobileView || 'clients';
+
+    if (view === 'client-detail' && state.currentClientId) {
+        fab.classList.remove('is-hidden');
+        label.textContent = 'Ordine';
+        fab.dataset.action = 'add-order';
+        fab.setAttribute('aria-label', 'Aggiungi ordine');
+    } else if (view === 'clients' || view === 'dashboard') {
+        fab.classList.remove('is-hidden');
+        label.textContent = 'Cliente';
+        fab.dataset.action = 'add-client';
+        fab.setAttribute('aria-label', 'Aggiungi cliente');
+    } else {
+        // Report → nascosto
+        fab.classList.add('is-hidden');
+        fab.dataset.action = '';
+    }
+}
+
+function handleFabClick() {
+    const fab = document.getElementById('fabAction');
+    if (!fab) return;
+    const action = fab.dataset.action;
+    if (action === 'add-order') {
+        if (!state.currentClientId) return;
+        openAddOrderModal();
+    } else if (action === 'add-client') {
+        openAddClientModal();
+    }
+}
+
+function setupMobileUX() {
+    // Bottom nav: gestiamo SOLO i 3 bottoni interni (dashboard/clients/report);
+    // i link Calc/Preventivo sono <a> con href verso le altre pagine.
+    document.querySelectorAll('.mobile-bottom-nav .mbn-btn').forEach(btn => {
+        if (btn.tagName === 'A') return; // link esterni: comportamento default
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            const target = btn.dataset.mbn;
+            if (target === 'dashboard') {
+                showDashboard();
+            } else if (target === 'clients') {
+                showClientsList();
+            } else if (target === 'report') {
+                openReportView();
+            }
+        });
+    });
+
+    // FAB
+    const fab = document.getElementById('fabAction');
+    if (fab) fab.addEventListener('click', handleFabClick);
+
+    // Backup toggle (su mobile, mostra/nasconde i bottoni di backup)
+    const sidebarSection = document.querySelector('.sidebar .sidebar-section');
+    const backupActions = sidebarSection && sidebarSection.querySelector('.backup-actions');
+    if (sidebarSection && backupActions && !sidebarSection.querySelector('.backup-toggle')) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'backup-toggle';
+        toggleBtn.innerHTML = '<span>⚙️ Backup &amp; Importa</span><span class="backup-toggle__caret" aria-hidden="true">▾</span>';
+        toggleBtn.addEventListener('click', () => {
+            const isOpen = backupActions.classList.toggle('is-open');
+            toggleBtn.querySelector('.backup-toggle__caret').textContent = isOpen ? '▴' : '▾';
+        });
+        sidebarSection.insertBefore(toggleBtn, backupActions);
+    }
+
+    // Auto-imposta una view iniziale (utile per il primo render)
+    if (!state.mobileView) {
+        // L'effettiva view viene impostata da applyInitialViewFromHash che
+        // chiama showDashboard/openReportView/showClientsList. Qui solo un
+        // valore di partenza per avere stato consistente.
+        setMobileView('dashboard');
+    }
+
+    // Aggiorna view su resize (per coerenza FAB ecc.)
+    window.addEventListener('resize', () => {
+        updateFab();
+    });
+
+    // Command Palette (⌘K / Ctrl+K / "/")
+    setupCommandPalette();
+}
+
+// ============================================================
+// COMMAND PALETTE (ricerca trasversale clienti + ordini)
+// ============================================================
+const cmdkState = {
+    open: false,
+    items: [],
+    activeIndex: 0
+};
+
+function getClientInitials(name) {
+    if (!name) return '?';
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function openCmdk() {
+    const el = document.getElementById('cmdk');
+    if (!el) return;
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('is-open'));
+    const input = document.getElementById('cmdkInput');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+    cmdkState.open = true;
+    renderCmdkResults('');
+}
+
+function closeCmdk() {
+    const el = document.getElementById('cmdk');
+    if (!el) return;
+    el.classList.remove('is-open');
+    cmdkState.open = false;
+    setTimeout(() => { el.hidden = true; }, 180);
+}
+
+function renderCmdkResults(query) {
+    const container = document.getElementById('cmdkResults');
+    if (!container) return;
+    const q = (query || '').trim().toLowerCase();
+
+    const clientHits = [];
+    const orderHits = [];
+    state.clients.forEach(client => {
+        if (!client || !client.name) return;
+        const haystack = [
+            client.name,
+            client.email || '',
+            client.phone || '',
+            client.vat || ''
+        ].join(' ').toLowerCase();
+        if (!q || haystack.includes(q)) {
+            clientHits.push(client);
+        }
+        if (client.orders && client.orders.length) {
+            client.orders.forEach(order => {
+                const oh = [
+                    order.number || '',
+                    order.description || ''
+                ].join(' ').toLowerCase();
+                if (q && oh.includes(q)) {
+                    orderHits.push({ client, order });
+                }
+            });
+        }
+    });
+
+    const limitedClients = clientHits.slice(0, 8);
+    const limitedOrders = orderHits.slice(0, 8);
+
+    const flat = [];
+    let html = '';
+
+    if (limitedClients.length) {
+        html += '<div class="cmdk__group-title">Clienti</div>';
+        limitedClients.forEach(client => {
+            const idx = flat.length;
+            flat.push({ type: 'client', id: client.id });
+            const initials = getClientInitials(client.name);
+            const sub = client.email || client.phone || client.vat || '—';
+            const numOrders = (client.orders && client.orders.length) || 0;
+            html += `<div class="cmdk__item" data-idx="${idx}" role="option">
+                <div class="cmdk__item-icon">${initials}</div>
+                <div class="cmdk__item-body">
+                    <div class="cmdk__item-title">${escapeHtml(client.name)}</div>
+                    <div class="cmdk__item-subtitle">${escapeHtml(sub)}</div>
+                </div>
+                <div class="cmdk__item-meta">${numOrders} ordin${numOrders === 1 ? 'e' : 'i'}</div>
+            </div>`;
+        });
+    }
+
+    if (limitedOrders.length) {
+        html += '<div class="cmdk__group-title">Ordini</div>';
+        limitedOrders.forEach(({ client, order }) => {
+            const idx = flat.length;
+            flat.push({ type: 'order', clientId: client.id, orderId: order.id });
+            const title = order.number ? `#${order.number}` : 'Ordine';
+            const sub = `${client.name} · ${order.description || ''}`.trim();
+            const amount = typeof order.amount === 'number'
+                ? new Intl.NumberFormat('it-CH', { style: 'currency', currency: 'CHF' }).format(order.amount)
+                : '';
+            html += `<div class="cmdk__item" data-idx="${idx}" role="option">
+                <div class="cmdk__item-icon cmdk__item-icon--order">📦</div>
+                <div class="cmdk__item-body">
+                    <div class="cmdk__item-title">${escapeHtml(title)}</div>
+                    <div class="cmdk__item-subtitle">${escapeHtml(sub)}</div>
+                </div>
+                <div class="cmdk__item-meta">${escapeHtml(amount)}</div>
+            </div>`;
+        });
+    }
+
+    if (!html) {
+        html = '<div class="cmdk__empty">Nessun risultato. Prova un altro termine.</div>';
+    }
+
+    container.innerHTML = html;
+    cmdkState.items = flat;
+    cmdkState.activeIndex = 0;
+    updateCmdkActiveItem();
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function updateCmdkActiveItem() {
+    const container = document.getElementById('cmdkResults');
+    if (!container) return;
+    const els = container.querySelectorAll('.cmdk__item');
+    els.forEach((el, i) => el.classList.toggle('is-active', i === cmdkState.activeIndex));
+    const active = els[cmdkState.activeIndex];
+    if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function activateCmdkSelection() {
+    const item = cmdkState.items[cmdkState.activeIndex];
+    if (!item) return;
+    closeCmdk();
+    if (item.type === 'client') {
+        selectClient(item.id);
+    } else if (item.type === 'order') {
+        selectClient(item.clientId);
+        switchTab('orders');
+        // Scroll all'ordine se presente
+        setTimeout(() => {
+            const orderEl = document.querySelector(`[data-order-id="${item.orderId}"]`);
+            if (orderEl) {
+                orderEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                orderEl.classList.add('order-card--highlight');
+                setTimeout(() => orderEl.classList.remove('order-card--highlight'), 1600);
+            }
+        }, 150);
+    }
+}
+
+function setupCommandPalette() {
+    const trigger = document.getElementById('cmdkTrigger');
+    const input = document.getElementById('cmdkInput');
+    const results = document.getElementById('cmdkResults');
+    const root = document.getElementById('cmdk');
+
+    if (trigger) trigger.addEventListener('click', openCmdk);
+
+    // Scorciatoia globale ⌘K / Ctrl+K / "/"
+    document.addEventListener('keydown', (ev) => {
+        const target = ev.target;
+        const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
+            ev.preventDefault();
+            if (cmdkState.open) closeCmdk(); else openCmdk();
+            return;
+        }
+        if (ev.key === '/' && !isTyping && !cmdkState.open) {
+            ev.preventDefault();
+            openCmdk();
+            return;
+        }
+        if (cmdkState.open) {
+            if (ev.key === 'Escape') {
+                ev.preventDefault();
+                closeCmdk();
+            } else if (ev.key === 'ArrowDown') {
+                ev.preventDefault();
+                cmdkState.activeIndex = Math.min(cmdkState.items.length - 1, cmdkState.activeIndex + 1);
+                updateCmdkActiveItem();
+            } else if (ev.key === 'ArrowUp') {
+                ev.preventDefault();
+                cmdkState.activeIndex = Math.max(0, cmdkState.activeIndex - 1);
+                updateCmdkActiveItem();
+            } else if (ev.key === 'Enter') {
+                ev.preventDefault();
+                activateCmdkSelection();
+            }
+        }
+    });
+
+    if (input) {
+        let t;
+        input.addEventListener('input', (e) => {
+            clearTimeout(t);
+            t = setTimeout(() => renderCmdkResults(e.target.value), 80);
+        });
+    }
+
+    if (results) {
+        results.addEventListener('click', (ev) => {
+            const item = ev.target.closest('.cmdk__item');
+            if (!item) return;
+            cmdkState.activeIndex = parseInt(item.dataset.idx || '0', 10);
+            activateCmdkSelection();
+        });
+    }
+
+    if (root) {
+        root.addEventListener('click', (ev) => {
+            if (ev.target.matches('[data-cmdk-close]')) closeCmdk();
+        });
+    }
 }
 
 // ===== GESTIONE TABS =====
@@ -1427,13 +1822,23 @@ function renderClients(searchTerm = '') {
 
     filteredClients.sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }));
 
-    clientsList.innerHTML = filteredClients.map(client => `
-        <div class="client-item ${client.id === state.currentClientId ? 'active' : ''}" 
+    clientsList.innerHTML = filteredClients.map(client => {
+        const initials = getClientInitials(client.name);
+        const ordersCount = (client.orders && client.orders.length) || 0;
+        const subtitle = client.email || client.phone || 'Nessun contatto';
+        const badgeClass = ordersCount === 0 ? 'client-item-badge client-item-badge--empty' : 'client-item-badge';
+        const badgeLabel = ordersCount === 0 ? '0' : String(ordersCount);
+        return `
+        <div class="client-item ${client.id === state.currentClientId ? 'active' : ''}"
              onclick="selectClient('${client.id}')">
-            <div class="client-item-name">${client.name}</div>
-            <div class="client-item-info">${client.email || 'Nessuna email'}</div>
-        </div>
-    `).join('');
+            <div class="client-avatar" aria-hidden="true">${initials}</div>
+            <div class="client-item-main">
+                <div class="client-item-name">${escapeHtml(client.name)}</div>
+                <div class="client-item-info">${escapeHtml(subtitle)}</div>
+            </div>
+            <div class="${badgeClass}" title="${ordersCount} ordin${ordersCount === 1 ? 'e' : 'i'}">${badgeLabel}</div>
+        </div>`;
+    }).join('');
 }
 
 function selectClient(clientId, options = {}) {
@@ -1468,8 +1873,38 @@ function selectClient(clientId, options = {}) {
 
     // Aggiorna header
     document.getElementById('clientName').textContent = client.name;
-    const info = [client.email, client.phone, client.vat].filter(Boolean).join(' • ');
-    document.getElementById('clientInfo').textContent = info || 'Nessuna informazione aggiuntiva';
+    const avatarEl = document.getElementById('clientDetailAvatar');
+    if (avatarEl) avatarEl.textContent = getClientInitials(client.name);
+
+    // Chips con icona (email/telefono/p.iva). Email/telefono sono link cliccabili.
+    const chips = [];
+    if (client.email) {
+        chips.push(`<a class="client-info-chip" href="mailto:${escapeHtml(client.email)}" title="Scrivi una mail">
+            <span class="client-info-chip__icon">✉️</span><span>${escapeHtml(client.email)}</span>
+        </a>`);
+    }
+    if (client.phone) {
+        const telHref = String(client.phone).replace(/[^0-9+]/g, '');
+        chips.push(`<a class="client-info-chip" href="tel:${escapeHtml(telHref)}" title="Chiama">
+            <span class="client-info-chip__icon">📞</span><span>${escapeHtml(client.phone)}</span>
+        </a>`);
+    }
+    if (client.vat) {
+        chips.push(`<span class="client-info-chip" title="P.IVA / CF">
+            <span class="client-info-chip__icon">🏷️</span><span>${escapeHtml(client.vat)}</span>
+        </span>`);
+    }
+    if (client.address) {
+        chips.push(`<span class="client-info-chip" title="Indirizzo">
+            <span class="client-info-chip__icon">📍</span><span>${escapeHtml(client.address)}</span>
+        </span>`);
+    }
+    const infoEl = document.getElementById('clientInfo');
+    if (chips.length) {
+        infoEl.innerHTML = `<div class="client-info-chips">${chips.join('')}</div>`;
+    } else {
+        infoEl.textContent = 'Nessuna informazione aggiuntiva';
+    }
 
     // Aggiorna lista clienti
     renderClients(document.getElementById('searchInput').value);
@@ -1479,6 +1914,9 @@ function selectClient(clientId, options = {}) {
     renderFiles();
     renderNotes();
     renderOrders();
+
+    // Aggiorna stato mobile nav
+    if (typeof setMobileView === 'function') setMobileView('client-detail');
 }
 
 /** Apertura cliente dalla tabella "Clienti acquisiti" nel report — mantiene filtri e consente "Torna al report". */
@@ -1503,10 +1941,15 @@ function backToClientList() {
     }
 
     document.getElementById('reportView').style.display = 'none';
-    
+    state.currentClientId = null;
+    renderClients(document.getElementById('searchInput').value || '');
+
     if (state.clients.length === 0) {
         document.getElementById('emptyState').style.display = 'block';
     }
+
+    // Aggiorna stato mobile nav
+    if (typeof setMobileView === 'function') setMobileView('clients');
 }
 
 function openAddClientModal() {
@@ -1992,7 +2435,7 @@ function renderOrders() {
         }
         
         return `
-        <div class="order-card" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
+        <div class="order-card" data-order-id="${order.id}" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <div class="order-card-header">
                 <div class="order-card-info">
                     <h4>${order.number}</h4>
@@ -3400,6 +3843,9 @@ function showDashboard() {
     
     // Popola la dashboard
     renderDashboard();
+
+    // Aggiorna stato mobile nav
+    if (typeof setMobileView === 'function') setMobileView('dashboard');
 }
 
 function renderDashboard() {
@@ -3626,6 +4072,9 @@ function openReportView() {
     }
     
     generateReport();
+
+    // Aggiorna stato mobile nav
+    if (typeof setMobileView === 'function') setMobileView('report');
 }
 
 function closeReportView() {

@@ -72,6 +72,91 @@
   border-bottom: 1px solid var(--dm-border);
 }
 
+/* Hamburger button — invisibile su desktop, attivo su mobile */
+.dm-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  background: transparent;
+  border: 2px solid var(--dm-border);
+  border-radius: 12px;
+  color: var(--dm-navy);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.dm-nav-toggle:active {
+  transform: scale(0.96);
+}
+
+.dm-nav-toggle:hover {
+  background: rgba(0, 174, 239, 0.08);
+  border-color: var(--dm-cyan);
+}
+
+.dm-nav-toggle__icon {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.dm-nav-toggle__icon::before,
+.dm-nav-toggle__icon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 22px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform 0.2s ease, top 0.2s ease;
+}
+
+.dm-nav-toggle__icon::before {
+  top: -7px;
+}
+
+.dm-nav-toggle__icon::after {
+  top: 7px;
+}
+
+.dm-nav-toggle[aria-expanded="true"] .dm-nav-toggle__icon {
+  background: transparent;
+}
+
+.dm-nav-toggle[aria-expanded="true"] .dm-nav-toggle__icon::before {
+  top: 0;
+  transform: rotate(45deg);
+}
+
+.dm-nav-toggle[aria-expanded="true"] .dm-nav-toggle__icon::after {
+  top: 0;
+  transform: rotate(-45deg);
+}
+
+/* Backdrop drawer */
+.dm-nav-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 27, 41, 0.55);
+  z-index: 99;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dm-nav-backdrop.is-open {
+  display: block;
+  opacity: 1;
+}
+
 .dm-logo {
   text-decoration: none;
   font-weight: 800;
@@ -1616,5 +1701,134 @@
   .dm-calc-results-table tr {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+}
+
+/* ========== Header mobile (hamburger drawer) ========== */
+@media (max-width: 768px) {
+  .dm-header {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+  }
+
+  .dm-logo {
+    font-size: 1.1rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .dm-nav-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    order: 3;
+  }
+
+  /* La nav diventa un drawer che scivola da destra */
+  .dm-nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(82vw, 320px);
+    max-width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)) 20px;
+    background: var(--dm-white);
+    box-shadow: -10px 0 40px rgba(0, 27, 41, 0.18);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 110;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-width: 0;
+  }
+
+  .dm-nav.is-open {
+    transform: translateX(0);
+  }
+
+  .dm-nav::before {
+    content: "Menu";
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dm-text-muted);
+    padding: 6px 12px;
+    margin-bottom: 6px;
+  }
+
+  .dm-nav a {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 14px 14px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 10px;
+    color: var(--dm-navy);
+    opacity: 1;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .dm-nav a:hover,
+  .dm-nav a:active {
+    background: rgba(0, 174, 239, 0.08);
+    color: var(--dm-cyan);
+  }
+
+  .dm-nav a[aria-current="page"] {
+    background: linear-gradient(135deg, rgba(0, 174, 239, 0.16), rgba(0, 59, 92, 0.08));
+    color: var(--dm-navy);
+  }
+
+  /* Le action buttons vanno DENTRO il drawer (in basso) su mobile */
+  .dm-header__actions {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: min(82vw, 320px);
+    max-width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 110;
+    pointer-events: none;
+    background: transparent;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0 20px;
+    margin-top: 0;
+  }
+
+  .dm-header__actions.is-open {
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .dm-header__actions .dm-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 18px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dm-header {
+    padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  }
+
+  .dm-logo {
+    font-size: 1rem;
   }
 }

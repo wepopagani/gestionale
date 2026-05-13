@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.8">
+    <link rel="stylesheet" href="style.css?v=3.0">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -34,15 +34,20 @@
 <body class="has-site-nav">
     <header class="dm-header app-site-header" role="banner">
         <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
-        <nav class="dm-nav" aria-label="Strumenti">
-            <a href="index.html" aria-current="page">Gestionale</a>
-            <a href="index.html#dashboard">Dashboard</a>
-            <a href="index.html#report">Report</a>
-            <a href="calcolatore.html">Calcolatore</a>
-            <a href="genera-preventivo.html">Preventivo</a>
-            <a href="storico-preventivi.html">Storico</a>
+        <nav class="dm-nav dm-nav--rich" aria-label="Strumenti">
+            <a href="index.html#dashboard" aria-current="page" data-icon="📊">Dashboard</a>
+            <a href="index.html#clients" data-icon="👥">Clienti</a>
+            <a href="index.html#report" data-icon="📋">Report</a>
+            <a href="calcolatore.html" data-icon="🧮">Calcolatore</a>
+            <a href="genera-preventivo.html" data-icon="📝">Preventivo</a>
+            <a href="storico-preventivi.html" data-icon="🗂️">Storico</a>
         </nav>
         <div class="dm-header__actions">
+            <button type="button" class="dm-search-trigger" id="cmdkTrigger" title="Cerca ovunque (⌘K)" aria-label="Cerca ovunque">
+                <span class="dm-search-trigger__icon" aria-hidden="true">🔍</span>
+                <span class="dm-search-trigger__text">Cerca…</span>
+                <span class="dm-search-trigger__kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>K</kbd></span>
+            </button>
             <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
             <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
         </div>
@@ -522,8 +527,11 @@
                 <!-- Header Cliente -->
                 <div class="client-header">
                     <div class="client-header-info">
-                        <h2 id="clientName"></h2>
-                        <p id="clientInfo"></p>
+                        <div class="client-detail-avatar" id="clientDetailAvatar" aria-hidden="true">?</div>
+                        <div class="client-header-info-text">
+                            <h2 id="clientName"></h2>
+                            <p id="clientInfo"></p>
+                        </div>
                     </div>
                     <div class="client-header-actions">
                         <button class="btn-secondary" id="editClientBtn">✏️ Modifica</button>
@@ -954,10 +962,61 @@
         </div>
     </div>
 
+    <!-- Command Palette (⌘K) -->
+    <div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Ricerca rapida" hidden>
+        <div class="cmdk__backdrop" data-cmdk-close></div>
+        <div class="cmdk__panel" role="document">
+            <div class="cmdk__input-wrap">
+                <span class="cmdk__icon" aria-hidden="true">🔍</span>
+                <input type="text" id="cmdkInput" class="cmdk__input" placeholder="Cerca clienti, ordini, descrizioni…" autocomplete="off" spellcheck="false">
+                <span class="cmdk__hint" aria-hidden="true"><kbd>Esc</kbd></span>
+            </div>
+            <div class="cmdk__results" id="cmdkResults" role="listbox" aria-label="Risultati">
+                <!-- popolato via JS -->
+            </div>
+            <div class="cmdk__footer" aria-hidden="true">
+                <span><kbd>↑</kbd><kbd>↓</kbd> naviga</span>
+                <span><kbd>⏎</kbd> apri</span>
+                <span><kbd>Esc</kbd> chiudi</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js?v=2.5"></script>
+    <!-- Mobile bottom navigation (visibile solo su schermi piccoli) -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Navigazione principale" data-view="dashboard">
+        <button type="button" class="mbn-btn" data-mbn="dashboard" aria-label="Dashboard">
+            <span class="mbn-icon" aria-hidden="true">📊</span>
+            <span class="mbn-label">Dashboard</span>
+        </button>
+        <button type="button" class="mbn-btn" data-mbn="clients" aria-label="Clienti">
+            <span class="mbn-icon" aria-hidden="true">👥</span>
+            <span class="mbn-label">Clienti</span>
+        </button>
+        <button type="button" class="mbn-btn" data-mbn="report" aria-label="Report">
+            <span class="mbn-icon" aria-hidden="true">📋</span>
+            <span class="mbn-label">Report</span>
+        </button>
+        <a class="mbn-btn" data-mbn="calc" href="calcolatore.html" aria-label="Calcolatore">
+            <span class="mbn-icon" aria-hidden="true">🧮</span>
+            <span class="mbn-label">Calc</span>
+        </a>
+        <a class="mbn-btn" data-mbn="preventivo" href="genera-preventivo.html" aria-label="Preventivo">
+            <span class="mbn-icon" aria-hidden="true">📝</span>
+            <span class="mbn-label">Preventivo</span>
+        </a>
+    </nav>
+
+    <!-- Floating Action Button (mobile) -->
+    <button type="button" class="fab-action" id="fabAction" aria-label="Azione rapida" title="Azione rapida">
+        <span class="fab-action__icon" aria-hidden="true">+</span>
+        <span class="fab-action__label" id="fabActionLabel">Aggiungi</span>
+    </button>
+
+    <script src="dm-mobile-nav.js?v=1.0"></script>
+    <script src="app.js?v=3.0"></script>
 </body>
 </html>
 
