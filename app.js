@@ -2009,8 +2009,9 @@ function selectClient(clientId, options = {}) {
     renderDocuments();
     renderOrders();
 
-    // Aggiorna stato mobile nav
+    // Aggiorna stato mobile nav e FAB (nuovo ordine su mobile)
     if (typeof setMobileView === 'function') setMobileView('client-detail');
+    else if (typeof updateFab === 'function') updateFab();
 }
 
 /** Apertura cliente dalla tabella "Clienti acquisiti" nel report — mantiene filtri e consente "Torna al report". */

@@ -3168,7 +3168,7 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         border-radius: 999px;
         box-shadow: 0 10px 28px rgba(0, 174, 239, 0.45);
         cursor: pointer;
-        z-index: 90;
+        z-index: 120;
         transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
         -webkit-tap-highlight-color: transparent;
     }
@@ -3302,9 +3302,13 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         cursor: pointer;
     }
 
-    /* Su mobile, "+ Nuovo Ordine" del tab nasconde (uso FAB) */
-    body.has-site-nav .section-header .btn-small {
+    /* Su mobile nascondi i btn-small nelle tab (dashboard/report); in dettaglio cliente restano visibili */
+    body.has-site-nav:not(.mobile-view-client-detail) .section-header .btn-small {
         display: none;
+    }
+
+    body.has-site-nav.mobile-view-client-detail .section-header .btn-small {
+        display: inline-flex;
     }
 
     /* KPI cards: griglia 2 colonne su mobile (più dense) */
