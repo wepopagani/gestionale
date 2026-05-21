@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* ignore */ }
     initFirebase();
     loadFromStorage();
+    try { pruneLocalStorageForQuota(true); } catch (e) { /* ignore */ }
     renderClients();
     setupEventListeners();
 
@@ -627,7 +628,6 @@ function setupCloudSync() {
             if (clientsArr.length > 0) {
                 console.log(`📥 Caricati ${clientsArr.length} clienti dal cloud`);
                 state.clients = clientsArr;
-                saveToLocalOnly();
                 renderClients();
 
                 if (state.currentClientId) {
@@ -641,6 +641,8 @@ function setupCloudSync() {
             }
 
             updateCloudStatus(true);
+            pruneLocalStorageForQuota(true);
+            saveToLocalOnly({ immediate: true });
             attachGranularListeners(ref);
             loadCounterFromCloud().then(() => console.log('✅ Counter cloud sincronizzato'));
             showNotification('☁️ Sincronizzazione attiva', 'success');
@@ -861,15 +863,85 @@ function showNotification(message, type = 'info') {
 const BACKUP_DAILY_KEEP_DAYS = 7;
 // Numero massimo di snapshot "rullante" conservati (ultimi N salvataggi significativi)
 const BACKUP_ROLLING_KEEP = 10;
+const BACKUP_ROLLING_KEEP_CLOUD = 3;
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000;
+const SAVE_LOCAL_DEBOUNCE_MS = 400;
+const QUOTA_TOAST_COOLDOWN_MS = 60000;
 const BACKUP_DAILY_PREFIX = 'gestionale_backup_daily_';
 const BACKUP_ROLLING_KEY = 'gestionale_backup_rolling';
+
+let _saveLocalTimer = null;
+let _lastBackupMs = 0;
+let _lastQuotaToastMs = 0;
+
+function isQuotaError(err) {
+    return err && (err.name === 'QuotaExceededError' || err.code === 22);
+}
+
+/** Clienti da serializzare in localStorage (senza base64 dei file se il cloud è attivo). */
+function clientsForLocalStorage() {
+    if (!cloudSyncEnabled) return state.clients;
+    return state.clients.map(client => {
+        if (!client.files || !client.files.length) return client;
+        return {
+            ...client,
+            files: client.files.map(f => {
+                if (!f || !f.data) return f;
+                const { data, ...meta } = f;
+                return meta;
+            })
+        };
+    });
+}
+
+function pruneLocalStorageForQuota(aggressive = false) {
+    pruneDailyBackups(aggressive ? 999 : 2);
+    try { localStorage.removeItem(BACKUP_ROLLING_KEY); } catch (e) { /* ignore */ }
+    if (aggressive) {
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(BACKUP_DAILY_PREFIX)) toRemove.push(k);
+        }
+        toRemove.forEach(k => {
+            try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+        });
+    }
+}
+
+function trySetLocalStorageItem(key, value) {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (err) {
+        if (!isQuotaError(err)) throw err;
+        pruneLocalStorageForQuota(true);
+        localStorage.setItem(key, value);
+        return true;
+    }
+}
+
+function shouldRunPeriodicBackup() {
+    return Date.now() - _lastBackupMs > BACKUP_INTERVAL_MS;
+}
+
+function markBackupRun() {
+    _lastBackupMs = Date.now();
+}
+
+function notifyQuotaOnce() {
+    const now = Date.now();
+    if (now - _lastQuotaToastMs < QUOTA_TOAST_COOLDOWN_MS) return;
+    _lastQuotaToastMs = now;
+    showNotification('⚠️ Memoria locale piena: backup ridotti. I dati restano sul cloud.', 'warning');
+}
 
 function makeBackupPayload() {
     return {
         savedAt: new Date().toISOString(),
         orderCounter: state.orderCounter,
         clientsCount: Array.isArray(state.clients) ? state.clients.length : 0,
-        clients: state.clients
+        clients: clientsForLocalStorage()
     };
 }
 
@@ -888,7 +960,8 @@ function writeDailyBackup() {
         try {
             localStorage.setItem(key, payload);
         } catch (quotaErr) {
-            pruneDailyBackups(1); // libera spazio rimuovendo il più vecchio
+            if (!isQuotaError(quotaErr)) throw quotaErr;
+            pruneLocalStorageForQuota(true);
             localStorage.setItem(key, payload);
         }
 
@@ -931,12 +1004,14 @@ function pushRollingBackup() {
             try { list = JSON.parse(raw) || []; } catch (e) { list = []; }
         }
         list.push(makeBackupPayload());
-        while (list.length > BACKUP_ROLLING_KEEP) list.shift();
+        const maxRolling = cloudSyncEnabled ? BACKUP_ROLLING_KEEP_CLOUD : BACKUP_ROLLING_KEEP;
+        while (list.length > maxRolling) list.shift();
 
         try {
             localStorage.setItem(BACKUP_ROLLING_KEY, JSON.stringify(list));
         } catch (quotaErr) {
-            // Se non entra, scarta i più vecchi finché non entra
+            if (!isQuotaError(quotaErr)) throw quotaErr;
+            pruneLocalStorageForQuota(true);
             while (list.length > 1) {
                 list.shift();
                 try {
@@ -1014,6 +1089,7 @@ function importDataFromJsonFile(file) {
             // Backup di sicurezza prima di sovrascrivere
             pushRollingBackup();
             writeDailyBackup();
+            markBackupRun();
 
             state.clients = clients;
             if (typeof counter === 'number' && counter > 0) {
@@ -1022,7 +1098,7 @@ function importDataFromJsonFile(file) {
                 state.orderCounter = calculateNextOrderNumber();
             }
 
-            saveToLocalOnly();
+            saveToLocalOnly({ forceBackup: true, immediate: true });
             // Import massivo: ripristino completo sul cloud (con backup del cloud precedente)
             cloudRestoreFromLocalState();
             renderClients();
@@ -1150,19 +1226,39 @@ function listLocalBackups() {
  * Scrive lo stato su localStorage + crea backup locali, SENZA toccare il cloud.
  * Va usata quando l'aggiornamento è stato indotto da un evento cloud in arrivo
  * (altrimenti rimbalzeremmo la stessa scrittura indietro).
+ * @param {{ forceBackup?: boolean, immediate?: boolean }} [options]
  */
-function saveToLocalOnly() {
-    try {
-        const timestamp = new Date().toLocaleTimeString();
-        localStorage.setItem('gestionale_data', JSON.stringify(state.clients));
-        localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-        console.log(`💾 [${timestamp}] Solo-local: ${state.clients.length} clienti`);
-        writeDailyBackup();
-        pushRollingBackup();
-    } catch (error) {
-        console.error('❌ Errore salvataggio localStorage:', error);
-        showNotification('⚠️ Errore salvataggio dati locali', 'error');
+function saveToLocalOnly(options = {}) {
+    const run = () => {
+        try {
+            const timestamp = new Date().toLocaleTimeString();
+            const payload = JSON.stringify(clientsForLocalStorage());
+            trySetLocalStorageItem('gestionale_data', payload);
+            trySetLocalStorageItem('gestionale_order_counter', state.orderCounter.toString());
+            console.log(`💾 [${timestamp}] Solo-local: ${state.clients.length} clienti`);
+            if (options.forceBackup || shouldRunPeriodicBackup()) {
+                writeDailyBackup();
+                pushRollingBackup();
+                markBackupRun();
+            }
+        } catch (error) {
+            console.error('❌ Errore salvataggio localStorage:', error);
+            if (isQuotaError(error)) {
+                notifyQuotaOnce();
+            } else {
+                showNotification('⚠️ Errore salvataggio dati locali', 'error');
+            }
+        }
+    };
+
+    if (options.immediate) {
+        clearTimeout(_saveLocalTimer);
+        _saveLocalTimer = null;
+        run();
+        return;
     }
+    clearTimeout(_saveLocalTimer);
+    _saveLocalTimer = setTimeout(run, SAVE_LOCAL_DEBOUNCE_MS);
 }
 
 /**
@@ -1309,10 +1405,6 @@ function setupEventListeners() {
     document.getElementById('saveDocumentBtn').addEventListener('click', saveDocument);
     document.getElementById('modalDocFileInput').addEventListener('change', handleDocFileSelect);
 
-    // Bottoni note
-    document.getElementById('addNoteBtn').addEventListener('click', openAddNoteModal);
-    document.getElementById('saveNoteBtn').addEventListener('click', saveNote);
-
     // Bottoni ordini
     document.getElementById('addOrderBtn').addEventListener('click', openAddOrderModal);
     document.getElementById('saveOrderBtn').addEventListener('click', saveOrder);
@@ -1359,11 +1451,6 @@ function setupEventListeners() {
         calculateVat();
     });
     document.getElementById('modalOrderCost').addEventListener('input', calculateMargin);
-
-    // Bottoni file
-    document.getElementById('addFileBtn').addEventListener('click', openAddFileModal);
-    document.getElementById('saveFileBtn').addEventListener('click', saveFile);
-    document.getElementById('modalFileInput').addEventListener('change', handleFileSelect);
 
     // Report (chiusura)
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
@@ -1805,9 +1892,7 @@ function switchTab(tabName) {
     
     const tabMap = {
         'orders': 'ordersTab',
-        'documents': 'documentsTab',
-        'files': 'filesTab',
-        'notes': 'notesTab'
+        'documents': 'documentsTab'
     };
     
     document.getElementById(tabMap[tabName]).classList.add('active');
@@ -1922,8 +2007,6 @@ function selectClient(clientId, options = {}) {
 
     // Renderizza contenuto
     renderDocuments();
-    renderFiles();
-    renderNotes();
     renderOrders();
 
     // Aggiorna stato mobile nav
@@ -2082,6 +2165,34 @@ function deleteCurrentClient() {
 }
 
 // ===== DOCUMENTI =====
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function documentPreviewHtml(doc) {
+    if (!doc.fileData) return '';
+    const mime = doc.fileMimeType || '';
+    const name = escapeHtml(doc.fileName || 'Allegato');
+    const safeId = escapeHtml(doc.id);
+
+    if (mime.startsWith('image/')) {
+        return `<div class="document-preview"><img src="${doc.fileData}" alt="${name}" loading="lazy"></div>`;
+    }
+    if (mime === 'application/pdf' || (doc.fileName && /\.pdf$/i.test(doc.fileName))) {
+        return `<div class="document-preview document-preview-pdf"><iframe src="${doc.fileData}" title="${name}"></iframe></div>`;
+    }
+    return `<div class="document-preview document-preview-file">
+        <span class="document-preview-icon">📎</span>
+        <span class="document-preview-name">${name}</span>
+        <button type="button" class="btn-small document-preview-download" onclick="event.stopPropagation(); downloadDocument('${safeId}')">Scarica</button>
+    </div>`;
+}
+
 function renderDocuments() {
     const client = state.clients.find(c => c.id === state.currentClientId);
     if (!client) return;
@@ -2108,20 +2219,21 @@ function renderDocuments() {
     };
 
     documentsList.innerHTML = client.documents.map(doc => `
-        <div class="document-card" ${doc.fileData ? 'onclick="downloadDocument(\'' + doc.id + '\')"' : ''} style="${doc.fileData ? 'cursor: pointer;' : ''}">
+        <div class="document-card">
             <div class="document-card-header">
-                <div class="document-type">${docIcons[doc.type]}</div>
-                <button class="document-card-menu" onclick="event.stopPropagation(); deleteDocument('${doc.id}')">🗑️</button>
+                <div class="document-type">${docIcons[doc.type] || '📁'}</div>
+                <button type="button" class="document-card-menu" onclick="deleteDocument('${escapeHtml(doc.id)}')">🗑️</button>
             </div>
-            <div class="document-card-title">${docTypes[doc.type]}</div>
-            <div class="document-card-number">${doc.number}</div>
-            ${doc.fileName ? `<p style="font-size: 12px; color: var(--primary); margin-top: 6px;">📎 ${doc.fileName}</p>` : ''}
-            ${doc.notes ? `<p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">${doc.notes}</p>` : ''}
+            ${documentPreviewHtml(doc)}
+            <div class="document-card-title">${docTypes[doc.type] || 'Documento'}</div>
+            <div class="document-card-number">${escapeHtml(doc.number)}</div>
+            ${doc.fileName && doc.fileData ? `<p class="document-card-filename">📎 ${escapeHtml(doc.fileName)}</p>` : ''}
+            ${doc.notes ? `<p class="document-card-notes">${escapeHtml(doc.notes)}</p>` : ''}
             <div class="document-card-footer">
                 <div class="document-card-amount">${formatCurrency(doc.amount)}</div>
                 <div class="document-card-date">${formatDate(doc.date)}</div>
             </div>
-            ${doc.fileData ? '<div style="position: absolute; top: 8px; right: 40px; background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">FILE</div>' : ''}
+            ${doc.fileData ? `<button type="button" class="btn-small document-card-download" onclick="downloadDocument('${escapeHtml(doc.id)}')">⬇️ Scarica allegato</button>` : ''}
         </div>
     `).join('');
 }

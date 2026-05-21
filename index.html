@@ -63,7 +63,7 @@
 
                 <!-- Backup / Ripristino -->
                 <div class="backup-actions" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
-                    <button class="btn-secondary" id="exportJsonBtn" title="Scarica un file JSON con tutti i dati (clienti, ordini, documenti, note)" style="flex:1 1 auto; font-size:12px; padding:6px 8px;">⬇️ Esporta JSON</button>
+                    <button class="btn-secondary" id="exportJsonBtn" title="Scarica un file JSON con tutti i dati (clienti, ordini, documenti)" style="flex:1 1 auto; font-size:12px; padding:6px 8px;">⬇️ Esporta JSON</button>
                     <button class="btn-secondary" id="importJsonBtn" title="Ripristina i dati da un file JSON esportato in precedenza" style="flex:1 1 auto; font-size:12px; padding:6px 8px;">⬆️ Importa JSON</button>
                     <button class="btn-secondary" id="viewBackupsBtn" title="Mostra i backup locali degli ultimi 7 giorni" style="flex:1 1 100%; font-size:12px; padding:6px 8px;">🕒 Backup locali</button>
                 </div>
@@ -85,7 +85,7 @@
             <div class="empty-state" id="emptyState">
                 <div class="empty-state-icon">👋</div>
                 <h2>Benvenuto nel tuo Gestionale</h2>
-                <p>Inizia aggiungendo il tuo primo cliente per gestire documenti, ordini e note.</p>
+                <p>Inizia aggiungendo il tuo primo cliente per gestire documenti e ordini.</p>
                 <button class="btn-primary" onclick="document.getElementById('addClientBtn').click()">+ Aggiungi Cliente</button>
             </div>
 
@@ -551,8 +551,6 @@
                 <div class="tabs">
                     <button class="tab-btn active" data-tab="orders">🛒 Ordini</button>
                     <button class="tab-btn" data-tab="documents">📄 Documenti</button>
-                    <button class="tab-btn" data-tab="files">📎 File</button>
-                    <button class="tab-btn" data-tab="notes">📝 Note</button>
                 </div>
 
                 <!-- Tab Content: Ordini -->
@@ -577,32 +575,6 @@
                     <div class="documents-grid" id="documentsList">
                         <div class="empty-section">
                             <p>Nessun documento caricato</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab Content: File -->
-                <div class="tab-content" id="filesTab">
-                    <div class="section-header">
-                        <h3>File</h3>
-                        <button class="btn-small" id="addFileBtn">+ Carica File</button>
-                    </div>
-                    <div class="files-grid" id="filesList">
-                        <div class="empty-section">
-                            <p>Nessun file caricato</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab Content: Note -->
-                <div class="tab-content" id="notesTab">
-                    <div class="section-header">
-                        <h3>Note</h3>
-                        <button class="btn-small" id="addNoteBtn">+ Nuova Nota</button>
-                    </div>
-                    <div class="notes-list" id="notesList">
-                        <div class="empty-section">
-                            <p>Nessuna nota presente</p>
                         </div>
                     </div>
                 </div>
@@ -711,30 +683,6 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="closeModal('documentModal')">Annulla</button>
                 <button class="btn-primary" id="saveDocumentBtn">Salva</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Nota -->
-    <div class="modal" id="noteModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalNoteTitle">Nuova Nota</h3>
-                <button class="modal-close" onclick="closeModal('noteModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Titolo</label>
-                    <input type="text" id="modalNoteTitle-input" placeholder="Titolo della nota">
-                </div>
-                <div class="form-group">
-                    <label>Contenuto *</label>
-                    <textarea id="modalNoteContent" rows="8" required></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('noteModal')">Annulla</button>
-                <button class="btn-primary" id="saveNoteBtn">Salva</button>
             </div>
         </div>
     </div>
@@ -886,47 +834,6 @@
         </div>
     </div>
 
-    <!-- Modal File -->
-    <div class="modal" id="fileModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Carica File</h3>
-                <button class="modal-close" onclick="closeModal('fileModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Seleziona File *</label>
-                    <div class="file-input-wrapper">
-                        <input type="file" id="modalFileInput" accept="*/*">
-                        <div class="file-input-display" id="fileInputDisplay">
-                            <span class="file-input-icon">📁</span>
-                            <span class="file-input-text">Clicca per scegliere un file o trascinalo qui</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Descrizione</label>
-                    <input type="text" id="modalFileDescription" placeholder="Descrizione opzionale del file">
-                </div>
-                <div id="fileInfoDisplay" class="file-info-display" style="display: none;">
-                    <div class="file-info-item">
-                        <strong>Nome:</strong> <span id="fileInfoName"></span>
-                    </div>
-                    <div class="file-info-item">
-                        <strong>Tipo:</strong> <span id="fileInfoType"></span>
-                    </div>
-                    <div class="file-info-item">
-                        <strong>Dimensione:</strong> <span id="fileInfoSize"></span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('fileModal')">Annulla</button>
-                <button class="btn-primary" id="saveFileBtn">Carica</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal Backup/Restore -->
     <div class="modal" id="backupModal">
         <div class="modal-content">
@@ -938,7 +845,7 @@
                 <div style="margin-bottom: 24px;">
                     <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">📥 Esporta Backup</h4>
                     <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
-                        Scarica tutti i tuoi dati (clienti, ordini, documenti, note, file) in formato JSON.
+                        Scarica tutti i tuoi dati (clienti, ordini, documenti) in formato JSON.
                     </p>
                     <button class="btn-primary" onclick="exportBackup()" style="width: 100%;">
                         📥 Scarica Backup JSON
