@@ -2537,11 +2537,6 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         background: var(--bg-secondary);
     }
     
-    /* Mostra bottone indietro su mobile */
-    .btn-back-mobile {
-        display: block;
-    }
-
     .empty-state {
         padding: 40px 20px;
     }
@@ -2950,6 +2945,15 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
 /* Su mobile: layout app-like */
 @media (max-width: 768px) {
+    body.has-site-nav {
+        --app-global-header-height: 52px;
+    }
+
+    body.modal-open {
+        overflow: hidden;
+        touch-action: none;
+    }
+
     /* Su body.has-site-nav il layout è fisso a 100vh con overflow hidden;
        gli scroll container interni (sidebar/main-content) ricevono il
        padding-bottom per non finire dietro la bottom nav. */
@@ -3107,9 +3111,23 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         gap: 2px;
     }
 
-    /* La main-content in fullscreen (cliente aperto) lascia spazio alla bottom nav */
+    /* Schermo pieno sotto header globale, sopra bottom nav */
     body.has-site-nav .main-content.fullscreen-mobile {
-        bottom: calc(64px + env(safe-area-inset-bottom));
+        top: var(--app-global-header-height, 52px) !important;
+        bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+        height: auto !important;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    body.has-site-nav.mobile-view-client-detail .main-content.fullscreen-mobile {
+        padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+
+    body.has-site-nav.mobile-view-client-detail .orders-list,
+    body.has-site-nav.mobile-view-client-detail .documents-grid {
+        padding-bottom: 12px;
     }
 
     .mbn-btn {
@@ -3286,13 +3304,18 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         padding: 10px 12px;
     }
 
-    /* Bottone "back" mobile esistente — più visibile */
+    /* Indietro solo nel dettaglio cliente (dashboard/report usano bottom nav) */
     .btn-back-mobile {
+        display: none !important;
+    }
+
+    body.has-site-nav.mobile-view-client-detail .client-detail > .btn-back-mobile {
         display: inline-flex !important;
         align-items: center;
         gap: 6px;
         margin-bottom: 12px;
-        padding: 8px 14px;
+        padding: 10px 16px;
+        min-height: 44px;
         background: var(--bg-primary);
         border: 1px solid var(--border);
         border-radius: 999px;
@@ -3300,15 +3323,92 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         font-weight: 700;
         font-size: 13px;
         cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
     }
 
-    /* Su mobile nascondi i btn-small nelle tab (dashboard/report); in dettaglio cliente restano visibili */
-    body.has-site-nav:not(.mobile-view-client-detail) .section-header .btn-small {
-        display: none;
+    /* Nel dettaglio cliente: CTA in riga, touch-friendly */
+    body.has-site-nav.mobile-view-client-detail .section-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
     }
 
     body.has-site-nav.mobile-view-client-detail .section-header .btn-small {
         display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        min-height: 44px;
+        padding: 10px 14px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    body.has-site-nav:not(.mobile-view-client-detail) .section-header .btn-small {
+        display: none;
+    }
+
+    /* FAB solo lista clienti / dashboard; nel cliente si usano i pulsanti in tab */
+    body.has-site-nav.mobile-view-client-detail .fab-action {
+        display: none !important;
+    }
+
+    body.has-site-nav .client-info-chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+        margin-bottom: 4px;
+        scrollbar-width: none;
+    }
+
+    body.has-site-nav .client-info-chips::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.has-site-nav .form-group input,
+    body.has-site-nav .form-group select,
+    body.has-site-nav .form-group textarea,
+    body.has-site-nav .filter-group select,
+    body.has-site-nav .filter-group input {
+        font-size: 16px;
+    }
+
+    body.has-site-nav .tab-btn {
+        min-height: 44px;
+        padding: 12px 14px;
+    }
+
+    body.has-site-nav .mbn-btn {
+        min-height: 48px;
+    }
+
+    body.has-site-nav .report-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    body.has-site-nav #closeReportBtn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    body.has-site-nav .report-table-wrapper {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.has-site-nav .document-preview-pdf iframe {
+        height: 200px;
+    }
+
+    @media (hover: none) {
+        .order-card:hover,
+        .document-card:hover,
+        .client-item:hover {
+            transform: none;
+        }
     }
 
     /* KPI cards: griglia 2 colonne su mobile (più dense) */

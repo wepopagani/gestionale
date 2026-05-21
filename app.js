@@ -1357,10 +1357,14 @@ function incrementOrderCounter() {
 
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
+    if (!document.querySelector('.modal.active')) {
+        document.body.classList.remove('modal-open');
+    }
 }
 
 function openModal(modalId) {
     document.getElementById(modalId).classList.add('active');
+    if (isMobileViewport()) document.body.classList.add('modal-open');
 }
 
 // ===== EVENT LISTENERS =====
@@ -1491,6 +1495,27 @@ function isMobileViewport() {
     return window.matchMedia('(max-width: 768px)').matches;
 }
 
+/** Layout sidebar / main su smartphone (lista clienti vs schermo pieno). */
+function applyMobileShellLayout(mode) {
+    const sidebar = document.querySelector('.sidebar');
+    const main = document.querySelector('.main-content');
+    if (!sidebar || !main) return;
+
+    if (!isMobileViewport()) {
+        sidebar.classList.remove('hidden-mobile');
+        main.classList.remove('fullscreen-mobile');
+        return;
+    }
+
+    if (mode === 'clients-list') {
+        sidebar.classList.remove('hidden-mobile');
+        main.classList.remove('fullscreen-mobile');
+    } else {
+        sidebar.classList.add('hidden-mobile');
+        main.classList.add('fullscreen-mobile');
+    }
+}
+
 /** Imposta la "tab" attiva su mobile (dashboard | clients | report | client-detail) */
 function setMobileView(view) {
     state.mobileView = view;
@@ -1533,10 +1558,7 @@ function showClientsList() {
     const pickHint = document.getElementById('clientPickHint');
     if (pickHint) pickHint.style.display = 'none';
 
-    const sidebar = document.querySelector('.sidebar');
-    const main = document.querySelector('.main-content');
-    if (sidebar) sidebar.classList.remove('hidden-mobile');
-    if (main) main.classList.remove('fullscreen-mobile');
+    applyMobileShellLayout('clients-list');
 
     state.currentClientId = null;
     state.cameFromReport = false;
@@ -1636,9 +1658,12 @@ function setupMobileUX() {
         setMobileView('dashboard');
     }
 
-    // Aggiorna view su resize (per coerenza FAB ecc.)
     window.addEventListener('resize', () => {
         updateFab();
+        if (!isMobileViewport()) {
+            applyMobileShellLayout('clients-list');
+            document.body.classList.remove('modal-open');
+        }
     });
 
     // Command Palette (⌘K / Ctrl+K / "/")
@@ -1896,6 +1921,8 @@ function switchTab(tabName) {
     };
     
     document.getElementById(tabMap[tabName]).classList.add('active');
+    state.clientActiveTab = tabName;
+    if (typeof updateFab === 'function') updateFab();
 }
 
 // ===== CLIENTI =====
@@ -1961,11 +1988,8 @@ function selectClient(clientId, options = {}) {
     document.getElementById('dashboardView').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'block';
     
-    // Su mobile, nascondi la sidebar quando si apre un cliente
-    if (window.innerWidth <= 768) {
-        document.querySelector('.sidebar').classList.add('hidden-mobile');
-        document.querySelector('.main-content').classList.add('fullscreen-mobile');
-    }
+    applyMobileShellLayout('client-detail');
+    switchTab('orders');
 
     // Aggiorna header
     document.getElementById('clientName').textContent = client.name;
@@ -2020,8 +2044,7 @@ function selectClientFromReport(clientId) {
 }
 
 function backToClientList() {
-    document.querySelector('.sidebar').classList.remove('hidden-mobile');
-    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
+    applyMobileShellLayout('clients-list');
     document.getElementById('clientDetail').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'none';
 
@@ -3966,20 +3989,13 @@ function showDashboard() {
     document.getElementById('reportView').style.display = 'none';
     document.getElementById('dashboardView').style.display = 'block';
     
-    // Su mobile, nascondi la sidebar e mostra fullscreen
-    if (window.innerWidth <= 768) {
-        document.querySelector('.sidebar').classList.add('hidden-mobile');
-        document.querySelector('.main-content').classList.add('fullscreen-mobile');
-    }
-    
-    // Deseleziona cliente corrente
+    applyMobileShellLayout('fullscreen-view');
+
     state.currentClientId = null;
-    renderClients(); // Rimuove la selezione visiva
-    
-    // Popola la dashboard
+    renderClients();
+
     renderDashboard();
 
-    // Aggiorna stato mobile nav
     if (typeof setMobileView === 'function') setMobileView('dashboard');
 }
 
@@ -4189,11 +4205,8 @@ function openReportView() {
     state.currentClientId = null;
     renderClients();
 
-    if (window.innerWidth <= 768) {
-        document.querySelector('.sidebar').classList.add('hidden-mobile');
-        document.querySelector('.main-content').classList.add('fullscreen-mobile');
-    }
-    
+    applyMobileShellLayout('fullscreen-view');
+
     populateReportClientDropdown();
     
     const hadSaved = restoreReportFiltersFromStorage();
@@ -4217,21 +4230,16 @@ function closeReportView() {
     saveReportFiltersToStorage();
     document.getElementById('reportView').style.display = 'none';
     
-    // Mostra la sidebar
-    document.querySelector('.sidebar').classList.remove('hidden-mobile');
-    document.querySelector('.main-content').classList.remove('fullscreen-mobile');
-    
     if (state.clients.length === 0) {
+        applyMobileShellLayout(isMobileViewport() ? 'fullscreen-view' : 'clients-list');
         hideClientPickHint();
         document.getElementById('emptyState').style.display = 'block';
     } else if (state.currentClientId) {
         document.getElementById('clientDetail').style.display = 'block';
-        // Su mobile, nascondi sidebar per fullscreen cliente
-        if (window.innerWidth <= 768) {
-            document.querySelector('.sidebar').classList.add('hidden-mobile');
-            document.querySelector('.main-content').classList.add('fullscreen-mobile');
-        }
+        applyMobileShellLayout('client-detail');
+        if (typeof setMobileView === 'function') setMobileView('client-detail');
     } else {
+        applyMobileShellLayout(isMobileViewport() ? 'fullscreen-view' : 'clients-list');
         // Torna alla dashboard
         showDashboard();
     }
