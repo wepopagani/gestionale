@@ -878,19 +878,34 @@ function isQuotaError(err) {
     return err && (err.name === 'QuotaExceededError' || err.code === 22);
 }
 
-/** Clienti da serializzare in localStorage (senza base64 dei file se il cloud è attivo). */
-function clientsForLocalStorage() {
-    if (!cloudSyncEnabled) return state.clients;
+/**
+ * Clienti da serializzare in localStorage.
+ * Quando il cloud è attivo, possiamo ridurre il payload in modo aggressivo:
+ *  - level 0: tutto (default in modalità offline)
+ *  - level 1: rimuove i base64 dei file, mantiene metadata
+ *  - level 2: rimuove completamente i file
+ *  - level 3: solo dati anagrafici essenziali + ordini (no documents/notes/files)
+ */
+function clientsForLocalStorage(level = 0) {
+    if (!cloudSyncEnabled && level === 0) return state.clients;
+    if (level === 0) level = 1; // se cloud è attivo, parti già da slim
     return state.clients.map(client => {
-        if (!client.files || !client.files.length) return client;
-        return {
-            ...client,
-            files: client.files.map(f => {
+        const base = { ...client };
+        if (level >= 1 && Array.isArray(base.files)) {
+            base.files = base.files.map(f => {
                 if (!f || !f.data) return f;
                 const { data, ...meta } = f;
                 return meta;
-            })
-        };
+            });
+        }
+        if (level >= 2) {
+            base.files = [];
+        }
+        if (level >= 3) {
+            base.documents = [];
+            base.notes = [];
+        }
+        return base;
     });
 }
 
@@ -909,15 +924,27 @@ function pruneLocalStorageForQuota(aggressive = false) {
     }
 }
 
-function trySetLocalStorageItem(key, value) {
+function trySetLocalStorageItem(key, value, options = {}) {
     try {
         localStorage.setItem(key, value);
         return true;
     } catch (err) {
         if (!isQuotaError(err)) throw err;
         pruneLocalStorageForQuota(true);
-        localStorage.setItem(key, value);
-        return true;
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (err2) {
+            if (!isQuotaError(err2)) throw err2;
+            // Se è una scrittura "opzionale" (es. payload principale con cloud
+            // attivo), il cloud resta la fonte autoritativa: non propaghiamo
+            // l'errore, restituiamo false così il chiamante può decidere.
+            if (options.optional) {
+                try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+                return false;
+            }
+            throw err2;
+        }
     }
 }
 
@@ -1230,18 +1257,46 @@ function listLocalBackups() {
  */
 function saveToLocalOnly(options = {}) {
     const run = () => {
+        const timestamp = new Date().toLocaleTimeString();
         try {
-            const timestamp = new Date().toLocaleTimeString();
-            const payload = JSON.stringify(clientsForLocalStorage());
-            trySetLocalStorageItem('gestionale_data', payload);
-            trySetLocalStorageItem('gestionale_order_counter', state.orderCounter.toString());
-            console.log(`💾 [${timestamp}] Solo-local: ${state.clients.length} clienti`);
-            if (options.forceBackup || shouldRunPeriodicBackup()) {
-                writeDailyBackup();
-                pushRollingBackup();
-                markBackupRun();
+            // Tentativo a livelli progressivi di "slim". La scrittura del
+            // payload principale è opzionale se il cloud è attivo: la fonte
+            // autoritativa è il cloud, il localStorage serve solo come cache
+            // di lavoro/offline.
+            const levels = cloudSyncEnabled ? [1, 2, 3] : [0, 1, 2, 3];
+            let saved = false;
+            let usedLevel = -1;
+            for (const lvl of levels) {
+                const payload = JSON.stringify(clientsForLocalStorage(lvl));
+                const ok = trySetLocalStorageItem('gestionale_data', payload, { optional: cloudSyncEnabled });
+                if (ok) { saved = true; usedLevel = lvl; break; }
+            }
+
+            // Counter è piccolo: lo salviamo comunque (best-effort)
+            try {
+                trySetLocalStorageItem('gestionale_order_counter', state.orderCounter.toString(), { optional: cloudSyncEnabled });
+            } catch (e) { /* già gestito dal trySetLocalStorageItem */ }
+
+            if (saved) {
+                const tag = usedLevel === 0 ? 'full' : `slim L${usedLevel}`;
+                console.log(`💾 [${timestamp}] Locale (${tag}): ${state.clients.length} clienti`);
+                if (options.forceBackup || shouldRunPeriodicBackup()) {
+                    writeDailyBackup();
+                    pushRollingBackup();
+                    markBackupRun();
+                }
+            } else if (cloudSyncEnabled) {
+                // Quota piena anche in modalità ultra-slim, ma il cloud ha tutto:
+                // non è un errore, è una semplice degradazione della cache locale.
+                console.info(`ℹ️ [${timestamp}] Locale pieno: ${state.clients.length} clienti — cloud resta la fonte primaria`);
+                notifyQuotaOnce();
+            } else {
+                // Offline puro: questo sì che è un problema, avvisa l'utente.
+                console.error('❌ Locale pieno e cloud non attivo');
+                showNotification('⚠️ Memoria locale piena e nessun cloud attivo. Esporta un backup JSON ora.', 'error');
             }
         } catch (error) {
+            // Errore non legato alla quota (es. JSON.stringify circolare)
             console.error('❌ Errore salvataggio localStorage:', error);
             if (isQuotaError(error)) {
                 notifyQuotaOnce();
