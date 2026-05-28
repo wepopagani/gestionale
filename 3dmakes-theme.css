@@ -488,6 +488,44 @@
   color: #c62828;
 }
 
+/* ========== Selettore cliente da rubrica (preventivo) ========== */
+.dm-client-panel {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px dashed var(--dm-border, #e5e7eb);
+  border-radius: 12px;
+  background: rgba(0, 174, 239, 0.04);
+}
+
+.dm-client-panel .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.dm-client-panel select[size] {
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dm-client-panel select[size] option {
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+
+/* Campi nome/indirizzo compilati automaticamente dalla rubrica */
+.dm-preventivo-wrap .dm-sidebar.dm-form input[readonly],
+.dm-preventivo-wrap .dm-sidebar.dm-form textarea[readonly] {
+  background: var(--dm-bg-soft, #f5f7fa);
+  color: var(--dm-text, #1d3454);
+  cursor: default;
+}
+
+.dm-preventivo-wrap .dm-sidebar.dm-form input[readonly]:focus,
+.dm-preventivo-wrap .dm-sidebar.dm-form textarea[readonly]:focus {
+  border-color: var(--dm-border, #e5e7eb);
+  box-shadow: none;
+}
+
 /* ========== Layout preventivo ========== */
 /* Colonna destra = foglio A4 reale (210mm), colonna sinistra occupa il resto.
    Ogni colonna ha il proprio scroll verticale indipendente, così editor e

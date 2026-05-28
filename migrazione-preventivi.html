@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="3dmakes-theme.css">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="firestore-init.js"></script>
     <style>
@@ -187,6 +188,20 @@
                 const db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
                 if (!db) {
                     log.textContent = 'Impossibile inizializzare Firestore (firebase-config.js).';
+                    return;
+                }
+                if (typeof initFirebaseAuthAnon !== 'function') {
+                    log.textContent = 'firebase-config.js troppo vecchio: manca initFirebaseAuthAnon. Ricarica la pagina.';
+                    return;
+                }
+                try {
+                    log.textContent = 'Autenticazione in corso...';
+                    await initFirebaseAuthAnon();
+                } catch (authErr) {
+                    console.error(authErr);
+                    log.textContent = (authErr && authErr.code === 'auth/operation-not-allowed')
+                        ? 'Abilita "Anonymous" in Firebase Console → Authentication → Sign-in method, poi ricarica.'
+                        : 'Autenticazione fallita: ' + (authErr.message || authErr);
                     return;
                 }
                 let ok = 0;

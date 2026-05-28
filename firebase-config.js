@@ -43,6 +43,58 @@ service cloud.firestore {
 }
 */
 
+// ===== AUTENTICAZIONE ANONIMA (per regole DB sicure) =====
+// Tutte le pagine che leggono/scrivono sul cloud devono attendere che questa
+// Promise sia risolta prima di chiamare la prima operazione sui DB.
+//
+// Per funzionare richiede:
+//  • firebase-auth-compat.js incluso nella pagina
+//  • Authentication → Sign-in method → Anonymous = ABILITATO nel progetto Firebase
+//
+// Tutte le sessioni utente diventano `auth.uid` univoci (firebase ne genera uno
+// per browser e lo conserva localmente). Le regole DB possono quindi richiedere
+// `request.auth != null` (Firestore) / `auth != null` (Realtime DB).
+let _firebaseAuthPromise = null;
+function initFirebaseAuthAnon() {
+    if (_firebaseAuthPromise) return _firebaseAuthPromise;
+    _firebaseAuthPromise = new Promise((resolve, reject) => {
+        try {
+            if (typeof firebase === 'undefined') {
+                throw new Error('Firebase SDK non caricato.');
+            }
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            if (typeof firebase.auth !== 'function') {
+                throw new Error('Firebase Auth SDK mancante: aggiungi firebase-auth-compat.js alla pagina.');
+            }
+            const auth = firebase.auth();
+            if (auth.currentUser) {
+                resolve(auth.currentUser);
+                return;
+            }
+            let resolved = false;
+            const unsub = auth.onAuthStateChanged(user => {
+                if (user && !resolved) {
+                    resolved = true;
+                    try { unsub(); } catch (e) { /* ignore */ }
+                    resolve(user);
+                }
+            });
+            auth.signInAnonymously().catch(err => {
+                if (!resolved) {
+                    resolved = true;
+                    try { unsub(); } catch (e) { /* ignore */ }
+                    reject(err);
+                }
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return _firebaseAuthPromise;
+}
+
 // Esporta la configurazione
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = firebaseConfig;

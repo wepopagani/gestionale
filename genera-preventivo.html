@@ -12,6 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="firestore-init.js"></script>
     <script src="preventivo-config-servizi.js"></script>
@@ -57,13 +59,31 @@
                 <small class="dm-muted-inline">Note legali e condizioni di fornitura nelle pagine 2–3 si adattano al servizio scelto.</small>
             </div>
             <div class="dm-section-title">Dati cliente</div>
+            <div class="dm-client-panel" id="panelClienteRubrica" role="region" aria-label="Selettore cliente">
+                <div class="form-group">
+                    <label>Cerca cliente in rubrica:</label>
+                    <input type="text" id="clienteRubricaSearch"
+                        placeholder="Filtra per nome, email, telefono o P.IVA..."
+                        autocomplete="off"
+                        oninput="filtraClientiRubrica(this.value)">
+                </div>
+                <div class="form-group">
+                    <label>Seleziona cliente:</label>
+                    <select id="clienteRubricaSelect" size="8"
+                        onchange="caricaClienteDaRubrica(this.value)"
+                        onclick="caricaClienteDaRubrica(this.value)">
+                        <option value="">Caricamento clienti...</option>
+                    </select>
+                    <small class="dm-muted-inline" id="clienteRubricaStatus">In attesa del cloud...</small>
+                </div>
+            </div>
             <div class="form-group">
                 <label>Nome Cliente:</label>
-                <input type="text" id="nomeCliente" value="esempio" oninput="aggiorna()">
+                <input type="text" id="nomeCliente" value="" placeholder="Seleziona un cliente dalla rubrica" readonly>
             </div>
             <div class="form-group">
                 <label>Indirizzo Cliente:</label>
-                <textarea id="indirizzoCliente" oninput="aggiorna()">esempio</textarea>
+                <textarea id="indirizzoCliente" placeholder="Indirizzo del cliente selezionato" readonly></textarea>
             </div>
             <div class="dm-section-title">Articoli</div>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
@@ -202,6 +222,25 @@
         let preventivoInModifica = null;
         let modalitaModifica = false;
 
+        // Realtime DB (rubrica clienti condivisa con il gestionale)
+        let firebaseRtdb = null;
+        const RUBRICA_USER_ID = 'shared_gestionale';
+        let clientiRubrica = [];
+        let clienteRubricaFiltro = '';
+
+        // Promise che si risolve quando Anonymous Auth ha completato.
+        // Tutte le operazioni di lettura/scrittura sui DB devono awaitarla,
+        // altrimenti le regole (`auth != null`) le rifiutano.
+        const authReady = (typeof initFirebaseAuthAnon === 'function')
+            ? initFirebaseAuthAnon().catch(function (err) {
+                console.error('❌ Anonymous Auth fallita:', err);
+                if (err && err.code === 'auth/operation-not-allowed') {
+                    console.error('👉 Abilita "Anonymous" in Firebase Console → Authentication → Sign-in method.');
+                }
+                throw err;
+            })
+            : Promise.reject(new Error('initFirebaseAuthAnon non disponibile'));
+
         try {
             db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
             firebaseInitialized = !!db;
@@ -214,10 +253,143 @@
             console.error('❌ Errore inizializzazione Firebase:', error);
         }
 
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined'
+                && firebase.database && firebaseConfig.databaseURL) {
+                firebaseRtdb = firebase.database();
+                console.log('✅ Firebase (Realtime DB) inizializzato per rubrica clienti');
+            } else {
+                console.warn('⚠️ Realtime DB non disponibile: rubrica clienti disabilitata.');
+            }
+        } catch (error) {
+            console.error('❌ Errore init Realtime DB:', error);
+        }
+
+        function normalizzaClientiRubrica(rawRoot) {
+            if (!rawRoot || typeof rawRoot !== 'object') return [];
+            const lista = Array.isArray(rawRoot)
+                ? rawRoot.filter(v => v !== null && v !== undefined)
+                : Object.values(rawRoot);
+            return lista
+                .filter(c => c && typeof c === 'object' && c.id && c.name)
+                .map(c => ({
+                    id: String(c.id),
+                    name: String(c.name || '').trim(),
+                    email: c.email || '',
+                    phone: c.phone || '',
+                    address: c.address || '',
+                    vat: c.vat || ''
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }));
+        }
+
+        function aggiornaSelectClientiRubrica() {
+            const sel = document.getElementById('clienteRubricaSelect');
+            const status = document.getElementById('clienteRubricaStatus');
+            if (!sel) return;
+
+            const filtro = (clienteRubricaFiltro || '').trim().toLowerCase();
+            const lista = filtro
+                ? clientiRubrica.filter(c => {
+                    return (c.name && c.name.toLowerCase().includes(filtro))
+                        || (c.email && c.email.toLowerCase().includes(filtro))
+                        || (c.phone && c.phone.toLowerCase().includes(filtro))
+                        || (c.address && c.address.toLowerCase().includes(filtro))
+                        || (c.vat && c.vat.toLowerCase().includes(filtro));
+                })
+                : clientiRubrica.slice();
+
+            sel.innerHTML = '';
+            if (lista.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = clientiRubrica.length === 0
+                    ? 'Nessun cliente in rubrica'
+                    : 'Nessun risultato per il filtro';
+                opt.disabled = true;
+                sel.appendChild(opt);
+            } else {
+                lista.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    const meta = c.email || c.phone || c.address || '';
+                    opt.textContent = meta ? `${c.name} — ${meta}` : c.name;
+                    sel.appendChild(opt);
+                });
+            }
+            if (status) {
+                if (clientiRubrica.length === 0) {
+                    status.textContent = 'Rubrica vuota: aggiungi i clienti dal gestionale.';
+                } else if (filtro) {
+                    status.textContent = `${lista.length} di ${clientiRubrica.length} clienti corrispondono al filtro.`;
+                } else {
+                    status.textContent = `${clientiRubrica.length} clienti disponibili. Selezionane uno per compilare i campi.`;
+                }
+            }
+        }
+
+        function filtraClientiRubrica(testo) {
+            clienteRubricaFiltro = testo || '';
+            aggiornaSelectClientiRubrica();
+        }
+
+        function composeIndirizzoCliente(c) {
+            const parti = [];
+            if (c.address) parti.push(String(c.address).trim());
+            if (c.vat) parti.push('P.IVA / CF: ' + String(c.vat).trim());
+            return parti.join('\n');
+        }
+
+        function caricaClienteDaRubrica(idCliente) {
+            if (!idCliente) return;
+            const cliente = clientiRubrica.find(c => c.id === idCliente);
+            if (!cliente) return;
+            const nomeEl = document.getElementById('nomeCliente');
+            const indEl = document.getElementById('indirizzoCliente');
+            if (nomeEl) nomeEl.value = cliente.name;
+            if (indEl) indEl.value = composeIndirizzoCliente(cliente);
+            aggiorna();
+            const status = document.getElementById('clienteRubricaStatus');
+            if (status) {
+                status.innerHTML = '<strong style="color:#00aeef;">Caricato:</strong> ' +
+                    (cliente.name || '') +
+                    ' — puoi comunque modificare i campi qui sotto.';
+            }
+        }
+
+        function caricaClientiRubrica() {
+            const status = document.getElementById('clienteRubricaStatus');
+            if (!firebaseRtdb) {
+                if (status) status.textContent = 'Rubrica non disponibile (Realtime DB non configurato).';
+                const sel = document.getElementById('clienteRubricaSelect');
+                if (sel) sel.innerHTML = '<option value="" disabled>Rubrica offline</option>';
+                return;
+            }
+            if (status) status.textContent = 'Autenticazione in corso...';
+            authReady
+                .then(() => {
+                    if (status) status.textContent = 'Caricamento clienti dal cloud...';
+                    return firebaseRtdb.ref('clients/' + RUBRICA_USER_ID).once('value');
+                })
+                .then(snap => {
+                    clientiRubrica = normalizzaClientiRubrica(snap.val());
+                    aggiornaSelectClientiRubrica();
+                })
+                .catch(err => {
+                    console.error('Errore caricamento rubrica clienti:', err);
+                    if (status) {
+                        status.textContent = (err && err.code === 'auth/operation-not-allowed')
+                            ? 'Abilita "Anonymous" in Firebase Console per usare la rubrica.'
+                            : 'Errore durante il caricamento della rubrica.';
+                    }
+                });
+        }
+
         async function ottieniProssimoNumeroPreventivo() {
             if (!firebaseInitialized) {
                 return document.getElementById('numeroOfferta').value;
             }
+            await authReady;
             const anno = new Date().getFullYear();
             const counterRef = db.collection('counters').doc('preventivi');
             const nuovoNumero = await db.runTransaction(async (transaction) => {
@@ -246,6 +418,7 @@
 
         async function salvaPreventivoFirestore(datiPreventivo, idPreventivo = null) {
             if (!firebaseInitialized) return null;
+            await authReady;
             if (idPreventivo) {
                 await db.collection('preventivi').doc(idPreventivo).update({
                     ...datiPreventivo,
@@ -263,6 +436,7 @@
 
         async function caricaPreventivoEsistente(idPreventivo) {
             if (!firebaseInitialized) return null;
+            await authReady;
             const doc = await db.collection('preventivi').doc(idPreventivo).get();
             if (!doc.exists) return null;
             return { id: doc.id, ...doc.data() };
@@ -357,8 +531,6 @@
 
         /** Valori iniziali bozza: finché restano così, i campi sono evidenziati in rosso. */
         const SEGNAPOSTO_PREVENTIVO = {
-            nomeCliente: 'esempio',
-            indirizzoCliente: 'esempio',
             descrizioneRiga: 'esempio'
         };
 
@@ -388,8 +560,8 @@
 
             const nome = normPerSegnaposto(document.getElementById('nomeCliente').value);
             const ind = normPerSegnaposto(document.getElementById('indirizzoCliente').value);
-            flagGroup('nomeCliente', nome === normPerSegnaposto(SEGNAPOSTO_PREVENTIVO.nomeCliente));
-            flagGroup('indirizzoCliente', ind === normPerSegnaposto(SEGNAPOSTO_PREVENTIVO.indirizzoCliente));
+            flagGroup('nomeCliente', !nome);
+            flagGroup('indirizzoCliente', !ind);
 
             const dataEl = document.getElementById('dataDoc');
             const dataVal = dataEl && dataEl.value;
@@ -1120,6 +1292,7 @@
 
         window.addEventListener('load', function() {
             verificaModalitaModifica();
+            caricaClientiRubrica();
         });
 
         renderEditor();

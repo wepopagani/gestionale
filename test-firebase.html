@@ -53,6 +53,7 @@
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
 </head>
 <body>
@@ -103,7 +104,9 @@
 
     <script>
         let db = null;
-        let userId = null;
+        // userId fisso "shared_gestionale" come nel resto dell'app (app.js).
+        // Le regole DB consentono solo questo path.
+        let userId = 'shared_gestionale';
         
         function log(message, type = 'info') {
             const logEl = document.getElementById('event-log');
@@ -136,17 +139,23 @@
             return true;
         }
         
-        // Test 2: Connessione Database
-        function testConnection() {
+        // Test 2: Connessione Database (con Anonymous Auth)
+        async function testConnection() {
             const statusEl = document.getElementById('db-status');
             const urlEl = document.getElementById('db-url');
-            
+
             try {
                 if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
                 }
+                if (typeof initFirebaseAuthAnon !== 'function') {
+                    throw new Error('initFirebaseAuthAnon non disponibile: aggiorna firebase-config.js.');
+                }
+                log('🔐 Autenticazione anonima in corso...', 'info');
+                const user = await initFirebaseAuthAnon();
+                log('✅ Autenticato (uid: ' + (user && user.uid ? user.uid.slice(0, 8) + '…' : 'n/d') + ')', 'success');
+
                 db = firebase.database();
-                
                 statusEl.innerHTML = '<span class="success">✅ Connessione stabilita</span>';
                 urlEl.innerHTML = `<span class="info">Database URL: ${firebaseConfig.databaseURL}</span>`;
                 log('✅ Connesso al database', 'success');
@@ -154,6 +163,9 @@
             } catch (error) {
                 statusEl.innerHTML = `<span class="error">❌ Errore: ${error.message}</span>`;
                 log(`❌ Errore connessione: ${error.message}`, 'error');
+                if (error && error.code === 'auth/operation-not-allowed') {
+                    log('👉 Abilita "Anonymous" in Firebase Console → Authentication → Sign-in method.', 'warning');
+                }
                 return false;
             }
         }
@@ -167,9 +179,7 @@
             
             const dataEl = document.getElementById('cloud-data');
             const contentEl = document.getElementById('data-content');
-            
-            userId = localStorage.getItem('gestionale_user_id') || 'user_unknown';
-            
+
             dataEl.innerHTML = '<span class="warning">⏳ Lettura in corso...</span>';
             log(`📖 Lettura dati per user: ${userId}`, 'info');
             
@@ -226,18 +236,14 @@
                 });
         }
         
-        // User ID
+        // User ID (path condiviso fisso usato da tutta l'app)
         function showUserId() {
-            userId = localStorage.getItem('gestionale_user_id');
             const el = document.getElementById('user-id');
-            
-            if (userId) {
-                el.innerHTML = `<span class="success">✅ User ID: <code>${userId}</code></span>`;
-                log(`User ID: ${userId}`, 'info');
-            } else {
-                el.innerHTML = '<span class="warning">⚠️ User ID non trovato in localStorage</span>';
-                log('⚠️ User ID mancante', 'warning');
-            }
+            const authUid = (firebase && firebase.auth && firebase.auth().currentUser)
+                ? firebase.auth().currentUser.uid : 'n/d';
+            el.innerHTML = `<span class="success">✅ Path dati: <code>clients/${userId}</code></span>` +
+                `<br><span class="info">Auth UID (anonimo): <code>${authUid}</code></span>`;
+            log(`Path dati: clients/${userId}`, 'info');
         }
         
         // Dati locali
@@ -292,11 +298,12 @@
         }
         
         // Inizializzazione
-        window.onload = function() {
+        window.onload = async function() {
             log('🚀 Avvio diagnostica...', 'info');
-            
+
             if (testConfig()) {
-                if (testConnection()) {
+                const connected = await testConnection();
+                if (connected) {
                     showUserId();
                     testRead();
                 }

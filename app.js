@@ -214,12 +214,33 @@ function initFirebase() {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
-        firebaseDb = firebase.database();
-        userId = 'shared_gestionale';
-        firebaseReady = true;
-        console.log('✅ Firebase inizializzato');
-        console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
-        setupCloudSync();
+
+        // Autentichiamo l'utente in anonimo PRIMA di esporre firebaseDb / fare
+        // sync. Le regole del Realtime Database richiedono `auth != null`,
+        // quindi non possiamo leggere/scrivere finché Anonymous Auth non ha
+        // restituito un uid.
+        if (typeof initFirebaseAuthAnon !== 'function') {
+            console.error('❌ initFirebaseAuthAnon mancante: includi firebase-config.js aggiornato e firebase-auth-compat.js');
+            updateCloudStatus(false);
+            return;
+        }
+
+        initFirebaseAuthAnon()
+            .then(function (user) {
+                firebaseDb = firebase.database();
+                userId = 'shared_gestionale';
+                firebaseReady = true;
+                console.log('✅ Firebase inizializzato (auth uid: ' + (user && user.uid ? user.uid.slice(0, 6) + '…' : 'n/d') + ')');
+                console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
+                setupCloudSync();
+            })
+            .catch(function (err) {
+                console.error('❌ Anonymous Auth fallita:', err);
+                if (err && err.code === 'auth/operation-not-allowed') {
+                    console.error('👉 Apri Firebase Console → Authentication → Sign-in method e abilita "Anonymous".');
+                }
+                updateCloudStatus(false);
+            });
     } catch (error) {
         console.error('❌ Errore inizializzazione Firebase:', error);
         updateCloudStatus(false);
