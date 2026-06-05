@@ -2177,6 +2177,20 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     margin-bottom: 20px;
 }
 
+.form-row {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.form-row--2 {
+    grid-template-columns: 1fr 2fr;
+}
+
+.form-row .form-group {
+    margin-bottom: 0;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 8px;

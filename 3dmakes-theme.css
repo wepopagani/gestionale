@@ -706,26 +706,58 @@
   margin-top: 0 !important;
   padding: 12px 14px !important;
   overflow: hidden;
+  font-size: var(--dm-legal-fs, 11.5pt);
+  line-height: var(--dm-legal-lh, 1.5);
 }
 
-/* Testo condizioni: grandezza controllata via --dm-legal-fs (impostata da JS
-   per riempire la pagina senza scroll). Valori di fallback leggibili. */
+/* Testo condizioni e note tecniche: stessa grandezza (--dm-legal-fs sul contenitore
+   .dm-doc-notes--legal, impostata da JS in base alle Note Tecniche). */
 .dm-doc-legal {
-  font-size: var(--dm-legal-fs, 9.5pt);
-  line-height: var(--dm-legal-lh, 1.38);
+  font-size: inherit;
+  line-height: inherit;
   color: var(--dm-text);
 }
 
 .dm-doc-legal strong {
+  display: inline;
+  margin: 0;
+  padding: 0;
   font-size: inherit;
+  font-weight: 700;
+  color: inherit;
 }
 
 .dm-doc-legal ol {
   padding-left: 14px;
+  margin: 0 0 0.45em;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .dm-doc-legal li {
-  margin-bottom: 0.35em;
+  margin-bottom: 0.55em;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.dm-doc-legal p {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.dm-doc-legal ol li::marker {
+  font-weight: 700;
+  color: inherit;
+}
+
+/* Titolo di sezione (es. 2. IVA): riga dedicata, testo nel paragrafo sotto */
+.dm-doc-legal p:has(> strong:only-child) {
+  margin: 0 0 0.18em !important;
+}
+
+.dm-doc-legal p:has(> strong:only-child) + p {
+  margin-top: 0 !important;
+  margin-bottom: 0.55em !important;
 }
 
 /* Durante export PDF: formato A4 esatto, niente bordi/ombre (PDF pulito). */
@@ -891,6 +923,23 @@
   margin-bottom: 10px;
   color: var(--dm-navy);
   font-size: 13px;
+}
+
+/* Pagine legali del preventivo: strong inline, senza margine sotto al titolo */
+.dm-doc-notes--legal strong {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: 700;
+  color: inherit;
+}
+
+/* Note tecniche: titolo del punto a capo, testo sotto */
+.dm-doc-notes--legal .dm-doc-legal li strong,
+.dm-doc-legal li strong {
+  display: block;
+  margin: 0 0 0.15em;
 }
 
 .dm-total-row.final {

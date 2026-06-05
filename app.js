@@ -252,7 +252,52 @@ function updateCloudStatus(connected) {
 }
 
 function cloudAvailable() {
-    return !!(firebaseReady && firebaseDb && cloudSyncEnabled && userId);
+    return !!(firebaseReady && firebaseDb && userId);
+}
+
+const CLIENT_SCALAR_KEYS = [
+    'name', 'acquisitionDate', 'email', 'phone',
+    'address', 'postalCode', 'city', 'country', 'vat', 'updatedAt'
+];
+
+function clientRecordTimestamp(client) {
+    if (!client) return 0;
+    const ts = Date.parse(client.updatedAt || client.createdAt || '');
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function mergeClientRecord(local, cloud) {
+    if (!cloud) return migrateClientAddressFields(local ? { ...local } : null);
+    if (!local) return migrateClientAddressFields({ ...cloud });
+    const merged = { ...cloud };
+    const localTs = clientRecordTimestamp(local);
+    const cloudTs = clientRecordTimestamp(cloud);
+
+    CLIENT_SCALAR_KEYS.forEach(function (k) {
+        const lv = local[k];
+        const cv = cloud[k];
+        if (localTs > cloudTs) {
+            if (lv !== undefined && lv !== null && lv !== '') merged[k] = lv;
+        } else if ((cv === undefined || cv === null || cv === '') && lv) {
+            merged[k] = lv;
+        }
+    });
+
+    ['orders', 'documents', 'notes', 'files'].forEach(function (k) {
+        if (Array.isArray(cloud[k]) && cloud[k].length) merged[k] = cloud[k];
+        else if (Array.isArray(local[k])) merged[k] = local[k];
+    });
+
+    return migrateClientAddressFields(merged);
+}
+
+function clientScalarFieldsForCloud(client) {
+    if (!client) return {};
+    const fields = {};
+    CLIENT_SCALAR_KEYS.forEach(function (k) {
+        if (client[k] !== undefined) fields[k] = client[k];
+    });
+    return fields;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +325,147 @@ function normalizeClientFromCloud(raw) {
     ['orders', 'documents', 'notes', 'files'].forEach(key => {
         c[key] = ensureArray(c[key]);
     });
+    return migrateClientAddressFields(c);
+}
+
+const ADDRESS_WORDS_LOWERCASE = new Set([
+    'a', 'al', 'alla', 'alle', 'allo', 'ai', 'agli', 'all',
+    'di', 'da', 'de', 'del', 'della', 'dei', 'delle', 'dello',
+    'in', 'su', 'sul', 'sulla', 'sui', 'sulle',
+    'e', 'o', 'per', 'con', 'tra', 'fra'
+]);
+
+function addressLooksCombined(text) {
+    if (!text) return false;
+    return /,\s*(?:CH[-\s]?)?\d{4,5}\s/i.test(text)
+        || /\s[-–—]\s*(?:CH[-\s]?)?\d{4,5}\s/i.test(text)
+        || /\s(?:CH[-\s]?)?\d{4,5}\s+[A-Za-zÀ-ÿ]/i.test(text);
+}
+
+function normalizePostalCode(value) {
+    if (!value) return '';
+    const raw = String(value).trim();
+    const digits = raw.replace(/^CH[-\s]?/i, '').trim();
+    if (/^\d{4,5}$/.test(digits)) return digits;
+    return raw;
+}
+
+function formatAddressTitleCase(text, kind) {
+    if (!text || !String(text).trim()) return '';
+    if (kind === 'country') {
+        const lower = String(text).trim().toLowerCase();
+        if (lower === 'svizzera' || lower === 'switzerland' || lower === 'ch') return 'Svizzera';
+        if (lower === 'italia' || lower === 'italy' || lower === 'it') return 'Italia';
+    }
+    return String(text).trim().split(/\s+/).map(function (word, index) {
+        if (/^\d+[a-zA-Z]?$/.test(word)) return word;
+        if (/^CH[-\s]?\d{4,5}$/i.test(word)) return normalizePostalCode(word);
+        const lower = word.toLowerCase();
+        if (index > 0 && ADDRESS_WORDS_LOWERCASE.has(lower)) return lower;
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+    }).join(' ');
+}
+
+function tryParseCombinedAddress(text) {
+    if (!text) return null;
+    const t = String(text).trim();
+    const patterns = [
+        /^(.+?),\s*(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i,
+        /^(.+?)\s*[-–—]\s*(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i,
+        /^(.+?)\s+(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i
+    ];
+    for (let i = 0; i < patterns.length; i++) {
+        const match = t.match(patterns[i]);
+        if (match) {
+            return {
+                street: match[1].trim(),
+                postalCode: match[2].trim(),
+                city: match[3].trim()
+            };
+        }
+    }
+    return null;
+}
+
+function parseClientAddressParts(client) {
+    let street = (client && client.address ? String(client.address) : '').trim();
+    let postalCode = (client && client.postalCode ? String(client.postalCode) : '').trim();
+    let city = (client && client.city ? String(client.city) : '').trim();
+    let country = (client && client.country ? String(client.country) : '').trim();
+
+    if (street && (!postalCode || !city || addressLooksCombined(street))) {
+        const split = tryParseCombinedAddress(street);
+        if (split) {
+            street = split.street;
+            if (!postalCode || addressLooksCombined(client.address || '')) postalCode = split.postalCode;
+            if (!city || addressLooksCombined(client.address || '')) city = split.city;
+        }
+    }
+
+    return {
+        street: formatAddressTitleCase(street, 'street'),
+        postalCode: normalizePostalCode(postalCode),
+        city: formatAddressTitleCase(city, 'city'),
+        country: formatAddressTitleCase(country, 'country')
+    };
+}
+
+function migrateClientAddressFields(client) {
+    if (!client || typeof client !== 'object') return client;
+    const parsed = parseClientAddressParts(client);
+    const combined = addressLooksCombined(client.address || '');
+
+    if (parsed.street && (combined || !client.postalCode || !client.city || parsed.street !== client.address)) {
+        client.address = parsed.street;
+    }
+    if (parsed.postalCode && (!client.postalCode || combined)) client.postalCode = parsed.postalCode;
+    if (parsed.city && (!client.city || combined)) client.city = parsed.city;
+    if (parsed.country && !client.country) client.country = parsed.country;
+
+    if (client.address) client.address = formatAddressTitleCase(client.address, 'street');
+    if (client.postalCode) client.postalCode = normalizePostalCode(client.postalCode);
+    if (client.city) client.city = formatAddressTitleCase(client.city, 'city');
+    if (client.country) client.country = formatAddressTitleCase(client.country, 'country');
+    return client;
+}
+
+function migrateAllClientAddresses(options) {
+    const pushCloud = !!(options && options.pushCloud);
+    let changed = 0;
+    state.clients.forEach(function (client) {
+        const before = JSON.stringify({
+            address: client.address || '',
+            postalCode: client.postalCode || '',
+            city: client.city || '',
+            country: client.country || ''
+        });
+        migrateClientAddressFields(client);
+        const after = JSON.stringify({
+            address: client.address || '',
+            postalCode: client.postalCode || '',
+            city: client.city || '',
+            country: client.country || ''
+        });
+        if (before !== after) {
+            changed++;
+            if (pushCloud && cloudAvailable()) {
+                if (!client.updatedAt) client.updatedAt = new Date().toISOString();
+                cloudUpdateClientFields(client.id, clientScalarFieldsForCloud(client));
+            }
+        }
+    });
+    if (changed > 0) {
+        saveToLocalOnly({ immediate: true });
+        console.log('📍 Indirizzi normalizzati per ' + changed + ' clienti');
+    }
+    return changed;
+}
+
+function formatCapDisplay(cap) {
+    if (!cap) return '';
+    const c = String(cap).trim();
+    if (/^CH[-\s]?/i.test(c)) return c.replace(/^CH[\s-]*/i, 'CH-');
+    if (/^\d{4,5}$/.test(c)) return 'CH-' + c;
     return c;
 }
 
@@ -335,7 +521,12 @@ function reconcileCloudRoot(rawRoot) {
         Object.keys(piece).forEach(k => {
             if (['orders', 'documents', 'notes', 'files', 'id'].includes(k)) return;
             const incoming = piece[k];
-            if (incoming === null || incoming === undefined || incoming === '') return;
+            if (incoming === null || incoming === undefined) return;
+            if (['address', 'postalCode', 'city', 'country', 'email', 'phone', 'vat', 'name', 'acquisitionDate', 'updatedAt'].includes(k)) {
+                byId[id][k] = incoming;
+                return;
+            }
+            if (incoming === '') return;
             if (byId[id][k] === undefined || byId[id][k] === null || byId[id][k] === '') {
                 byId[id][k] = incoming;
             }
@@ -416,9 +607,13 @@ function cloudSetClient(client) {
 
 function cloudUpdateClientFields(clientId, fields) {
     if (!cloudAvailable() || !clientId || !fields || typeof fields !== 'object') return Promise.resolve();
-    const safe = { ...fields };
-    // Evita di sovrascrivere sotto-nodi (orders/documents/notes/files) dai campi
-    ['orders', 'documents', 'notes', 'files'].forEach(k => { delete safe[k]; });
+    const safe = {};
+    [
+        'name', 'acquisitionDate', 'email', 'phone',
+        'address', 'postalCode', 'city', 'country', 'vat', 'updatedAt'
+    ].forEach(function (k) {
+        if (fields[k] !== undefined) safe[k] = fields[k];
+    });
     return firebaseDb.ref(pathClient(clientId)).update(safe)
         .catch(err => handleCloudError('aggiornamento cliente', err));
 }
@@ -648,7 +843,29 @@ function setupCloudSync() {
 
             if (clientsArr.length > 0) {
                 console.log(`📥 Caricati ${clientsArr.length} clienti dal cloud`);
-                state.clients = clientsArr;
+                const localSnapshot = state.clients.slice();
+                const mergedById = {};
+                clientsArr.forEach(function (cloudClient) {
+                    const localClient = localSnapshot.find(function (l) { return l.id === cloudClient.id; });
+                    mergedById[cloudClient.id] = mergeClientRecord(localClient, cloudClient);
+                });
+                localSnapshot.forEach(function (localClient) {
+                    if (localClient && localClient.id && !mergedById[localClient.id]) {
+                        mergedById[localClient.id] = migrateClientAddressFields({ ...localClient });
+                    }
+                });
+                state.clients = Object.values(mergedById);
+                localSnapshot.forEach(function (localClient) {
+                    if (!localClient || !localClient.id) return;
+                    const merged = mergedById[localClient.id];
+                    if (!merged) return;
+                    if (clientRecordTimestamp(localClient) > clientRecordTimestamp(
+                        clientsArr.find(function (c) { return c.id === localClient.id; })
+                    )) {
+                        cloudUpdateClientFields(localClient.id, clientScalarFieldsForCloud(merged));
+                    }
+                });
+                migrateAllClientAddresses({ pushCloud: true });
                 renderClients();
 
                 if (state.currentClientId) {
@@ -656,6 +873,7 @@ function setupCloudSync() {
                     if (client) selectClient(state.currentClientId);
                 }
             } else if (state.clients.length > 0) {
+                migrateAllClientAddresses({ pushCloud: true });
                 // Cloud vuoto e abbiamo dati locali: pushiamo ognuno separatamente
                 console.log(`📤 Push iniziale di ${state.clients.length} clienti dal locale al cloud`);
                 state.clients.forEach(c => cloudSetClient(c));
@@ -705,8 +923,9 @@ function attachGranularListeners(rootRef) {
             saveToLocalOnly();
             renderClients();
         } else {
-            if (JSON.stringify(state.clients[idx]) !== JSON.stringify(c)) {
-                state.clients[idx] = c;
+            const merged = mergeClientRecord(state.clients[idx], c);
+            if (JSON.stringify(state.clients[idx]) !== JSON.stringify(merged)) {
+                state.clients[idx] = merged;
                 saveToLocalOnly();
                 renderClients();
                 if (state.currentClientId === c.id) selectClient(c.id);
@@ -719,10 +938,11 @@ function attachGranularListeners(rootRef) {
         if (!c) return;
         const idx = state.clients.findIndex(x => x.id === c.id);
         if (idx === -1) {
-            state.clients.push(c);
+            state.clients.push(migrateClientAddressFields(c));
         } else {
-            if (JSON.stringify(state.clients[idx]) === JSON.stringify(c)) return;
-            state.clients[idx] = c;
+            const merged = mergeClientRecord(state.clients[idx], c);
+            if (JSON.stringify(state.clients[idx]) === JSON.stringify(merged)) return;
+            state.clients[idx] = merged;
         }
         saveToLocalOnly();
         renderClients();
@@ -1351,6 +1571,7 @@ function loadFromStorage() {
     const data = localStorage.getItem('gestionale_data');
     if (data) {
         state.clients = JSON.parse(data);
+        migrateAllClientAddresses({ pushCloud: false });
     }
     
     // Il counter verrà caricato dal cloud in setupCloudSync
@@ -2090,9 +2311,9 @@ function selectClient(clientId, options = {}) {
             <span class="client-info-chip__icon">🏷️</span><span>${escapeHtml(client.vat)}</span>
         </span>`);
     }
-    if (client.address) {
+    if (formatClientAddressDisplay(client)) {
         chips.push(`<span class="client-info-chip" title="Indirizzo">
-            <span class="client-info-chip__icon">📍</span><span>${escapeHtml(client.address)}</span>
+            <span class="client-info-chip__icon">📍</span><span>${escapeHtml(formatClientAddressDisplay(client)).replace(/\n/g, '<br>')}</span>
         </span>`);
     }
     const infoEl = document.getElementById('clientInfo');
@@ -2156,6 +2377,48 @@ function backToClientList() {
     if (typeof setMobileView === 'function') setMobileView('clients');
 }
 
+function formatClientAddressDisplay(client) {
+    if (!client) return '';
+    const p = parseClientAddressParts(client);
+    const lines = [];
+    if (p.street) lines.push(p.street);
+    const cap = formatCapDisplay(p.postalCode);
+    const capCity = [cap, p.city].filter(Boolean).join(' ');
+    if (capCity) lines.push(capCity);
+    if (p.country) lines.push(p.country);
+    return lines.join('\n');
+}
+
+function readClientAddressFields() {
+    const fields = {
+        address: document.getElementById('modalClientAddress').value.trim(),
+        postalCode: document.getElementById('modalClientPostalCode').value.trim(),
+        city: document.getElementById('modalClientCity').value.trim(),
+        country: document.getElementById('modalClientCountry').value.trim()
+    };
+    if (fields.address && (!fields.postalCode || !fields.city || addressLooksCombined(fields.address))) {
+        const parsed = parseClientAddressParts(fields);
+        if (parsed.street !== fields.address || parsed.postalCode || parsed.city) {
+            fields.address = parsed.street;
+            fields.postalCode = parsed.postalCode || fields.postalCode;
+            fields.city = parsed.city || fields.city;
+        }
+    }
+    return fields;
+}
+
+function fillClientAddressFields(client) {
+    const migrated = migrateClientAddressFields(client ? { ...client } : {});
+    document.getElementById('modalClientAddress').value = migrated.address || '';
+    document.getElementById('modalClientPostalCode').value = migrated.postalCode || '';
+    document.getElementById('modalClientCity').value = migrated.city || '';
+    document.getElementById('modalClientCountry').value = migrated.country || '';
+}
+
+function clearClientAddressFields() {
+    fillClientAddressFields({});
+}
+
 function openAddClientModal() {
     state.editMode = false;
     document.getElementById('modalClientTitle').textContent = 'Nuovo Cliente';
@@ -2163,7 +2426,7 @@ function openAddClientModal() {
     document.getElementById('modalClientAcquisitionDate').value = new Date().toISOString().split('T')[0]; // Data di oggi
     document.getElementById('modalClientEmail').value = '';
     document.getElementById('modalClientPhone').value = '';
-    document.getElementById('modalClientAddress').value = '';
+    clearClientAddressFields();
     document.getElementById('modalClientVat').value = '';
     openModal('clientModal');
 }
@@ -2182,7 +2445,7 @@ function openEditClientModal() {
     
     document.getElementById('modalClientEmail').value = client.email || '';
     document.getElementById('modalClientPhone').value = client.phone || '';
-    document.getElementById('modalClientAddress').value = client.address || '';
+    fillClientAddressFields(client);
     document.getElementById('modalClientVat').value = client.vat || '';
     openModal('clientModal');
 }
@@ -2202,14 +2465,16 @@ function saveClient() {
             acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
             email: document.getElementById('modalClientEmail').value.trim(),
             phone: document.getElementById('modalClientPhone').value.trim(),
-            address: document.getElementById('modalClientAddress').value.trim(),
+            ...readClientAddressFields(),
             vat: document.getElementById('modalClientVat').value.trim(),
             updatedAt: new Date().toISOString()
         };
+        migrateClientAddressFields(fields);
         Object.assign(state.clients[clientIndex], fields);
+        fillClientAddressFields(state.clients[clientIndex]);
 
-        saveToLocalOnly();
-        cloudUpdateClientFields(state.currentClientId, fields);
+        saveToLocalOnly({ immediate: true });
+        cloudUpdateClientFields(state.currentClientId, clientScalarFieldsForCloud(state.clients[clientIndex]));
         console.log('✅ Cliente aggiornato (update per-campo, dati preservati)');
     } else {
         const newClient = {
@@ -2218,7 +2483,7 @@ function saveClient() {
             acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
             email: document.getElementById('modalClientEmail').value.trim(),
             phone: document.getElementById('modalClientPhone').value.trim(),
-            address: document.getElementById('modalClientAddress').value.trim(),
+            ...readClientAddressFields(),
             vat: document.getElementById('modalClientVat').value.trim(),
             documents: [],
             files: [],
@@ -2226,10 +2491,11 @@ function saveClient() {
             orders: [],
             createdAt: new Date().toISOString()
         };
+        migrateClientAddressFields(newClient);
         state.clients.push(newClient);
         state.currentClientId = newClient.id;
 
-        saveToLocalOnly();
+        saveToLocalOnly({ immediate: true });
         cloudSetClient(newClient);
         console.log('✅ Nuovo cliente creato: ' + newClient.id);
     }

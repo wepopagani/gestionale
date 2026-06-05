@@ -1,7 +1,7 @@
 /**
  * Clausole legali preventivo (pagine 2–3 PDF) — per servizio 3DMakes.
- * Struttura: 1 Note tecniche · 2 IVA · 3 Trasporto/consegna · 4 Pagamento · 5 Costi esclusi
- * · 6 Condizioni di fornitura · 7 Accettazione · legge/foro e chiusura.
+ * Pagina 2: note tecniche · Pagine 3–4: 1 IVA · 2 Trasporto · 3 Pagamento · 4 Costi esclusi
+ * · 5 Condizioni di fornitura · 6 Accettazione · legge/foro e chiusura.
  */
 (function () {
     'use strict';
@@ -11,13 +11,15 @@
     var ACCETTAZIONE_SILENZIO =
         'In assenza di contestazione scritta nei termini di cui sopra, il Servizio si intenderà integralmente accettato dal Cliente.';
     var USO_NON_CRITICO =
-        'Salvo diverso accordo scritto, manufatti, modelli digitali, file o lavorazioni forniti da 3DMakes sono destinati a validazione, prototipazione o impieghi non critici per la sicurezza e non devono essere utilizzati in applicazioni ove la sicurezza di persone o beni dipenda dal componente (impieghi «safety-critical») senza apposite prove, verifiche e certificazioni a cura e spese del Cliente.';
+        '<strong>Uso e sicurezza:</strong> Salvo diverso accordo scritto, manufatti, modelli digitali, file o lavorazioni forniti da 3DMakes sono destinati a validazione, prototipazione o impieghi non critici per la sicurezza e non devono essere utilizzati in applicazioni ove la sicurezza di persone o beni dipenda dal componente (impieghi «safety-critical») senza apposite prove, verifiche e certificazioni a cura e spese del Cliente.';
     var RITARDI_CLIENTE =
         'Ritardi derivanti da modifiche richieste dal Cliente, da approvazioni tardive, da dati o informazioni incomplete, da materiali non disponibili o da variazioni delle specifiche potranno comportare la revisione dei tempi e, ove occorra, dei corrispettivi.';
     var MAT_CLIENTE =
         '3DMakes non è responsabile per difetti, deformazioni, contaminazioni, danni o comportamenti anomali imputabili a materiali, componenti, supporti o file forniti dal Cliente.';
     var CONFERMA_ORDINE =
         'L\'ordine si intende confermato con il ricevimento dell\'accettazione scritta del preventivo, dell\'ordine d\'acquisto o del pagamento anticipato, ove previsto.';
+    var IVA_NETTO = 'Prezzi da intendersi al netto dell\'IVA.';
+    var PAGAMENTO_50_50 = '50% alla conferma dell\'ordine e 50% alla consegna della merce.';
 
     var FOOTER_LEGGE =
         '<p style="margin:0 0 6px;"><strong>Legge applicabile e foro competente</strong></p>' +
@@ -42,37 +44,40 @@
                 '<li><strong>Geometria consigliata:</strong> si raccomandano, di massima, spessori di parete non inferiori a circa 1 mm e dettagli non inferiori a circa 0,5 mm; geometrie più snelle possono dare luogo a esiti non ripetibili o a maggiore fragilità.</li>' +
                 '<li><strong>Accoppiamenti e tolleranze funzionali:</strong> non si garantiscono accoppiamenti meccanici di precisione, interferenze progettate o intercambiabilità senza analisi tecnica e offerta dedicata.</li>' +
                 '<li><strong>Uso finale:</strong> l\'impiego previsto del manufatto, la sua idoneità funzionale e la conformità a norme di settore restano nella sfera di competenza e di responsabilità del Cliente.</li>' +
-                '<li>' + MAT_CLIENTE + '</li>' +
+                '<li><strong>Materiali da conto Cliente:</strong> ' + MAT_CLIENTE + '</li>' +
                 '<li>' + USO_NON_CRITICO + '</li>' +
                 '</ol>' +
-                '<p style="margin:0 0 6px;"><strong>2. IVA</strong></p>' +
-                '<p style="margin:0 0 8px;">Da applicarsi secondo la normativa fiscale vigente e come già esposto in prima pagina.</p>' +
-                '<p style="margin:0 0 6px;"><strong>3. Trasporto e consegna</strong></p>' +
-                '<p style="margin:0 0 8px;">Ritiro presso la sede 3DMakes in via Cantonale 15, 6918 Figino, salvo diversa pattuizione scritta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>4. Pagamento</strong></p>' +
-                '<p style="margin:0 0 8px;">Alle modalità già indicate nell\'offerta commerciale (anticipo, saldo, ecc.).</p>' +
-                '<p style="margin:0 0 6px;"><strong>5. Costi esclusi</strong></p>' +
-                '<p style="margin:0 0 10px;">Ogni costo, prestazione o condizione non richiamata espressamente nel presente documento.</p>' +
-                '<p style="margin:0 0 8px;"><strong>6. Condizioni di fornitura</strong></p>' +
-                '<p style="margin:0 0 6px;"><strong>6.1 Oggetto</strong></p>' +
-                '<p style="margin:0 0 8px;">Le presenti clausole regolano i servizi di prototipazione e produzione in additive manufacturing (di seguito «Servizio») svolti da 3DMakes in base ai file 3D e alle istruzioni validate dal Cliente. I pezzi vengono prodotti in conformità ai suddetti file; salvo patto scritto, non sono comprese attività di riprogettazione o ottimizzazione CAD inclusive nel prezzo.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.2 Conferma d\'ordine e termini</strong></p>' +
-                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + ' Le date di consegna comunicate hanno carattere orientativo e possono essere spostate in caso di forza maggiore, indisponibilità del materiale o altre circostanze non imputabili a 3DMakes.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.3 Proprietà intellettuale</strong></p>' +
-                '<p style="margin:0 0 8px;">Il Cliente dichiara e garantisce di avere titolo a far eseguire la lavorazione sui file e sulle rappresentazioni fornite e si obbliga a manlevare 3DMakes da qualsivoglia pretesa di terzi in ordine a modelli, marchi, disegni o altre opere utilizzati per l\'ordine.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.4 Garanzie e responsabilità</strong></p>' +
-                '<p style="margin:0 0 8px;">3DMakes esegue il Servizio con la diligenza richiesta dalla natura dell\'incarico, nei limiti delle tecnologie e dei materiali convenuti. Restano escluse garanzie tacite ulteriori non previste dal contratto, nonché i danni indiretti, lucro cessante o perdita di chance. ' + LIMITE_RESP + '</p>' +
                 '</div>',
             pagina3:
                 '<div class="dm-doc-legal">' +
-                '<p style="margin:0 0 6px;"><strong>6.5 Reclami, resi e non conformità</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>1. IVA</strong></p>' +
+                '<p style="margin:0 0 8px;">' + IVA_NETTO + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>2. Trasporto e consegna</strong></p>' +
+                '<p style="margin:0 0 8px;">Ritiro presso la sede 3DMakes in via Cantonale 15, 6918 Figino, salvo diversa pattuizione scritta.</p>' +
+                '<p style="margin:0 0 6px;"><strong>3. Pagamento</strong></p>' +
+                '<p style="margin:0 0 8px;">' + PAGAMENTO_50_50 + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>4. Costi esclusi</strong></p>' +
+                '<p style="margin:0 0 10px;">Ogni costo, prestazione o condizione non richiamata espressamente nel presente documento.</p>' +
+                '<p style="margin:0 0 8px;"><strong>5. Condizioni di fornitura</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.1 Oggetto</strong></p>' +
+                '<p style="margin:0 0 8px;">Le presenti clausole regolano i servizi di prototipazione e produzione in additive manufacturing (di seguito «Servizio») svolti da 3DMakes in base ai file 3D e alle istruzioni validate dal Cliente. I pezzi vengono prodotti in conformità ai suddetti file; salvo patto scritto, non sono comprese attività di riprogettazione o ottimizzazione CAD inclusive nel prezzo.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.2 Conferma d\'ordine e termini</strong></p>' +
+                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + ' Le date di consegna comunicate hanno carattere orientativo e possono essere spostate in caso di forza maggiore, indisponibilità del materiale o altre circostanze non imputabili a 3DMakes.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.3 Proprietà intellettuale</strong></p>' +
+                '<p style="margin:0 0 8px;">Il Cliente dichiara e garantisce di avere titolo a far eseguire la lavorazione sui file e sulle rappresentazioni fornite e si obbliga a manlevare 3DMakes da qualsivoglia pretesa di terzi in ordine a modelli, marchi, disegni o altre opere utilizzati per l\'ordine.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.4 Garanzie e responsabilità</strong></p>' +
+                '<p style="margin:0 0 8px;">3DMakes esegue il Servizio con la diligenza richiesta dalla natura dell\'incarico, nei limiti delle tecnologie e dei materiali convenuti. Restano escluse garanzie tacite ulteriori non previste dal contratto, nonché i danni indiretti, lucro cessante o perdita di chance. ' + LIMITE_RESP + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.5 Reclami, resi e non conformità</strong></p>' +
                 '<p style="margin:0 0 8px;">Eventuali difformità rispetto a quanto pattuito devono essere denunciate per iscritto, entro 48 ore dalla consegna o dal ritiro, corredate da fotografie leggibili e dal riferimento all\'offerta o all\'ordine. Non si accettano resi senza previa autorizzazione scritta (RMA). ' + ACCETTAZIONE_SILENZIO + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.6 Know-how e parametri di processo</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.6 Know-how e parametri di processo</strong></p>' +
                 '<p style="margin:0 0 8px;">Parametri di slicing, strategie di stampa e know-how operativo restano di esclusiva titolarità di 3DMakes, salvo esplicita cessione per iscritto.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.7 Prezzi</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.7 Prezzi</strong></p>' +
                 '<p style="margin:0 0 10px;">Gli importi restano fermi finché non intervengono variazioni documentate di file, specifiche o volumi rispetto a quanto posto a base del preventivo.</p>' +
-                '<p style="margin:0 0 8px;"><strong>7. Accettazione</strong></p>' +
+                '<p style="margin:0 0 8px;"><strong>6. Accettazione</strong></p>' +
                 '<p style="margin:0 0 8px; text-align:center;"><strong><u>L\'accettazione della presente offerta comporta l\'adesione integrale alle note e alle condizioni che precedono.</u></strong></p>' +
+                '</div>',
+            pagina4:
+                '<div class="dm-doc-legal">' +
                 FOOTER_LEGGE +
                 '</div>'
         },
@@ -90,37 +95,40 @@
                 '<li><strong>Approvazioni:</strong> l\'approvazione scritta del Cliente sulle milestone indicate in offerta vale come accettazione dello stato del modello a quel punto e restringe il perimetro delle modifiche ancora comprese nei corrispettivi pattuiti.</li>' +
                 '<li><strong>Deliverable:</strong> formati di consegna (a titolo esemplificativo: STL, STEP, OBJ, 3MF, DXF o altri formati indicati) e ambiente di lavoro sono quelli stabiliti per iscritto. Non sono di norma inclusi, salvo supplemento: file sorgenti parametrici completi con cronologia delle feature, template aziendali, librerie interne, macro personalizzate e documentazione del workflow 3DMakes.</li>' +
                 '<li><strong>FEM, CFD e industrializzazione:</strong> salvo separato incarico e offerta, 3DMakes non esegue analisi agli elementi finiti (FEM), analisi fluidodinamiche (CFD), piani di validazione industriale né attività di industrializzazione di prodotto; prove fisiche, omologazioni e collaudi restano a carico del Cliente.</li>' +
-                '<li>' + MAT_CLIENTE + '</li>' +
+                '<li><strong>Materiali da conto Cliente:</strong> ' + MAT_CLIENTE + '</li>' +
                 '<li>' + USO_NON_CRITICO + '</li>' +
                 '</ol>' +
-                '<p style="margin:0 0 6px;"><strong>2. IVA</strong></p>' +
-                '<p style="margin:0 0 8px;">Da applicarsi secondo la normativa fiscale vigente e come già esposto in prima pagina.</p>' +
-                '<p style="margin:0 0 6px;"><strong>3. Trasporto e consegna</strong></p>' +
-                '<p style="margin:0 0 8px;">Consegna dei file digitali nelle modalità definite in offerta (download, cloud, supporto fisico).</p>' +
-                '<p style="margin:0 0 6px;"><strong>4. Pagamento</strong></p>' +
-                '<p style="margin:0 0 8px;">Alle condizioni già indicate nell\'offerta (anticipo, rate, saldo a consegna, ecc.).</p>' +
-                '<p style="margin:0 0 6px;"><strong>5. Costi esclusi</strong></p>' +
-                '<p style="margin:0 0 10px;">Qualsiasi prestazione o formato di output non elencato esplicitamente nell\'offerta.</p>' +
-                '<p style="margin:0 0 8px;"><strong>6. Condizioni di fornitura</strong></p>' +
-                '<p style="margin:0 0 6px;"><strong>6.1 Oggetto</strong></p>' +
-                '<p style="margin:0 0 8px;">Consulenza e realizzazione di modelli digitali e attività connesse di progettazione 3D (di seguito «Servizio»), nei limiti dello scope e degli output descritti nel preventivo.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.2 Conferma d\'ordine</strong></p>' +
-                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.3 Proprietà intellettuale</strong></p>' +
-                '<p style="margin:0 0 8px;">Il Cliente dichiara di possedere titolo o licenza sugli elementi messi a disposizione e manleva 3DMakes da rivendicazioni di terzi. Rimangono riservati a 3DMakes metodologie, template e strumenti interni non oggetto di ceduta contrattuale.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.4 Garanzie e responsabilità</strong></p>' +
-                '<p style="margin:0 0 8px;">3DMakes si impegna a espletare l\'incarico con diligenza professionale e in coerenza col brief approvato, nei limiti degli strumenti software e delle tempistiche pattuite. Sono esclusi danni indiretti. ' + LIMITE_RESP + '</p>' +
                 '</div>',
             pagina3:
                 '<div class="dm-doc-legal">' +
-                '<p style="margin:0 0 6px;"><strong>6.5 Conformità e contestazioni</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>1. IVA</strong></p>' +
+                '<p style="margin:0 0 8px;">' + IVA_NETTO + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>2. Trasporto e consegna</strong></p>' +
+                '<p style="margin:0 0 8px;">Consegna dei file digitali nelle modalità definite in offerta (download, cloud, supporto fisico).</p>' +
+                '<p style="margin:0 0 6px;"><strong>3. Pagamento</strong></p>' +
+                '<p style="margin:0 0 8px;">' + PAGAMENTO_50_50 + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>4. Costi esclusi</strong></p>' +
+                '<p style="margin:0 0 10px;">Qualsiasi prestazione o formato di output non elencato esplicitamente nell\'offerta.</p>' +
+                '<p style="margin:0 0 8px;"><strong>5. Condizioni di fornitura</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.1 Oggetto</strong></p>' +
+                '<p style="margin:0 0 8px;">Consulenza e realizzazione di modelli digitali e attività connesse di progettazione 3D (di seguito «Servizio»), nei limiti dello scope e degli output descritti nel preventivo.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.2 Conferma d\'ordine</strong></p>' +
+                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.3 Proprietà intellettuale</strong></p>' +
+                '<p style="margin:0 0 8px;">Il Cliente dichiara di possedere titolo o licenza sugli elementi messi a disposizione e manleva 3DMakes da rivendicazioni di terzi. Rimangono riservati a 3DMakes metodologie, template e strumenti interni non oggetto di ceduta contrattuale.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.4 Garanzie e responsabilità</strong></p>' +
+                '<p style="margin:0 0 8px;">3DMakes si impegna a espletare l\'incarico con diligenza professionale e in coerenza col brief approvato, nei limiti degli strumenti software e delle tempistiche pattuite. Sono esclusi danni indiretti. ' + LIMITE_RESP + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.5 Conformità e contestazioni</strong></p>' +
                 '<p style="margin:0 0 8px;">Le contestazioni sulle difformità rispetto al brief approvato dovranno essere formulate per iscritto entro 48 ore dal ricevimento dei file, indicando riferimento d\'ordine e punti oggetto di contestazione. ' + ACCETTAZIONE_SILENZIO + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.6 Know-how</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.6 Know-how</strong></p>' +
                 '<p style="margin:0 0 8px;">Modelli di libreria, workflow interni e metodologie proprietarie utilizzate nello svolgimento del Servizio restano di titolarità 3DMakes, salvo diversa convenzione scritta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.7 Prezzi</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.7 Prezzi</strong></p>' +
                 '<p style="margin:0 0 10px;">Gli importi possono essere aggiornati fino alla conferma definitiva di brief, milestone e pacchetto di consegna.</p>' +
-                '<p style="margin:0 0 8px;"><strong>7. Accettazione</strong></p>' +
+                '<p style="margin:0 0 8px;"><strong>6. Accettazione</strong></p>' +
                 '<p style="margin:0 0 8px; text-align:center;"><strong><u>L\'accettazione della presente offerta comporta l\'adesione integrale alle note e alle condizioni che precedono.</u></strong></p>' +
+                '</div>',
+            pagina4:
+                '<div class="dm-doc-legal">' +
                 FOOTER_LEGGE +
                 '</div>'
         },
@@ -143,34 +151,37 @@
                 '<li><strong>Rifiuto della commessa:</strong> 3DMakes può declinare l\'incarico o sospendere la lavorazione qualora materiali o geometrie comportino rischi per la sicurezza del personale o delle attrezzature.</li>' +
                 '<li>' + USO_NON_CRITICO + '</li>' +
                 '</ol>' +
-                '<p style="margin:0 0 6px;"><strong>2. IVA</strong></p>' +
-                '<p style="margin:0 0 8px;">Da applicarsi secondo la normativa fiscale vigente e come già esposto in prima pagina.</p>' +
-                '<p style="margin:0 0 6px;"><strong>3. Trasporto e consegna</strong></p>' +
-                '<p style="margin:0 0 8px;">Ritiro e riconsegna dei pezzi secondo quanto specificato nell\'offerta e pattuito con il Cliente.</p>' +
-                '<p style="margin:0 0 6px;"><strong>4. Pagamento</strong></p>' +
-                '<p style="margin:0 0 8px;">Alle condizioni già indicate nell\'offerta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>5. Costi esclusi</strong></p>' +
-                '<p style="margin:0 0 10px;">Servizi accessori non quotati (es. ricostruzione grafica, campioni aggiuntivi, trattamenti post-marcatura).</p>' +
-                '<p style="margin:0 0 8px;"><strong>6. Condizioni di fornitura</strong></p>' +
-                '<p style="margin:0 0 6px;"><strong>6.1 Oggetto</strong></p>' +
-                '<p style="margin:0 0 8px;">Programmazione ed esecuzione di lavorazioni laser di incisione e/o marcatura (di seguito «Servizio») sui pezzi e con le grafiche approvate dal Cliente.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.2 Conferma d\'ordine</strong></p>' +
-                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.3 Proprietà intellettuale</strong></p>' +
-                '<p style="margin:0 0 8px;">Il Cliente è responsabile della liceità dei segni e delle opere oggetto di riproduzione; 3DMakes interviene quale esecutore tecnico della marcatura richiesta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.4 Garanzie e responsabilità</strong></p>' +
-                '<p style="margin:0 0 8px;">3DMakes esegue il Servizio in conformità a grafiche e campioni approvati, nei limiti del processo laser e del substrato. Sono esclusi danni indiretti e pretese estetiche soggettive non regolate contrattualmente. ' + LIMITE_RESP + '</p>' +
                 '</div>',
             pagina3:
                 '<div class="dm-doc-legal">' +
-                '<p style="margin:0 0 6px;"><strong>6.5 Reclami e non conformità</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>1. IVA</strong></p>' +
+                '<p style="margin:0 0 8px;">' + IVA_NETTO + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>2. Trasporto e consegna</strong></p>' +
+                '<p style="margin:0 0 8px;">Ritiro e riconsegna dei pezzi secondo quanto specificato nell\'offerta e pattuito con il Cliente.</p>' +
+                '<p style="margin:0 0 6px;"><strong>3. Pagamento</strong></p>' +
+                '<p style="margin:0 0 8px;">' + PAGAMENTO_50_50 + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>4. Costi esclusi</strong></p>' +
+                '<p style="margin:0 0 10px;">Servizi accessori non quotati (es. ricostruzione grafica, campioni aggiuntivi, trattamenti post-marcatura).</p>' +
+                '<p style="margin:0 0 8px;"><strong>5. Condizioni di fornitura</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.1 Oggetto</strong></p>' +
+                '<p style="margin:0 0 8px;">Programmazione ed esecuzione di lavorazioni laser di incisione e/o marcatura (di seguito «Servizio») sui pezzi e con le grafiche approvate dal Cliente.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.2 Conferma d\'ordine</strong></p>' +
+                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.3 Proprietà intellettuale</strong></p>' +
+                '<p style="margin:0 0 8px;">Il Cliente è responsabile della liceità dei segni e delle opere oggetto di riproduzione; 3DMakes interviene quale esecutore tecnico della marcatura richiesta.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.4 Garanzie e responsabilità</strong></p>' +
+                '<p style="margin:0 0 8px;">3DMakes esegue il Servizio in conformità a grafiche e campioni approvati, nei limiti del processo laser e del substrato. Sono esclusi danni indiretti e pretese estetiche soggettive non regolate contrattualmente. ' + LIMITE_RESP + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.5 Reclami e non conformità</strong></p>' +
                 '<p style="margin:0 0 8px;">Reclami motivati vanno trasmessi per iscritto entro 48 ore dalla consegna o dal ritiro, con fotografie chiare e riferimento d\'ordine. Nessun reso senza emissione preventiva di RMA. ' + ACCETTAZIONE_SILENZIO + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.6 Know-how</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.6 Know-how</strong></p>' +
                 '<p style="margin:0 0 8px;">Programmi macchina, parametri laser e metodi di fissaggio sviluppati da 3DMakes restano di sua esclusiva titolarità, salvo patto scritto di cessione.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.7 Prezzi</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.7 Prezzi</strong></p>' +
                 '<p style="margin:0 0 10px;">Validi fino ad approvazione definitiva di grafica, campioni e distinta pezzi, ove applicabile.</p>' +
-                '<p style="margin:0 0 8px;"><strong>7. Accettazione</strong></p>' +
+                '<p style="margin:0 0 8px;"><strong>6. Accettazione</strong></p>' +
                 '<p style="margin:0 0 8px; text-align:center;"><strong><u>L\'accettazione della presente offerta comporta l\'adesione integrale alle note e alle condizioni che precedono.</u></strong></p>' +
+                '</div>',
+            pagina4:
+                '<div class="dm-doc-legal">' +
                 FOOTER_LEGGE +
                 '</div>'
         },
@@ -190,34 +201,37 @@
                 '<li><strong>Uso e validazione:</strong> l\'utilizzo finale dei dati, le verifiche dimensionali strumentali e l\'idoneità del modello digitale all\'impiego prescelto sono di esclusiva responsabilità del Cliente. ' + MAT_CLIENTE + '</li>' +
                 '<li>' + USO_NON_CRITICO + '</li>' +
                 '</ol>' +
-                '<p style="margin:0 0 6px;"><strong>2. IVA</strong></p>' +
-                '<p style="margin:0 0 8px;">Da applicarsi secondo la normativa fiscale vigente e come già esposto in prima pagina.</p>' +
-                '<p style="margin:0 0 6px;"><strong>3. Trasporto e consegna</strong></p>' +
-                '<p style="margin:0 0 8px;">Ritiro e riconsegna dell\'oggetto e trasmissione dei file digitali secondo le modalità definite in offerta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>4. Pagamento</strong></p>' +
-                '<p style="margin:0 0 8px;">Alle condizioni già indicate nell\'offerta.</p>' +
-                '<p style="margin:0 0 6px;"><strong>5. Costi esclusi</strong></p>' +
-                '<p style="margin:0 0 10px;">Ogni attività non citata nel preventivo (es. post-processing CAD avanzato, certificazioni, rilievi aggiuntivi).</p>' +
-                '<p style="margin:0 0 8px;"><strong>6. Condizioni di fornitura</strong></p>' +
-                '<p style="margin:0 0 6px;"><strong>6.1 Oggetto</strong></p>' +
-                '<p style="margin:0 0 8px;">Acquisizione digitale tridimensionale e lavorazioni sui dati espressamente ricomprese nell\'offerta (di seguito «Servizio»), limitatamente all\'oggetto e ai deliverable ivi descritti.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.2 Conferma d\'ordine</strong></p>' +
-                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.3 Proprietà intellettuale</strong></p>' +
-                '<p style="margin:0 0 8px;">Il Cliente dichiara di avere diritto a far sottoporre a scansione l\'oggetto e i relativi dati e manleva 3DMakes da pretese di terzi connesse all\'oggetto stesso o all\'uso del modello digitale.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.4 Garanzie e responsabilità</strong></p>' +
-                '<p style="margin:0 0 8px;">La responsabilità di 3DMakes è limitata all\'esecuzione del Servizio retribuito secondo i parametri dichiarati in offerta. Sono esclusi danni indiretti. ' + LIMITE_RESP + '</p>' +
                 '</div>',
             pagina3:
                 '<div class="dm-doc-legal">' +
-                '<p style="margin:0 0 6px;"><strong>6.5 Contestazioni</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>1. IVA</strong></p>' +
+                '<p style="margin:0 0 8px;">' + IVA_NETTO + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>2. Trasporto e consegna</strong></p>' +
+                '<p style="margin:0 0 8px;">Ritiro e riconsegna dell\'oggetto e trasmissione dei file digitali secondo le modalità definite in offerta.</p>' +
+                '<p style="margin:0 0 6px;"><strong>3. Pagamento</strong></p>' +
+                '<p style="margin:0 0 8px;">' + PAGAMENTO_50_50 + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>4. Costi esclusi</strong></p>' +
+                '<p style="margin:0 0 10px;">Ogni attività non citata nel preventivo (es. post-processing CAD avanzato, certificazioni, rilievi aggiuntivi).</p>' +
+                '<p style="margin:0 0 8px;"><strong>5. Condizioni di fornitura</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.1 Oggetto</strong></p>' +
+                '<p style="margin:0 0 8px;">Acquisizione digitale tridimensionale e lavorazioni sui dati espressamente ricomprese nell\'offerta (di seguito «Servizio»), limitatamente all\'oggetto e ai deliverable ivi descritti.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.2 Conferma d\'ordine</strong></p>' +
+                '<p style="margin:0 0 8px;">' + CONFERMA_ORDINE + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.3 Proprietà intellettuale</strong></p>' +
+                '<p style="margin:0 0 8px;">Il Cliente dichiara di avere diritto a far sottoporre a scansione l\'oggetto e i relativi dati e manleva 3DMakes da pretese di terzi connesse all\'oggetto stesso o all\'uso del modello digitale.</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.4 Garanzie e responsabilità</strong></p>' +
+                '<p style="margin:0 0 8px;">La responsabilità di 3DMakes è limitata all\'esecuzione del Servizio retribuito secondo i parametri dichiarati in offerta. Sono esclusi danni indiretti. ' + LIMITE_RESP + '</p>' +
+                '<p style="margin:0 0 6px;"><strong>5.5 Contestazioni</strong></p>' +
                 '<p style="margin:0 0 8px;">Ogni contestazione in merito alla conformità dei file rispetto a quanto pattuito in offerta dovrà essere inviata per iscritto entro 48 ore dalla messa a disposizione del deliverable, con riferimento d\'ordine e sintesi della problematica. ' + ACCETTAZIONE_SILENZIO + '</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.6 Know-how</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.6 Know-how</strong></p>' +
                 '<p style="margin:0 0 8px;">Pipeline di acquisizione, algoritmi di allineamento, parametri di fusione e metodi di lavorazione interni restano di titolarità 3DMakes, salvo diverso accordo scritto.</p>' +
-                '<p style="margin:0 0 6px;"><strong>6.7 Prezzi</strong></p>' +
+                '<p style="margin:0 0 6px;"><strong>5.7 Prezzi</strong></p>' +
                 '<p style="margin:0 0 10px;">Possono essere rivisti fino a ricezione definitiva dell\'oggetto e conferma scritta dell\'elenco dei deliverable richiesti.</p>' +
-                '<p style="margin:0 0 8px;"><strong>7. Accettazione</strong></p>' +
+                '<p style="margin:0 0 8px;"><strong>6. Accettazione</strong></p>' +
                 '<p style="margin:0 0 8px; text-align:center;"><strong><u>L\'accettazione della presente offerta comporta l\'adesione integrale alle note e alle condizioni che precedono.</u></strong></p>' +
+                '</div>',
+            pagina4:
+                '<div class="dm-doc-legal">' +
                 FOOTER_LEGGE +
                 '</div>'
         }
