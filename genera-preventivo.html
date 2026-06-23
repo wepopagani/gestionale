@@ -59,6 +59,14 @@
                 <small class="dm-muted-inline">Note legali e condizioni di fornitura nelle pagine 2–4 si adattano al servizio scelto.</small>
             </div>
             <div class="dm-section-title">Dati cliente</div>
+            <div class="form-group">
+                <label>Origine dati cliente:</label>
+                <select id="fonteCliente" onchange="impostaFonteCliente(this.value)">
+                    <option value="rubrica" selected>Dalla rubrica</option>
+                    <option value="manuale">Inserimento manuale</option>
+                </select>
+                <small class="dm-muted-inline">Con «Inserimento manuale» compili i campi sotto senza usare la rubrica.</small>
+            </div>
             <div class="dm-client-panel" id="panelClienteRubrica" role="region" aria-label="Selettore cliente">
                 <div class="form-group">
                     <label>Cerca cliente in rubrica:</label>
@@ -78,12 +86,26 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Nome Cliente:</label>
-                <input type="text" id="nomeCliente" value="" placeholder="Seleziona un cliente dalla rubrica" readonly>
+                <label>Nome:</label>
+                <input type="text" id="nomeCliente" value="" placeholder="Nome o ragione sociale" oninput="aggiorna()">
             </div>
             <div class="form-group">
-                <label>Indirizzo Cliente:</label>
-                <textarea id="indirizzoCliente" placeholder="Indirizzo del cliente selezionato" readonly></textarea>
+                <label>Cognome:</label>
+                <input type="text" id="cognomeCliente" value="" placeholder="Cognome (facoltativo per aziende)" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Indirizzo:</label>
+                <input type="text" id="indirizzoCliente" value="" placeholder="Via e numero civico" oninput="aggiorna()">
+            </div>
+            <div class="dm-grid-2 dm-client-cap-luogo">
+                <div class="form-group">
+                    <label>CAP:</label>
+                    <input type="text" id="capCliente" value="" placeholder="es. 6900 o CH-6900" oninput="aggiorna()">
+                </div>
+                <div class="form-group">
+                    <label>Luogo:</label>
+                    <input type="text" id="luogoCliente" value="" placeholder="es. Lugano" oninput="aggiorna()">
+                </div>
             </div>
             <div class="dm-section-title">Articoli</div>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
@@ -337,7 +359,7 @@
                 } else if (filtro) {
                     status.textContent = `${lista.length} di ${clientiRubrica.length} clienti corrispondono al filtro.`;
                 } else {
-                    status.textContent = `${clientiRubrica.length} clienti disponibili. Selezionane uno per compilare i campi.`;
+                    status.textContent = `${clientiRubrica.length} clienti disponibili. Selezionane uno o compila i campi sotto.`;
                 }
             }
         }
@@ -472,20 +494,116 @@
             return testo.trim();
         }
 
+        function splitNomeCognome(name) {
+            const s = String(name || '').trim();
+            if (!s) return { nome: '', cognome: '' };
+            const i = s.indexOf(' ');
+            if (i < 0) return { nome: s, cognome: '' };
+            return { nome: s.slice(0, i), cognome: s.slice(i + 1).trim() };
+        }
+
+        function composeClienteNomeDisplay(nome, cognome) {
+            return [nome, cognome].map(function (s) { return String(s || '').trim(); }).filter(Boolean).join(' ');
+        }
+
+        function composeClienteIndirizzoDisplay(indirizzo, cap, luogo) {
+            const lines = [];
+            const street = String(indirizzo || '').trim();
+            if (street) lines.push(street);
+            const capCity = [formatCapDisplay(cap), String(luogo || '').trim()].filter(Boolean).join(' ');
+            if (capCity) lines.push(capCity);
+            return lines.join('\n');
+        }
+
+        function leggiCampiClienteForm() {
+            return {
+                nome: (document.getElementById('nomeCliente') || {}).value || '',
+                cognome: (document.getElementById('cognomeCliente') || {}).value || '',
+                indirizzo: (document.getElementById('indirizzoCliente') || {}).value || '',
+                cap: (document.getElementById('capCliente') || {}).value || '',
+                luogo: (document.getElementById('luogoCliente') || {}).value || ''
+            };
+        }
+
+        function caricaClienteNelForm(cliente) {
+            if (!cliente) return;
+            const nomeEl = document.getElementById('nomeCliente');
+            const cognomeEl = document.getElementById('cognomeCliente');
+            const indEl = document.getElementById('indirizzoCliente');
+            const capEl = document.getElementById('capCliente');
+            const luogoEl = document.getElementById('luogoCliente');
+            if (!nomeEl || !indEl || !capEl || !luogoEl) return;
+
+            nomeEl.value = cliente.nome || '';
+            if (cognomeEl) cognomeEl.value = cliente.cognome || '';
+
+            let street = '';
+            let cap = '';
+            let luogo = '';
+
+            if (cliente.cap || cliente.luogo) {
+                street = cliente.indirizzo || '';
+                cap = cliente.cap || '';
+                luogo = cliente.luogo || '';
+            } else {
+                const raw = formattaIndirizzoClienteTesto(cliente.indirizzo || '');
+                const lines = raw.split('\n').filter(function (l) {
+                    return l.trim() && !/^P\.IVA\s*\/\s*CF:/i.test(l);
+                });
+                street = lines[0] || '';
+                if (lines[1]) {
+                    const m = lines[1].match(/^(CH-?\d{4,5})\s+(.+)$/i) || lines[1].match(/^(\d{4,5})\s+(.+)$/);
+                    if (m) {
+                        cap = m[1];
+                        luogo = m[2];
+                    } else {
+                        luogo = lines[1];
+                    }
+                }
+                if (street && (!cap || !luogo)) {
+                    const parsed = parseClientAddressParts({ address: street });
+                    if (parsed.postalCode || parsed.city) {
+                        street = parsed.street || street;
+                        if (!cap) cap = parsed.postalCode;
+                        if (!luogo) luogo = parsed.city;
+                    }
+                }
+            }
+
+            indEl.value = street;
+            capEl.value = cap;
+            luogoEl.value = luogo;
+        }
+
+        function impostaFonteCliente(fonte) {
+            const panel = document.getElementById('panelClienteRubrica');
+            if (panel) panel.style.display = fonte === 'manuale' ? 'none' : '';
+            const status = document.getElementById('clienteRubricaStatus');
+            if (status && fonte === 'manuale') {
+                status.textContent = 'Inserisci i dati cliente nei campi sotto.';
+            } else if (status && clientiRubrica.length) {
+                status.textContent = clientiRubrica.length + ' clienti in rubrica — seleziona uno o compila manualmente.';
+            }
+        }
+
         function caricaClienteDaRubrica(idCliente) {
             if (!idCliente) return;
             const cliente = clientiRubrica.find(c => c.id === idCliente);
             if (!cliente) return;
-            const nomeEl = document.getElementById('nomeCliente');
-            const indEl = document.getElementById('indirizzoCliente');
-            if (nomeEl) nomeEl.value = cliente.name;
-            if (indEl) indEl.value = composeIndirizzoCliente(cliente);
+            const partiNome = splitNomeCognome(cliente.name);
+            const partiInd = parseClientAddressParts(cliente);
+            document.getElementById('nomeCliente').value = partiNome.nome;
+            const cognomeEl = document.getElementById('cognomeCliente');
+            if (cognomeEl) cognomeEl.value = partiNome.cognome;
+            document.getElementById('indirizzoCliente').value = partiInd.street;
+            document.getElementById('capCliente').value = partiInd.postalCode;
+            document.getElementById('luogoCliente').value = partiInd.city;
             aggiorna();
             const status = document.getElementById('clienteRubricaStatus');
             if (status) {
                 status.innerHTML = '<strong style="color:#00aeef;">Caricato:</strong> ' +
                     (cliente.name || '') +
-                    ' — puoi comunque modificare i campi qui sotto.';
+                    ' — puoi modificare i campi qui sotto.';
             }
         }
 
@@ -712,10 +830,13 @@
                 if (fg && attivo) fg.classList.add('dm-field-alert');
             }
 
-            const nome = normPerSegnaposto(document.getElementById('nomeCliente').value);
-            const ind = normPerSegnaposto(document.getElementById('indirizzoCliente').value);
+            const campi = leggiCampiClienteForm();
+            const nome = normPerSegnaposto(campi.nome);
+            const indirizzoOk = normPerSegnaposto(campi.indirizzo) ||
+                normPerSegnaposto(campi.cap) ||
+                normPerSegnaposto(campi.luogo);
             flagGroup('nomeCliente', !nome);
-            flagGroup('indirizzoCliente', !ind);
+            flagGroup('indirizzoCliente', !indirizzoOk);
 
             const dataEl = document.getElementById('dataDoc');
             const dataVal = dataEl && dataEl.value;
@@ -801,9 +922,7 @@
                 preventivoInModifica = null;
                 modalitaModifica = false;
                 document.getElementById('numeroOfferta').value = '…';
-                document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                document.getElementById('indirizzoCliente').value =
-                    formattaIndirizzoClienteTesto(preventivo.cliente?.indirizzo || '');
+                caricaClienteNelForm(preventivo.cliente);
                 document.getElementById('note').value = preventivo.note || '';
                 setSelectValue('tipoServizioPreventivo', preventivo.tipoServizio || 'stampa_3d');
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
@@ -858,9 +977,7 @@
                 modalitaModifica = true;
                 document.getElementById('numeroOfferta').value = preventivo.numeroOfferta || '';
                 document.getElementById('dataDoc').value = preventivo.data || '';
-                document.getElementById('nomeCliente').value = preventivo.cliente?.nome || '';
-                document.getElementById('indirizzoCliente').value =
-                    formattaIndirizzoClienteTesto(preventivo.cliente?.indirizzo || '');
+                caricaClienteNelForm(preventivo.cliente);
                 document.getElementById('note').value = preventivo.note || '';
                 setSelectValue('tipoServizioPreventivo', preventivo.tipoServizio || 'stampa_3d');
                 document.getElementById('condPagamento').value = preventivo.condizioni?.pagamento || 'Da concordare';
@@ -936,12 +1053,21 @@
             const aliquotaIva = parseFloat(document.getElementById('aliquotaIva').value) || 8.1;
             const importoIva = applicaIva ? imponibile * (aliquotaIva / 100) : 0;
             const totale = imponibile + importoIva;
+            const campiCliente = leggiCampiClienteForm();
+            const nomeCliente = campiCliente.nome.trim();
+            const cognomeCliente = campiCliente.cognome.trim();
+            const indirizzoCliente = campiCliente.indirizzo.trim();
+            const capCliente = campiCliente.cap.trim();
+            const luogoCliente = campiCliente.luogo.trim();
             return {
                 numeroOfferta: document.getElementById('numeroOfferta').value,
                 data: document.getElementById('dataDoc').value,
                 cliente: {
-                    nome: document.getElementById('nomeCliente').value,
-                    indirizzo: document.getElementById('indirizzoCliente').value
+                    nome: nomeCliente,
+                    cognome: cognomeCliente,
+                    indirizzo: indirizzoCliente,
+                    cap: capCliente,
+                    luogo: luogoCliente
                 },
                 righe: righe.map(riga => {
                     const tecKey = risolviTecnologia(riga.tecnologia);
@@ -1149,9 +1275,11 @@
         function aggiorna() {
             document.getElementById('prev-indirizzoAzienda').textContent = 'Via Cantonale 15\nCH-6918 Lugano';
             document.getElementById('prev-contattiAzienda').textContent = 'Tel: 076 266 03 96\nEmail: info@3dmakes.ch\nWeb: www.3dmakes.ch';
-            document.getElementById('prev-nomeCliente').textContent = document.getElementById('nomeCliente').value;
+            const campiCliente = leggiCampiClienteForm();
+            document.getElementById('prev-nomeCliente').textContent =
+                composeClienteNomeDisplay(campiCliente.nome, campiCliente.cognome);
             document.getElementById('prev-indirizzoCliente').textContent =
-                formattaIndirizzoClienteTesto(document.getElementById('indirizzoCliente').value);
+                composeClienteIndirizzoDisplay(campiCliente.indirizzo, campiCliente.cap, campiCliente.luogo);
             document.getElementById('prev-numeroOfferta').textContent = document.getElementById('numeroOfferta').value;
             const data = new Date(document.getElementById('dataDoc').value);
             document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-IT');

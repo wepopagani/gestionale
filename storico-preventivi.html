@@ -154,6 +154,14 @@
                 .replace(/</g, '&lt;');
         }
 
+        function clienteDisplayName(cliente) {
+            if (!cliente) return '—';
+            const parts = [cliente.nome, cliente.cognome].map(function (s) {
+                return String(s || '').trim();
+            }).filter(Boolean);
+            return parts.length ? parts.join(' ') : '—';
+        }
+
         function startOfDayMs(d) {
             const x = new Date(d);
             x.setHours(0, 0, 0, 0);
@@ -231,7 +239,7 @@
             const tbody = document.getElementById('tbody');
             tbody.innerHTML = '';
             rows.forEach(function (row) {
-                const nome = row.cliente && row.cliente.nome ? row.cliente.nome : '—';
+                const nome = clienteDisplayName(row.cliente);
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                         <td class="dm-num">${escapeHtml(row.numeroOfferta || '—')}</td>

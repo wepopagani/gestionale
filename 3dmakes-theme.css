@@ -512,21 +512,11 @@
   border-radius: 6px;
 }
 
-/* Campi nome/indirizzo compilati automaticamente dalla rubrica */
-.dm-preventivo-wrap .dm-sidebar.dm-form input[readonly],
-.dm-preventivo-wrap .dm-sidebar.dm-form textarea[readonly] {
-  background: var(--dm-bg-soft, #f5f7fa);
-  color: var(--dm-text, #1d3454);
-  cursor: default;
+.dm-client-cap-luogo {
+  align-items: end;
 }
 
-.dm-preventivo-wrap .dm-sidebar.dm-form input[readonly]:focus,
-.dm-preventivo-wrap .dm-sidebar.dm-form textarea[readonly]:focus {
-  border-color: var(--dm-border, #e5e7eb);
-  box-shadow: none;
-}
-
-/* ========== Layout preventivo ========== */
+/* Campi nome/indirizzo: modificabili anche dopo selezione rubrica */
 /* Colonna destra = foglio A4 reale (210mm), colonna sinistra occupa il resto.
    Ogni colonna ha il proprio scroll verticale indipendente, così editor e
    anteprima si possono scorrere liberamente senza far scorrere la pagina. */
