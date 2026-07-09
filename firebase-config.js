@@ -18,7 +18,7 @@ const gestionalePublicUrl = 'https://clienti.3dmakes.ch';
 
 // Password team per il gestionale staff (cambiala in firebase-config.js).
 // Nota: è visibile nel codice sorgente — usa una password dedicata, non quella email.
-const gestionaleStaffPassword = '3DMAKES2026';
+const gestionaleStaffPassword = 'SQUIDDY2026';
 
 // Esposto su window per auth-staff.js
 if (typeof window !== 'undefined') {
