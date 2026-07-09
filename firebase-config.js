@@ -13,6 +13,9 @@ const firebaseConfig = {
   measurementId: "G-T0BGZHM5E4"
 };
 
+// URL pubblico dove è online il gestionale (https), per i link registrazione clienti.
+const gestionalePublicUrl = 'https://clienti.3dmakes.ch';
+
 // IMPORTANTE: Abilita Realtime Database
 // 1. Nel menu Firebase Console, vai su "Realtime Database"
 // 2. Click "Crea database"
@@ -31,7 +34,7 @@ const firebaseConfig = {
 // Per produzione, configura regole più sicure con autenticazione
 
 // ===== FIRESTORE (preventivi) =====
-// Per «Genera Preventivo» e «Storico Preventivi»: nella Firebase Console abilita
+// Per «Genera Preventivo», link registrazione clienti e «Storico Preventivi»: nella Firebase Console abilita
 // Firestore Database (stesso progetto gestionale-a0cb6). Esempio regole di test:
 /*
 rules_version = '2';
@@ -39,6 +42,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /preventivi/{id} { allow read, write: if true; }
     match /counters/{id} { allow read, write: if true; }
+    match /client_intake_links/{id} { allow read, write: if true; }
   }
 }
 */

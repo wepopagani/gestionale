@@ -21,13 +21,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.3">
+    <link rel="stylesheet" href="style.css?v=3.5">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="firestore-init.js"></script>
     
     <!-- Chart.js per grafici -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -61,6 +63,7 @@
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
                 <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
+                <button class="btn-secondary" id="createIntakeLinkBtn" title="Genera un link da inviare al cliente per la registrazione autonoma" style="width:100%; margin-top:8px;">🔗 Crea link registrazione</button>
 
                 <!-- Backup / Ripristino -->
                 <div class="backup-actions" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
@@ -578,6 +581,53 @@
         </main>
     </div>
 
+    <!-- Modal Link registrazione cliente -->
+    <div class="modal" id="intakeLinkModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Link registrazione cliente</h3>
+                <button class="modal-close" onclick="closeModal('intakeLinkModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin:0 0 16px; color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
+                    Genera un link da inviare al cliente: lui compila nome, contatti e indirizzo e viene registrato automaticamente nel gestionale.
+                </p>
+                <div id="intakeFileWarning" class="intake-file-warning" style="display:none;">
+                    Stai aprendo il gestionale dal computer (<code>file://</code>). I link devono usare un indirizzo <strong>https://</strong> online — compila il campo sotto.
+                </div>
+                <div class="form-group">
+                    <label for="intakePublicBaseUrl">URL pubblico del gestionale *</label>
+                    <input type="url" id="intakePublicBaseUrl" placeholder="https://clienti.3dmakes.ch" value="https://clienti.3dmakes.ch">
+                    <small style="color: var(--text-secondary); font-size: 12px; display:block; margin-top:6px;">
+                        Indirizzo web dove hai caricato questi file (con <code>registrazione-cliente.html</code>). Salvato nel browser.
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label>Nota interna (opzionale)</label>
+                    <input type="text" id="intakeLinkLabel" placeholder="es. Cliente da fiera, Mario Rossi…">
+                </div>
+                <div id="intakeLinkResult" style="display:none;">
+                    <div class="form-group intake-link-result">
+                        <label>Link da inviare</label>
+                        <input type="text" id="intakeLinkUrl" class="intake-link-url" readonly>
+                        <button type="button" class="btn-primary intake-link-copy" id="copyIntakeLinkBtn">📋 Copia link</button>
+                    </div>
+                    <p style="margin:0; font-size:12px; color: var(--text-secondary);">
+                        Il link è monouso: dopo la registrazione del cliente non sarà più utilizzabile.
+                    </p>
+                </div>
+                <div id="intakeLinksListWrap" style="margin-top:20px;">
+                    <div class="dm-calc-subhead" style="margin-bottom:8px;">Link recenti</div>
+                    <div id="intakeLinksList" style="font-size:13px; color: var(--text-secondary);">Caricamento…</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('intakeLinkModal')">Chiudi</button>
+                <button class="btn-primary" id="generateIntakeLinkBtn">Genera link</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Cliente -->
     <div class="modal" id="clientModal">
         <div class="modal-content">
@@ -587,8 +637,39 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Nome/Ragione Sociale *</label>
-                    <input type="text" id="modalClientName" required>
+                    <label>Tipo cliente *</label>
+                    <div class="client-type-toggle">
+                        <label class="client-type-option">
+                            <input type="radio" name="modalClientType" value="privato" checked>
+                            <span>👤 Privato</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="modalClientType" value="aziendale">
+                            <span>🏢 Aziendale</span>
+                        </label>
+                    </div>
+                </div>
+                <div id="modalClientPrivatoFields">
+                    <div class="form-row form-row--2">
+                        <div class="form-group">
+                            <label>Nome *</label>
+                            <input type="text" id="modalClientFirstName">
+                        </div>
+                        <div class="form-group">
+                            <label>Cognome *</label>
+                            <input type="text" id="modalClientLastName">
+                        </div>
+                    </div>
+                </div>
+                <div id="modalClientAziendaFields" style="display:none;">
+                    <div class="form-group">
+                        <label>Ragione sociale *</label>
+                        <input type="text" id="modalClientCompanyName">
+                    </div>
+                    <div class="form-group">
+                        <label>P.IVA / Codice Fiscale *</label>
+                        <input type="text" id="modalClientVat">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>📅 Data Acquisizione Cliente *</label>
@@ -622,10 +703,6 @@
                 <div class="form-group">
                     <label>Paese</label>
                     <input type="text" id="modalClientCountry" placeholder="es. Svizzera">
-                </div>
-                <div class="form-group">
-                    <label>P.IVA / Codice Fiscale</label>
-                    <input type="text" id="modalClientVat">
                 </div>
             </div>
             <div class="modal-footer">
@@ -941,7 +1018,7 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=3.5"></script>
+    <script src="app.js?v=4.0"></script>
 </body>
 </html>
 

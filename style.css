@@ -2223,6 +2223,61 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     resize: vertical;
 }
 
+.intake-link-result .intake-link-url {
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: var(--text-primary);
+    background: #f8fafc;
+    word-break: break-all;
+}
+
+.intake-link-result .intake-link-copy {
+    width: 100%;
+}
+
+.client-type-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.client-type-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.client-type-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.client-type-option:has(input:checked) {
+    border-color: var(--primary);
+    background: rgba(0, 174, 239, 0.08);
+}
+
+.intake-file-warning {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {

@@ -256,7 +256,7 @@ function cloudAvailable() {
 }
 
 const CLIENT_SCALAR_KEYS = [
-    'name', 'acquisitionDate', 'email', 'phone',
+    'name', 'clientType', 'acquisitionDate', 'email', 'phone',
     'address', 'postalCode', 'city', 'country', 'vat', 'updatedAt'
 ];
 
@@ -522,7 +522,7 @@ function reconcileCloudRoot(rawRoot) {
             if (['orders', 'documents', 'notes', 'files', 'id'].includes(k)) return;
             const incoming = piece[k];
             if (incoming === null || incoming === undefined) return;
-            if (['address', 'postalCode', 'city', 'country', 'email', 'phone', 'vat', 'name', 'acquisitionDate', 'updatedAt'].includes(k)) {
+            if (['address', 'postalCode', 'city', 'country', 'email', 'phone', 'vat', 'name', 'clientType', 'acquisitionDate', 'updatedAt'].includes(k)) {
                 byId[id][k] = incoming;
                 return;
             }
@@ -609,7 +609,7 @@ function cloudUpdateClientFields(clientId, fields) {
     if (!cloudAvailable() || !clientId || !fields || typeof fields !== 'object') return Promise.resolve();
     const safe = {};
     [
-        'name', 'acquisitionDate', 'email', 'phone',
+        'name', 'clientType', 'acquisitionDate', 'email', 'phone',
         'address', 'postalCode', 'city', 'country', 'vat', 'updatedAt'
     ].forEach(function (k) {
         if (fields[k] !== undefined) safe[k] = fields[k];
@@ -920,6 +920,9 @@ function attachGranularListeners(rootRef) {
         const idx = state.clients.findIndex(x => x.id === c.id);
         if (idx === -1) {
             state.clients.push(c);
+            if (c.source === 'public_form') {
+                showNotification('Nuovo cliente registrato via link: ' + c.name, 'success');
+            }
             saveToLocalOnly();
             renderClients();
         } else {
@@ -1610,11 +1613,211 @@ function calculateNextOrderNumber() {
     return maxNumber + 1;
 }
 
-// ===== UTILITIES =====
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+function generateIntakeToken() {
+    const arr = new Uint8Array(12);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(arr);
+        return Array.from(arr, function (b) { return b.toString(36).padStart(2, '0'); }).join('').slice(0, 18);
+    }
+    return generateId();
+}
+
+function getGestionalePublicBaseUrl() {
+    const inputEl = document.getElementById('intakePublicBaseUrl');
+    if (inputEl && inputEl.value.trim()) {
+        return inputEl.value.trim().replace(/\/$/, '');
+    }
+    const stored = localStorage.getItem('gestionale_public_base_url');
+    if (stored && stored.trim()) return stored.trim().replace(/\/$/, '');
+    if (typeof gestionalePublicUrl === 'string' && gestionalePublicUrl.trim()) {
+        return gestionalePublicUrl.trim().replace(/\/$/, '');
+    }
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        const dir = window.location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+        return dir.replace(/\/$/, '');
+    }
+    return '';
+}
+
+function saveGestionalePublicBaseUrl(url) {
+    const clean = (url || '').trim().replace(/\/$/, '');
+    if (clean) localStorage.setItem('gestionale_public_base_url', clean);
+    const inputEl = document.getElementById('intakePublicBaseUrl');
+    if (inputEl) inputEl.value = clean;
+    return clean;
+}
+
+function buildIntakeLinkUrl(token) {
+    const base = getGestionalePublicBaseUrl();
+    if (!base) {
+        return 'registrazione-cliente.html?t=' + encodeURIComponent(token);
+    }
+    return base + '/registrazione-cliente.html?t=' + encodeURIComponent(token);
+}
+
+function getIntakeFirestore() {
+    if (typeof initFirestoreDb !== 'function') return null;
+    if (!window._gestionaleFirestore) {
+        window._gestionaleFirestore = initFirestoreDb();
+    }
+    return window._gestionaleFirestore;
+}
+
+function createClientIntakeLink(label) {
+    if (typeof initFirebaseAuthAnon !== 'function') {
+        showNotification('Firebase non configurato', 'error');
+        return Promise.resolve(null);
+    }
+    const token = generateIntakeToken();
+    const link = {
+        token: token,
+        label: (label || '').trim(),
+        active: true,
+        used: false,
+        workspace: userId || 'shared_gestionale',
+        createdAt: new Date().toISOString()
+    };
+    return initFirebaseAuthAnon()
+        .then(function () {
+            const fs = getIntakeFirestore();
+            if (!fs) {
+                showNotification('Firestore non disponibile. Abilitalo nella Firebase Console.', 'error');
+                return null;
+            }
+            return fs.collection('client_intake_links').doc(token).set(link)
+                .then(function () { return link; });
+        })
+        .catch(function (err) {
+            console.error('createClientIntakeLink:', err);
+            const detail = typeof formatFirestoreError === 'function'
+                ? formatFirestoreError(err).split('\n')[0]
+                : (err && err.message ? err.message : 'errore sconosciuto');
+            showNotification('⚠️ Errore creazione link: ' + detail, 'error');
+            return null;
+        });
+}
+
+function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            resolve();
+        } catch (e) {
+            reject(e);
+        } finally {
+            document.body.removeChild(ta);
+        }
+    });
+}
+
+function renderIntakeLinksList() {
+    const listEl = document.getElementById('intakeLinksList');
+    if (!listEl) return;
+    listEl.textContent = 'Caricamento…';
+    const fs = getIntakeFirestore();
+    if (!fs) {
+        listEl.textContent = 'Firestore non disponibile.';
+        return;
+    }
+    initFirebaseAuthAnon()
+        .then(function () { return fs.collection('client_intake_links').get(); })
+        .then(function (snap) {
+            const items = [];
+            snap.forEach(function (doc) {
+                const v = doc.data();
+                if (v) items.push(v);
+            });
+            items.sort(function (a, b) {
+                return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+            });
+            const recent = items.slice(0, 8);
+            if (!recent.length) {
+                listEl.innerHTML = '<p style="margin:0;">Nessun link creato.</p>';
+                return;
+            }
+            listEl.innerHTML = recent.map(function (link) {
+                const status = link.used
+                    ? '<span style="color:#0d9488;font-weight:600;">Usato</span>'
+                    : '<span style="color:#00aeef;font-weight:600;">Attivo</span>';
+                const label = link.label ? ' · ' + escapeHtml(link.label) : '';
+                const client = link.used && link.clientName
+                    ? ' · ' + escapeHtml(link.clientName)
+                    : '';
+                const date = link.createdAt ? formatDate(link.createdAt) : '';
+                return '<div style="padding:8px 0;border-bottom:1px solid var(--border-color,#e8e4dc);">' +
+                    status + label + client +
+                    '<div style="font-size:11px;margin-top:2px;opacity:0.8;">' + date + '</div></div>';
+            }).join('');
+        })
+        .catch(function (err) {
+            console.error('renderIntakeLinksList:', err);
+            listEl.textContent = 'Errore caricamento link.';
+        });
+}
+
+function openIntakeLinkModal() {
+    document.getElementById('intakeLinkLabel').value = '';
+    document.getElementById('intakeLinkResult').style.display = 'none';
+    document.getElementById('intakeLinkUrl').value = '';
+    const base = getGestionalePublicBaseUrl();
+    const baseInput = document.getElementById('intakePublicBaseUrl');
+    if (baseInput) baseInput.value = base;
+    const warn = document.getElementById('intakeFileWarning');
+    if (warn) warn.style.display = window.location.protocol === 'file:' ? 'block' : 'none';
+    renderIntakeLinksList();
+    openModal('intakeLinkModal');
+}
+
+function handleGenerateIntakeLink() {
+    const label = document.getElementById('intakeLinkLabel').value.trim();
+    const baseUrl = saveGestionalePublicBaseUrl(
+        document.getElementById('intakePublicBaseUrl').value
+    );
+    if (!/^https?:\/\/.+/i.test(baseUrl)) {
+        showNotification('Inserisci l\'URL pubblico del gestionale (es. https://tuodominio.ch/gestionale)', 'error');
+        return;
+    }
+    const btn = document.getElementById('generateIntakeLinkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Generazione…';
+    createClientIntakeLink(label).then(function (link) {
+        btn.disabled = false;
+        btn.textContent = 'Genera link';
+        if (!link) return;
+        const url = buildIntakeLinkUrl(link.token);
+        document.getElementById('intakeLinkUrl').value = url;
+        document.getElementById('intakeLinkResult').style.display = 'block';
+        renderIntakeLinksList();
+        return copyTextToClipboard(url).then(function () {
+            showNotification('Link creato e copiato negli appunti', 'success');
+        }).catch(function () {
+            showNotification('Link creato: copialo manualmente dal campo', 'success');
+        });
+    });
+}
+
+function handleCopyIntakeLink() {
+    const url = document.getElementById('intakeLinkUrl').value;
+    if (!url) return;
+    copyTextToClipboard(url)
+        .then(function () { showNotification('Link copiato', 'success'); })
+        .catch(function () { showNotification('Copia non riuscita', 'error'); });
+}
+
+// ===== UTILITIES =====
 function formatDate(date) {
     if (!date) return '';
     const d = new Date(date);
@@ -1679,9 +1882,20 @@ function setupEventListeners() {
 
     // Bottoni clienti
     document.getElementById('addClientBtn').addEventListener('click', openAddClientModal);
+    const createIntakeLinkBtn = document.getElementById('createIntakeLinkBtn');
+    if (createIntakeLinkBtn) createIntakeLinkBtn.addEventListener('click', openIntakeLinkModal);
+    const generateIntakeLinkBtn = document.getElementById('generateIntakeLinkBtn');
+    if (generateIntakeLinkBtn) generateIntakeLinkBtn.addEventListener('click', handleGenerateIntakeLink);
+    const copyIntakeLinkBtn = document.getElementById('copyIntakeLinkBtn');
+    if (copyIntakeLinkBtn) copyIntakeLinkBtn.addEventListener('click', handleCopyIntakeLink);
     document.getElementById('editClientBtn').addEventListener('click', openEditClientModal);
     document.getElementById('deleteClientBtn').addEventListener('click', deleteCurrentClient);
     document.getElementById('saveClientBtn').addEventListener('click', saveClient);
+    document.querySelectorAll('input[name="modalClientType"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            setModalClientType(radio.value);
+        });
+    });
 
     // Backup / Ripristino
     const exportBtn = document.getElementById('exportJsonBtn');
@@ -2419,15 +2633,82 @@ function clearClientAddressFields() {
     fillClientAddressFields({});
 }
 
+function splitClientNameParts(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return { firstName: '', lastName: '' };
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
+function inferClientType(client) {
+    if (client && client.clientType) return client.clientType;
+    if (client && client.vat) return 'aziendale';
+    return 'privato';
+}
+
+function setModalClientType(type) {
+    const isAzienda = type === 'aziendale';
+    document.querySelectorAll('input[name="modalClientType"]').forEach(function (radio) {
+        radio.checked = radio.value === type;
+    });
+    const privatoEl = document.getElementById('modalClientPrivatoFields');
+    const aziendaEl = document.getElementById('modalClientAziendaFields');
+    if (privatoEl) privatoEl.style.display = isAzienda ? 'none' : '';
+    if (aziendaEl) aziendaEl.style.display = isAzienda ? '' : 'none';
+}
+
+function readClientIdentityFromModal() {
+    const type = document.querySelector('input[name="modalClientType"]:checked');
+    const clientType = type ? type.value : 'privato';
+    if (clientType === 'aziendale') {
+        return {
+            clientType: 'aziendale',
+            name: document.getElementById('modalClientCompanyName').value.trim(),
+            vat: document.getElementById('modalClientVat').value.trim()
+        };
+    }
+    const firstName = document.getElementById('modalClientFirstName').value.trim();
+    const lastName = document.getElementById('modalClientLastName').value.trim();
+    return {
+        clientType: 'privato',
+        name: [firstName, lastName].filter(Boolean).join(' ').trim(),
+        vat: ''
+    };
+}
+
+function fillClientIdentityFields(client) {
+    const clientType = inferClientType(client);
+    setModalClientType(clientType);
+    if (clientType === 'aziendale') {
+        document.getElementById('modalClientCompanyName').value = client.name || '';
+        document.getElementById('modalClientVat').value = client.vat || '';
+        document.getElementById('modalClientFirstName').value = '';
+        document.getElementById('modalClientLastName').value = '';
+    } else {
+        const parts = splitClientNameParts(client.name);
+        document.getElementById('modalClientFirstName').value = parts.firstName;
+        document.getElementById('modalClientLastName').value = parts.lastName;
+        document.getElementById('modalClientCompanyName').value = '';
+        document.getElementById('modalClientVat').value = '';
+    }
+}
+
+function clearClientIdentityFields() {
+    setModalClientType('privato');
+    document.getElementById('modalClientFirstName').value = '';
+    document.getElementById('modalClientLastName').value = '';
+    document.getElementById('modalClientCompanyName').value = '';
+    document.getElementById('modalClientVat').value = '';
+}
+
 function openAddClientModal() {
     state.editMode = false;
     document.getElementById('modalClientTitle').textContent = 'Nuovo Cliente';
-    document.getElementById('modalClientName').value = '';
-    document.getElementById('modalClientAcquisitionDate').value = new Date().toISOString().split('T')[0]; // Data di oggi
+    clearClientIdentityFields();
+    document.getElementById('modalClientAcquisitionDate').value = new Date().toISOString().split('T')[0];
     document.getElementById('modalClientEmail').value = '';
     document.getElementById('modalClientPhone').value = '';
     clearClientAddressFields();
-    document.getElementById('modalClientVat').value = '';
     openModal('clientModal');
 }
 
@@ -2437,36 +2718,50 @@ function openEditClientModal() {
 
     state.editMode = true;
     document.getElementById('modalClientTitle').textContent = 'Modifica Cliente';
-    document.getElementById('modalClientName').value = client.name;
-    
-    // Data acquisizione: usa acquisitionDate se esiste, altrimenti createdAt, altrimenti oggi
+    fillClientIdentityFields(client);
+
     const acquisitionDate = client.acquisitionDate || client.createdAt || new Date().toISOString();
     document.getElementById('modalClientAcquisitionDate').value = acquisitionDate.split('T')[0];
-    
+
     document.getElementById('modalClientEmail').value = client.email || '';
     document.getElementById('modalClientPhone').value = client.phone || '';
     fillClientAddressFields(client);
-    document.getElementById('modalClientVat').value = client.vat || '';
     openModal('clientModal');
 }
 
 function saveClient() {
-    const name = document.getElementById('modalClientName').value.trim();
+    const identity = readClientIdentityFromModal();
+    const name = identity.name;
 
     if (!name) {
-        alert('Il nome del cliente è obbligatorio');
+        alert(identity.clientType === 'aziendale'
+            ? 'La ragione sociale è obbligatoria'
+            : 'Nome e cognome sono obbligatori');
         return;
+    }
+    if (identity.clientType === 'aziendale' && !identity.vat) {
+        alert('La P.IVA / Codice Fiscale è obbligatoria per le aziende');
+        return;
+    }
+    if (identity.clientType === 'privato') {
+        const firstName = document.getElementById('modalClientFirstName').value.trim();
+        const lastName = document.getElementById('modalClientLastName').value.trim();
+        if (!firstName || !lastName) {
+            alert('Nome e cognome sono obbligatori');
+            return;
+        }
     }
 
     if (state.editMode) {
         const clientIndex = state.clients.findIndex(c => c.id === state.currentClientId);
         const fields = {
             name,
+            clientType: identity.clientType,
             acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
             email: document.getElementById('modalClientEmail').value.trim(),
             phone: document.getElementById('modalClientPhone').value.trim(),
             ...readClientAddressFields(),
-            vat: document.getElementById('modalClientVat').value.trim(),
+            vat: identity.vat,
             updatedAt: new Date().toISOString()
         };
         migrateClientAddressFields(fields);
@@ -2480,11 +2775,12 @@ function saveClient() {
         const newClient = {
             id: generateId(),
             name,
+            clientType: identity.clientType,
             acquisitionDate: document.getElementById('modalClientAcquisitionDate').value,
             email: document.getElementById('modalClientEmail').value.trim(),
             phone: document.getElementById('modalClientPhone').value.trim(),
             ...readClientAddressFields(),
-            vat: document.getElementById('modalClientVat').value.trim(),
+            vat: identity.vat,
             documents: [],
             files: [],
             notes: [],

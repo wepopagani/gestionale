@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Registrazione cliente — 3DMAKES</title>
+    <meta name="description" content="Compila i tuoi dati per essere registrato come cliente 3DMAKES.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="3dmakes-theme.css">
+    <style>
+        .intake-wrap {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 32px 20px 64px;
+        }
+        .intake-card {
+            background: var(--dm-white);
+            border-radius: var(--dm-radius);
+            box-shadow: var(--dm-shadow);
+            border: 1px solid var(--dm-border);
+            overflow: hidden;
+        }
+        .intake-card__head {
+            padding: 28px 28px 12px;
+            text-align: center;
+        }
+        .intake-card__head h1 {
+            margin: 0 0 8px;
+            font-size: 1.5rem;
+            color: var(--dm-navy);
+        }
+        .intake-card__head p {
+            margin: 0;
+            color: var(--dm-text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .intake-card__body {
+            padding: 8px 28px 28px;
+        }
+        .intake-form .form-group {
+            margin-bottom: 16px;
+        }
+        .intake-form label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--dm-navy);
+            margin-bottom: 6px;
+        }
+        .intake-form input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--dm-border);
+            border-radius: 10px;
+            font: inherit;
+            color: var(--dm-text);
+            background: #fff;
+        }
+        .intake-form input:focus {
+            outline: none;
+            border-color: var(--dm-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
+        }
+        .intake-form .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 520px) {
+            .intake-form .form-row { grid-template-columns: 1fr; }
+        }
+        .intake-submit {
+            width: 100%;
+            margin-top: 8px;
+            padding: 14px 20px;
+            border: none;
+            border-radius: var(--dm-radius-pill);
+            background: var(--dm-cyan);
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .intake-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .intake-status {
+            text-align: center;
+            padding: 48px 24px;
+        }
+        .intake-status__icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+        .intake-status h2 {
+            margin: 0 0 8px;
+            color: var(--dm-navy);
+        }
+        .intake-status p {
+            margin: 0;
+            color: var(--dm-text-muted);
+            line-height: 1.5;
+        }
+        .intake-error { color: var(--dm-danger); }
+        .intake-privacy {
+            font-size: 0.78rem;
+            color: var(--dm-text-muted);
+            line-height: 1.45;
+            margin-top: 14px;
+        }
+        .intake-type-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .intake-type-btn {
+            padding: 12px 14px;
+            border: 2px solid var(--dm-border);
+            border-radius: 12px;
+            background: #fff;
+            color: var(--dm-navy);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .intake-type-btn.is-active {
+            border-color: var(--dm-cyan);
+            background: rgba(0, 174, 239, 0.08);
+        }
+        .intake-type-panel { display: none; }
+        .intake-type-panel.is-active { display: block; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="firestore-init.js"></script>
+</head>
+<body class="dm-page">
+    <header class="dm-header" role="banner">
+        <a href="https://3dmakes.ch" class="dm-logo" target="_blank" rel="noopener"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+    </header>
+
+    <main class="intake-wrap">
+        <div class="intake-card" id="intakeCard">
+            <div class="intake-status" id="loadingState">
+                <div class="intake-status__icon">⏳</div>
+                <h2>Caricamento…</h2>
+                <p>Verifica del link in corso.</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+(function () {
+    const USER_ID = 'shared_gestionale';
+    const token = new URLSearchParams(window.location.search).get('t');
+
+    function generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
+    function pathClient(clientId) {
+        return 'clients/' + USER_ID + '/' + clientId;
+    }
+
+    function getFirestore() {
+        return typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
+    }
+
+    function showState(html) {
+        document.getElementById('intakeCard').innerHTML = html;
+    }
+
+    function showInvalid(message) {
+        showState(
+            '<div class="intake-status">' +
+            '<div class="intake-status__icon">🔗</div>' +
+            '<h2>Link non valido</h2>' +
+            '<p class="intake-error">' + message + '</p>' +
+            '</div>'
+        );
+    }
+
+    function showSuccess() {
+        showState(
+            '<div class="intake-status">' +
+            '<div class="intake-status__icon">✅</div>' +
+            '<h2>Grazie!</h2>' +
+            '<p>I tuoi dati sono stati inviati correttamente.<br>Ti contatteremo al più presto.</p>' +
+            '</div>'
+        );
+    }
+
+    function renderForm(linkData) {
+        const labelNote = linkData.label
+            ? '<p style="margin-top:8px;font-size:0.85rem;color:var(--dm-cyan);font-weight:600;">' + escapeHtml(linkData.label) + '</p>'
+            : '';
+        showState(
+            '<div class="intake-card__head">' +
+            '<h1>I tuoi dati</h1>' +
+            '<p>Compila il modulo per completare la registrazione come cliente 3DMAKES.</p>' +
+            labelNote +
+            '</div>' +
+            '<div class="intake-card__body">' +
+            '<form class="intake-form" id="intakeForm" novalidate>' +
+            '<div class="form-group"><label>Tipo cliente *</label>' +
+            '<div class="intake-type-toggle" role="tablist">' +
+            '<button type="button" class="intake-type-btn is-active" data-type="privato">👤 Privato</button>' +
+            '<button type="button" class="intake-type-btn" data-type="aziendale">🏢 Aziendale</button>' +
+            '</div></div>' +
+            '<div id="panelPrivato" class="intake-type-panel is-active">' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label for="nome">Nome *</label><input type="text" id="nome" autocomplete="given-name"></div>' +
+            '<div class="form-group"><label for="cognome">Cognome *</label><input type="text" id="cognome" autocomplete="family-name"></div>' +
+            '</div></div>' +
+            '<div id="panelAziendale" class="intake-type-panel">' +
+            '<div class="form-group"><label for="ragioneSociale">Ragione sociale *</label><input type="text" id="ragioneSociale" autocomplete="organization"></div>' +
+            '<div class="form-group"><label for="vat">P.IVA / Codice Fiscale *</label><input type="text" id="vat"></div>' +
+            '</div>' +
+            '<div class="form-group"><label for="email">Email *</label><input type="email" id="email" required autocomplete="email"></div>' +
+            '<div class="form-group"><label for="phone">Telefono *</label><input type="tel" id="phone" required autocomplete="tel"></div>' +
+            '<div class="form-group"><label for="address">Indirizzo</label><input type="text" id="address" autocomplete="street-address" placeholder="Via, numero civico"></div>' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label for="postalCode">CAP</label><input type="text" id="postalCode" autocomplete="postal-code" placeholder="es. 6900"></div>' +
+            '<div class="form-group"><label for="city">Città</label><input type="text" id="city" autocomplete="address-level2" placeholder="es. Lugano"></div>' +
+            '</div>' +
+            '<div class="form-group"><label for="country">Paese</label><input type="text" id="country" autocomplete="country-name" placeholder="es. Svizzera" value="Svizzera"></div>' +
+            '<button type="submit" class="intake-submit" id="submitBtn">Invia dati</button>' +
+            '<p class="intake-privacy">I dati inseriti verranno utilizzati da 3DMAKES per gestire la relazione commerciale e per contattarti in merito ai servizi richiesti.</p>' +
+            '</form></div>'
+        );
+
+        let currentType = 'privato';
+        document.querySelectorAll('.intake-type-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                currentType = btn.getAttribute('data-type');
+                document.querySelectorAll('.intake-type-btn').forEach(function (b) {
+                    b.classList.toggle('is-active', b === btn);
+                });
+                document.getElementById('panelPrivato').classList.toggle('is-active', currentType === 'privato');
+                document.getElementById('panelAziendale').classList.toggle('is-active', currentType === 'aziendale');
+            });
+        });
+
+        document.getElementById('intakeForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitForm(linkData, currentType);
+        });
+    }
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function submitForm(linkData, clientType) {
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        let name = '';
+        let vat = '';
+
+        if (clientType === 'aziendale') {
+            name = document.getElementById('ragioneSociale').value.trim();
+            vat = document.getElementById('vat').value.trim();
+            if (!name) {
+                alert('La ragione sociale è obbligatoria.');
+                return;
+            }
+            if (!vat) {
+                alert('La P.IVA / Codice Fiscale è obbligatorio per le aziende.');
+                return;
+            }
+        } else {
+            const nome = document.getElementById('nome').value.trim();
+            const cognome = document.getElementById('cognome').value.trim();
+            if (!nome || !cognome) {
+                alert('Nome e cognome sono obbligatori.');
+                return;
+            }
+            name = [nome, cognome].filter(Boolean).join(' ').trim();
+        }
+
+        if (!email) {
+            alert('L\'email è obbligatoria.');
+            return;
+        }
+        if (!phone) {
+            alert('Il telefono è obbligatorio.');
+            return;
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Invio in corso…';
+
+        const clientId = generateId();
+        const client = {
+            id: clientId,
+            name: name,
+            clientType: clientType,
+            acquisitionDate: new Date().toISOString().split('T')[0],
+            email: email,
+            phone: phone,
+            address: document.getElementById('address').value.trim(),
+            postalCode: document.getElementById('postalCode').value.trim(),
+            city: document.getElementById('city').value.trim(),
+            country: document.getElementById('country').value.trim() || 'Svizzera',
+            vat: vat,
+            source: 'public_form',
+            intakeToken: token,
+            createdAt: new Date().toISOString(),
+            orders: {},
+            documents: {},
+            notes: {},
+            files: {}
+        };
+
+        const rtdb = firebase.database();
+        const fs = getFirestore();
+        if (!fs) {
+            alert('Servizio temporaneamente non disponibile. Riprova più tardi.');
+            btn.disabled = false;
+            btn.textContent = 'Invia dati';
+            return;
+        }
+
+        rtdb.ref(pathClient(clientId)).set(client)
+            .then(function () {
+                return fs.collection('client_intake_links').doc(token).update({
+                    used: true,
+                    usedAt: new Date().toISOString(),
+                    clientId: clientId,
+                    clientName: name
+                });
+            })
+            .then(function () {
+                showSuccess();
+            })
+            .catch(function (err) {
+                console.error(err);
+                btn.disabled = false;
+                btn.textContent = 'Invia dati';
+                alert('Errore durante l\'invio. Riprova tra qualche istante.');
+            });
+    }
+
+    if (!token) {
+        showInvalid('Questo link non contiene un codice valido. Chiedi a 3DMAKES un nuovo link di registrazione.');
+        return;
+    }
+
+    initFirebaseAuthAnon()
+        .then(function () {
+            const fs = getFirestore();
+            if (!fs) throw new Error('Firestore non disponibile');
+            return fs.collection('client_intake_links').doc(token).get();
+        })
+        .then(function (doc) {
+            if (!doc || !doc.exists) {
+                showInvalid('Il link non è valido o è scaduto. Contatta 3DMAKES per riceverne uno nuovo.');
+                return;
+            }
+            const linkData = doc.data();
+            if (linkData.active === false) {
+                showInvalid('Il link non è più attivo. Contatta 3DMAKES per riceverne uno nuovo.');
+                return;
+            }
+            if (linkData.used) {
+                showInvalid('Questo link è già stato utilizzato. Se hai bisogno di aggiornare i dati, contattaci direttamente.');
+                return;
+            }
+            renderForm(linkData);
+        })
+        .catch(function (err) {
+            console.error(err);
+            showInvalid('Impossibile verificare il link. Controlla la connessione e riprova.');
+        });
+})();
+    </script>
+</body>
+</html>
