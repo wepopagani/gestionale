@@ -4926,6 +4926,12 @@ function getDateRange(period) {
             to = new Date(now);
             to.setHours(23, 59, 59, 999);
             break;
+
+        case 'last_month':
+            // Intero mese precedente
+            from = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+            to = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+            break;
             
         case 'quarter':
             // Primo giorno del trimestre corrente
@@ -5400,6 +5406,7 @@ function printReport() {
     const periodLabels = {
         'week': 'Questa Settimana',
         'month': 'Questo Mese',
+        'last_month': 'Mese Scorso',
         'quarter': 'Questo Trimestre',
         'year': 'Quest\'Anno',
         'all': 'Tutti i Periodi',
