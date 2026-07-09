@@ -1,9 +1,6 @@
 // Versione 2.3 - Scritture per-path nel cloud, counter transazionale,
 // listener real-time granulare. Fix definitivo per la perdita di ordini in
 // modalità multi-utente (più persone che lavorano contemporaneamente).
-console.log('✅ Gestionale 3DMAKES v2.3 caricato');
-console.log('💰 Valuta: CHF (Franchi Svizzeri)');
-console.log('🛡️ Modalità sicura multi-utente: scritture atomiche per path');
 
 // ===== FIREBASE SETUP =====
 // Configurazione caricata da firebase-config.js
@@ -88,16 +85,12 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
             .then((registration) => {
-                console.log('✅ Service Worker registrato:', registration.scope);
-                
                 // Controlla aggiornamenti ogni ora
                 setInterval(() => {
                     registration.update();
                 }, 3600000);
             })
-            .catch((error) => {
-                console.log('❌ Registrazione Service Worker fallita:', error);
-            });
+            .catch(() => { /* ignore */ });
     });
 }
 
@@ -107,7 +100,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
     // Previene il prompt automatico
     e.preventDefault();
     deferredPrompt = e;
-    console.log('💡 App installabile come PWA');
 });
 
 // ===== Scorciatoia: freccia in alto a sinistra → Report =====
@@ -202,12 +194,10 @@ const LEGACY_BACKUP_PATH = '_legacy_backup_v1/shared_gestionale_';
 function initFirebase() {
     try {
         if (typeof firebaseConfig === 'undefined') {
-            console.log('Firebase config non trovato. Modifica firebase-config.js con le tue credenziali.');
             updateCloudStatus(false);
             return;
         }
         if (firebaseConfig.apiKey === 'TUA_API_KEY' || firebaseConfig.apiKey.includes('placeholder')) {
-            console.log('⚠️ Firebase non configurato. Inserisci le tue credenziali in firebase-config.js');
             updateCloudStatus(false);
             return;
         }
@@ -230,8 +220,6 @@ function initFirebase() {
                 firebaseDb = firebase.database();
                 userId = 'shared_gestionale';
                 firebaseReady = true;
-                console.log('✅ Firebase inizializzato (staff: ' + (user && user.email ? user.email : 'n/d') + ')');
-                console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
                 setupCloudSync();
             })
             .catch(function (err) {
@@ -453,7 +441,6 @@ function migrateAllClientAddresses(options) {
     });
     if (changed > 0) {
         saveToLocalOnly({ immediate: true });
-        console.log('📍 Indirizzi normalizzati per ' + changed + ' clienti');
     }
     return changed;
 }
@@ -718,7 +705,6 @@ function allocateNextOrderNumber() {
         const assigned = after - 1;
         state.orderCounter = after;
         localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-        console.log(`🔢 Numero ordine assegnato via transaction: ${assigned} (counter ora = ${after})`);
         return assigned;
     }).catch(err => {
         console.error('❌ Errore transaction counter, uso fallback locale:', err);
@@ -768,8 +754,6 @@ function needsReconciliation(rawRoot) {
 function runMigrationIfNeeded(currentRoot) {
     if (!needsReconciliation(currentRoot)) return Promise.resolve(false);
 
-    console.log('🧭 Riconciliazione formato cloud necessaria (array legacy o frammenti).');
-
     const markerRef = firebaseDb.ref(MIGRATION_MARKER_PATH);
     const myToken = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
 
@@ -785,18 +769,15 @@ function runMigrationIfNeeded(currentRoot) {
         };
     }).then(result => {
         if (!result.committed) {
-            console.log('🧭 Un altro client sta già riconciliando, attendo aggiornamenti in tempo reale.');
             return false;
         }
         const committed = result.snapshot.val();
         if (committed.by !== myToken) return false;
 
-        console.log('🧭 Inizio riconciliazione…');
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
 
         return firebaseDb.ref(LEGACY_BACKUP_PATH + ts).set(currentRoot)
             .then(() => {
-                console.log('✅ Backup pre-riconciliazione in ' + LEGACY_BACKUP_PATH + ts);
                 const merged = reconcileCloudRoot(currentRoot);
                 const newObj = {};
                 Object.values(merged).forEach(c => {
@@ -811,7 +792,6 @@ function runMigrationIfNeeded(currentRoot) {
             })
             .then(() => markerRef.set({ done: true, at: new Date().toISOString(), by: myToken }))
             .then(() => {
-                console.log('✅ Riconciliazione completata');
                 showNotification('✅ Database riconciliato al nuovo formato sicuro', 'success');
                 return true;
             })
@@ -839,7 +819,6 @@ function setupCloudSync() {
             const clientsArr = normalizeClientsFromCloud(raw2);
 
             if (clientsArr.length > 0) {
-                console.log(`📥 Caricati ${clientsArr.length} clienti dal cloud`);
                 const localSnapshot = state.clients.slice();
                 const mergedById = {};
                 clientsArr.forEach(function (cloudClient) {
@@ -872,7 +851,6 @@ function setupCloudSync() {
             } else if (state.clients.length > 0) {
                 migrateAllClientAddresses({ pushCloud: true });
                 // Cloud vuoto e abbiamo dati locali: pushiamo ognuno separatamente
-                console.log(`📤 Push iniziale di ${state.clients.length} clienti dal locale al cloud`);
                 state.clients.forEach(c => cloudSetClient(c));
             }
 
@@ -880,7 +858,7 @@ function setupCloudSync() {
             pruneLocalStorageForQuota(true);
             saveToLocalOnly({ immediate: true });
             attachGranularListeners(ref);
-            loadCounterFromCloud().then(() => console.log('✅ Counter cloud sincronizzato'));
+            loadCounterFromCloud();
             showNotification('☁️ Sincronizzazione attiva', 'success');
         });
     }).catch(error => {
@@ -986,7 +964,6 @@ function loadCounterFromCloud() {
                 const maxFromOrders = calculateNextOrderNumber();
                 state.orderCounter = Math.max(cloudNum, maxFromOrders);
                 localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-                console.log(`📋 Counter ordini: cloud=${cloudNum}, calcolato=${maxFromOrders}, usato=${state.orderCounter}`);
             } else {
                 // Nessun counter nel cloud: inizializza dal max osservato
                 state.orderCounter = Math.max(
@@ -994,7 +971,6 @@ function loadCounterFromCloud() {
                     calculateNextOrderNumber()
                 );
                 firebaseDb.ref('counter/' + userId).set(state.orderCounter).catch(() => {});
-                console.log(`📋 Counter ordini inizializzato a ${state.orderCounter}`);
             }
             setupCounterSync();
         })
@@ -1018,7 +994,6 @@ function setupCounterSync() {
         if (newCounter > state.orderCounter) {
             state.orderCounter = newCounter;
             localStorage.setItem('gestionale_order_counter', state.orderCounter.toString());
-            console.log(`🔄 Counter aggiornato dal cloud: ${state.orderCounter}`);
         }
     });
 }
@@ -1047,9 +1022,6 @@ function cloudRestoreFromLocalState() {
             return firebaseDb.ref('clients/' + userId).set(obj);
         })
         .then(() => firebaseDb.ref('counter/' + userId).set(state.orderCounter))
-        .then(() => {
-            console.log('✅ Ripristino cloud completato, backup precedente in ' + backupKey);
-        })
         .catch(err => {
             console.error('❌ Errore ripristino cloud:', err);
             showNotification('⚠️ Ripristino cloud non riuscito, i dati sono comunque in locale', 'error');
@@ -1498,7 +1470,6 @@ function listLocalBackups() {
  */
 function saveToLocalOnly(options = {}) {
     const run = () => {
-        const timestamp = new Date().toLocaleTimeString();
         try {
             // Tentativo a livelli progressivi di "slim". La scrittura del
             // payload principale è opzionale se il cloud è attivo: la fonte
@@ -1519,8 +1490,6 @@ function saveToLocalOnly(options = {}) {
             } catch (e) { /* già gestito dal trySetLocalStorageItem */ }
 
             if (saved) {
-                const tag = usedLevel === 0 ? 'full' : `slim L${usedLevel}`;
-                console.log(`💾 [${timestamp}] Locale (${tag}): ${state.clients.length} clienti`);
                 if (options.forceBackup || shouldRunPeriodicBackup()) {
                     writeDailyBackup();
                     pushRollingBackup();
@@ -1529,7 +1498,6 @@ function saveToLocalOnly(options = {}) {
             } else if (cloudSyncEnabled) {
                 // Quota piena anche in modalità ultra-slim, ma il cloud ha tutto:
                 // non è un errore, è una semplice degradazione della cache locale.
-                console.info(`ℹ️ [${timestamp}] Locale pieno: ${state.clients.length} clienti — cloud resta la fonte primaria`);
                 notifyQuotaOnce();
             } else {
                 // Offline puro: questo sì che è un problema, avvisa l'utente.
@@ -2704,7 +2672,6 @@ function saveClient() {
 
         saveToLocalOnly({ immediate: true });
         cloudUpdateClientFields(state.currentClientId, clientScalarFieldsForCloud(state.clients[clientIndex]));
-        console.log('✅ Cliente aggiornato (update per-campo, dati preservati)');
     } else {
         const newClient = {
             id: generateId(),
@@ -2727,7 +2694,6 @@ function saveClient() {
 
         saveToLocalOnly({ immediate: true });
         cloudSetClient(newClient);
-        console.log('✅ Nuovo cliente creato: ' + newClient.id);
     }
 
     renderClients();
@@ -3529,7 +3495,6 @@ async function saveOrder() {
 
             saveToLocalOnly();
             await cloudSetOrder(clientId, order);
-            console.log(`✅ Ordine ${order.number} salvato su path ${pathOrder(clientId, order.id)}`);
         }
 
         renderOrders();
@@ -4964,7 +4929,6 @@ function getDateRange(period) {
             break;
     }
     
-    console.log(`📅 Range periodo '${period}': da ${from.toLocaleDateString('it-IT')} a ${to.toLocaleDateString('it-IT')}`);
     return { from, to };
 }
 
@@ -4972,8 +4936,6 @@ function generateReport() {
     const period = document.getElementById('reportPeriod').value;
     const clientFilter = document.getElementById('reportClient').value;
     const statusFilter = document.getElementById('reportStatus').value;
-    
-    console.log('🔄 Generazione report...', { period, clientFilter, statusFilter });
     
     const dateRange = getDateRange(period);
     
@@ -5013,8 +4975,6 @@ function generateReport() {
     filteredOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
     
     state.reportData = filteredOrders;
-    
-    console.log(`📦 Ordini totali: ${allOrdersForStats.length}, Filtrati: ${filteredOrders.length}`);
     
     // ===== RACCOLTA CLIENTI ACQUISITI =====
     const newClients = [];
@@ -5094,8 +5054,6 @@ function generateReport() {
         return dateB - dateA;
     });
     
-    console.log(`👥 Clienti acquisiti trovati: ${newClients.length}`);
-    
     // ===== CALCOLA STATISTICHE PER STATO =====
     // Le statistiche vengono calcolate su TUTTI gli ordini del periodo (non filtrati)
     const statusStats = {
@@ -5166,15 +5124,6 @@ function generateReport() {
     const completedOrders = filteredOrders.filter(o => o.status === 'completato').length;
     const totalNewClients = newClients.length;
     
-    console.log('📊 Statistiche:', {
-        totalNewClients,
-        totalOrders,
-        totalRevenue,
-        completedOrders,
-        statusFilter,
-        statusStats
-    });
-    
     // Aggiorna summary
     document.getElementById('totalNewClients').textContent = totalNewClients;
     document.getElementById('totalOrders').textContent = totalOrders;
@@ -5191,9 +5140,6 @@ function generateReport() {
     updateStatusCardsActive(statusFilter);
     
     saveReportFiltersToStorage();
-    
-    console.log('✅ Report generato!');
-    console.log(`💰 Importo filtrato: ${formatCurrency(totalRevenue)}`);
 }
 
 function renderClientsAcquiredTable(clients, dateRange) {
@@ -5633,12 +5579,6 @@ window.debugState = function() {
     return state;
 };
 
-// Log automatico ogni 5 minuti per tracking
-setInterval(() => {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(`⏰ [${timestamp}] Stato: ${state.clients.length} clienti, cloud: ${cloudSyncEnabled ? 'ON' : 'OFF'}`);
-}, 300000); // 5 minuti
-
 // ===== BACKUP & RESTORE =====
 function exportBackup() {
     try {
@@ -5666,7 +5606,6 @@ function exportBackup() {
         URL.revokeObjectURL(url);
         
         showNotification('✅ Backup scaricato con successo', 'success');
-        console.log('💾 Backup esportato:', backupData);
     } catch (error) {
         console.error('❌ Errore esportazione backup:', error);
         showNotification('❌ Errore durante l\'esportazione', 'error');
@@ -5720,7 +5659,6 @@ function importBackup() {
             fileInput.value = ''; // Reset input
             
             showNotification(`✅ Backup ripristinato! ${state.clients.length} clienti importati`, 'success');
-            console.log('📥 Backup importato:', backupData);
         } catch (error) {
             console.error('❌ Errore importazione backup:', error);
             showNotification('❌ Errore: file backup non valido', 'error');

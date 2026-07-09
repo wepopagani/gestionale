@@ -4,7 +4,7 @@
 // frammenti da migrazione parziale): riconciliazione automatica con merge
 // dei nodi fantasma per evitare perdite di ordini.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.29';
+const CACHE_NAME = '3dmakes-gestionale-v3.31';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -35,29 +35,21 @@ function isNetworkOnlyRequest(url) {
 
 // Installazione - Caching dei file statici
 self.addEventListener('install', (event) => {
-  console.log('✅ Service Worker: Installazione in corso...');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('📦 Service Worker: File cached');
-        return cache.addAll(urlsToCache);
-      })
-      .catch((error) => {
-        console.error('❌ Errore caching:', error);
-      })
+      .then((cache) => cache.addAll(urlsToCache))
+      .catch(() => { /* ignore */ })
   );
   self.skipWaiting();
 });
 
 // Attivazione - Pulizia cache vecchie
 self.addEventListener('activate', (event) => {
-  console.log('🚀 Service Worker: Attivazione');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ Service Worker: Rimozione cache vecchia', cacheName);
             return caches.delete(cacheName);
           }
         })

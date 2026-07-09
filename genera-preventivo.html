@@ -17,7 +17,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js?v=2"></script>
     <script src="firestore-init.js"></script>
-    <script src="auth-staff.js?v=4"></script>
+    <script src="auth-staff.js?v=5"></script>
     <script src="preventivo-config-servizi.js?v=20260608"></script>
 </head>
 <body class="dm-page">
@@ -277,11 +277,6 @@
         try {
             db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
             firebaseInitialized = !!db;
-            if (firebaseInitialized) {
-                console.log('✅ Firebase (Firestore) inizializzato');
-            } else {
-                console.warn('⚠️ Firebase non configurato in firebase-config.js');
-            }
         } catch (error) {
             console.error('❌ Errore inizializzazione Firebase:', error);
         }
@@ -290,9 +285,6 @@
             if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined'
                 && firebase.database && firebaseConfig.databaseURL) {
                 firebaseRtdb = firebase.database();
-                console.log('✅ Firebase (Realtime DB) inizializzato per rubrica clienti');
-            } else {
-                console.warn('⚠️ Realtime DB non disponibile: rubrica clienti disabilitata.');
             }
         } catch (error) {
             console.error('❌ Errore init Realtime DB:', error);
