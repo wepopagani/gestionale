@@ -1627,10 +1627,6 @@ function generateIntakeToken() {
 }
 
 function getGestionalePublicBaseUrl() {
-    const inputEl = document.getElementById('intakePublicBaseUrl');
-    if (inputEl && inputEl.value.trim()) {
-        return inputEl.value.trim().replace(/\/$/, '');
-    }
     const stored = localStorage.getItem('gestionale_public_base_url');
     if (stored && stored.trim()) return stored.trim().replace(/\/$/, '');
     if (typeof gestionalePublicUrl === 'string' && gestionalePublicUrl.trim()) {
@@ -1641,14 +1637,6 @@ function getGestionalePublicBaseUrl() {
         return dir.replace(/\/$/, '');
     }
     return '';
-}
-
-function saveGestionalePublicBaseUrl(url) {
-    const clean = (url || '').trim().replace(/\/$/, '');
-    if (clean) localStorage.setItem('gestionale_public_base_url', clean);
-    const inputEl = document.getElementById('intakePublicBaseUrl');
-    if (inputEl) inputEl.value = clean;
-    return clean;
 }
 
 function buildIntakeLinkUrl(token) {
@@ -1723,71 +1711,18 @@ function copyTextToClipboard(text) {
     });
 }
 
-function renderIntakeLinksList() {
-    const listEl = document.getElementById('intakeLinksList');
-    if (!listEl) return;
-    listEl.textContent = 'Caricamento…';
-    const fs = getIntakeFirestore();
-    if (!fs) {
-        listEl.textContent = 'Firestore non disponibile.';
-        return;
-    }
-    initFirebaseAuthAnon()
-        .then(function () { return fs.collection('client_intake_links').get(); })
-        .then(function (snap) {
-            const items = [];
-            snap.forEach(function (doc) {
-                const v = doc.data();
-                if (v) items.push(v);
-            });
-            items.sort(function (a, b) {
-                return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
-            });
-            const recent = items.slice(0, 8);
-            if (!recent.length) {
-                listEl.innerHTML = '<p style="margin:0;">Nessun link creato.</p>';
-                return;
-            }
-            listEl.innerHTML = recent.map(function (link) {
-                const status = link.used
-                    ? '<span style="color:#0d9488;font-weight:600;">Usato</span>'
-                    : '<span style="color:#00aeef;font-weight:600;">Attivo</span>';
-                const label = link.label ? ' · ' + escapeHtml(link.label) : '';
-                const client = link.used && link.clientName
-                    ? ' · ' + escapeHtml(link.clientName)
-                    : '';
-                const date = link.createdAt ? formatDate(link.createdAt) : '';
-                return '<div style="padding:8px 0;border-bottom:1px solid var(--border-color,#e8e4dc);">' +
-                    status + label + client +
-                    '<div style="font-size:11px;margin-top:2px;opacity:0.8;">' + date + '</div></div>';
-            }).join('');
-        })
-        .catch(function (err) {
-            console.error('renderIntakeLinksList:', err);
-            listEl.textContent = 'Errore caricamento link.';
-        });
-}
-
 function openIntakeLinkModal() {
     document.getElementById('intakeLinkLabel').value = '';
     document.getElementById('intakeLinkResult').style.display = 'none';
     document.getElementById('intakeLinkUrl').value = '';
-    const base = getGestionalePublicBaseUrl();
-    const baseInput = document.getElementById('intakePublicBaseUrl');
-    if (baseInput) baseInput.value = base;
-    const warn = document.getElementById('intakeFileWarning');
-    if (warn) warn.style.display = window.location.protocol === 'file:' ? 'block' : 'none';
-    renderIntakeLinksList();
     openModal('intakeLinkModal');
 }
 
 function handleGenerateIntakeLink() {
     const label = document.getElementById('intakeLinkLabel').value.trim();
-    const baseUrl = saveGestionalePublicBaseUrl(
-        document.getElementById('intakePublicBaseUrl').value
-    );
+    const baseUrl = getGestionalePublicBaseUrl();
     if (!/^https?:\/\/.+/i.test(baseUrl)) {
-        showNotification('Inserisci l\'URL pubblico del gestionale (es. https://tuodominio.ch/gestionale)', 'error');
+        showNotification('URL pubblico non configurato (clienti.3dmakes.ch)', 'error');
         return;
     }
     const btn = document.getElementById('generateIntakeLinkBtn');
@@ -1800,7 +1735,6 @@ function handleGenerateIntakeLink() {
         const url = buildIntakeLinkUrl(link.token);
         document.getElementById('intakeLinkUrl').value = url;
         document.getElementById('intakeLinkResult').style.display = 'block';
-        renderIntakeLinksList();
         return copyTextToClipboard(url).then(function () {
             showNotification('Link creato e copiato negli appunti', 'success');
         }).catch(function () {
