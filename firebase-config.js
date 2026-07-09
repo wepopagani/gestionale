@@ -16,19 +16,13 @@ const firebaseConfig = {
 // URL pubblico dove è online il gestionale (https), per i link registrazione clienti.
 const gestionalePublicUrl = 'https://clienti.3dmakes.ch';
 
-// Account Google autorizzati al gestionale (minuscolo). Aggiungi le email del team.
-const gestionaleAllowedEmails = [
-    'info@3dmakes.ch',
-    'info@3dmakes.it'
-];
+// Password team per il gestionale staff (cambiala in firebase-config.js).
+// Nota: è visibile nel codice sorgente — usa una password dedicata, non quella email.
+const gestionaleStaffPassword = '3DMAKES2026';
 
-// Oppure autorizza tutto un dominio (es. @3dmakes.ch). Lascia [] se usi solo la lista sopra.
-const gestionaleAllowedDomains = ['3dmakes.ch', '3dmakes.it'];
-
-// Esposto su window per auth-staff.js (const non finisce su window da sola).
+// Esposto su window per auth-staff.js
 if (typeof window !== 'undefined') {
-    window.gestionaleAllowedEmails = gestionaleAllowedEmails;
-    window.gestionaleAllowedDomains = gestionaleAllowedDomains;
+    window.gestionaleStaffPassword = gestionaleStaffPassword;
     window.gestionalePublicUrl = gestionalePublicUrl;
 }
 
@@ -63,8 +57,9 @@ service cloud.firestore {
 }
 */
 
-// ===== AUTENTICAZIONE ANONIMA (modulo pubblico registrazione clienti) =====
-// Il gestionale staff usa Google Sign-In via auth-staff.js.
+// ===== AUTENTICAZIONE ANONIMA =====
+// Staff: password in auth-staff.js → poi login anonimo Firebase.
+// Pubblico: registrazione-cliente.html usa initFirebaseAuthAnon() direttamente.
 let _firebaseAuthPromise = null;
 function initFirebaseAuthAnon() {
     if (_firebaseAuthPromise) return _firebaseAuthPromise;

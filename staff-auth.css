@@ -98,6 +98,35 @@ body.staff-login-active .fab-action {
     cursor: not-allowed;
 }
 
+.staff-login-form {
+    text-align: left;
+}
+
+.staff-login-label {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #003b5c;
+}
+
+.staff-login-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid #e8e4dc;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 1rem;
+}
+
+.staff-login-input:focus {
+    outline: none;
+    border-color: #00aeef;
+    box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
+}
+
 .staff-user-pill {
     display: none;
     align-items: center;
