@@ -18,11 +18,12 @@ const gestionalePublicUrl = 'https://clienti.3dmakes.ch';
 
 // Account Google autorizzati al gestionale (minuscolo). Aggiungi le email del team.
 const gestionaleAllowedEmails = [
-    'info@3dmakes.ch'
+    'info@3dmakes.ch',
+    'info@3dmakes.it'
 ];
 
 // Oppure autorizza tutto un dominio (es. @3dmakes.ch). Lascia [] se usi solo la lista sopra.
-const gestionaleAllowedDomains = ['3dmakes.ch'];
+const gestionaleAllowedDomains = ['3dmakes.ch', '3dmakes.it'];
 
 // Esposto su window per auth-staff.js (const non finisce su window da sola).
 if (typeof window !== 'undefined') {

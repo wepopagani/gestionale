@@ -5,6 +5,11 @@
 (function () {
     let staffAuthPromise = null;
     let staffAuthResolved = false;
+    let staffAuthChecked = false;
+    let lastDeniedEmail = '';
+
+    const FALLBACK_ALLOWED_EMAILS = ['info@3dmakes.ch', 'info@3dmakes.it'];
+    const FALLBACK_ALLOWED_DOMAINS = ['3dmakes.ch', '3dmakes.it'];
 
     function ensureFirebaseApp() {
         if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') {
@@ -21,31 +26,35 @@
     }
 
     function getAllowedEmails() {
-        return Array.isArray(window.gestionaleAllowedEmails) ? window.gestionaleAllowedEmails : [];
+        const fromWindow = window.gestionaleAllowedEmails;
+        if (Array.isArray(fromWindow) && fromWindow.length) return fromWindow;
+        return FALLBACK_ALLOWED_EMAILS;
     }
 
     function getAllowedDomains() {
-        return Array.isArray(window.gestionaleAllowedDomains) ? window.gestionaleAllowedDomains : [];
+        const fromWindow = window.gestionaleAllowedDomains;
+        if (Array.isArray(fromWindow) && fromWindow.length) return fromWindow;
+        return FALLBACK_ALLOWED_DOMAINS;
     }
 
     function isAllowedStaffEmail(email) {
         const e = normalizeEmail(email);
         if (!e) return false;
 
-        const allowedEmails = getAllowedEmails();
-        if (allowedEmails.length) {
-            if (allowedEmails.map(normalizeEmail).includes(e)) return true;
-        }
+        const allowedEmails = getAllowedEmails().map(normalizeEmail);
+        if (allowedEmails.includes(e)) return true;
 
-        const allowedDomains = getAllowedDomains();
-        if (allowedDomains.length) {
-            return allowedDomains.some(function (domain) {
-                const d = String(domain || '').trim().toLowerCase().replace(/^@/, '');
-                return d && e.endsWith('@' + d);
-            });
-        }
+        return getAllowedDomains().some(function (domain) {
+            const d = String(domain || '').trim().toLowerCase().replace(/^@/, '');
+            return d && e.endsWith('@' + d);
+        });
+    }
 
-        return false;
+    function normalizeAuthUrl() {
+        if (!window.location.hash) return;
+        try {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (e) { /* ignore */ }
     }
 
     function ensureLoginOverlay() {
@@ -58,6 +67,7 @@
             '<div class="staff-login-card" role="dialog" aria-labelledby="staffLoginTitle">' +
             '<h2 id="staffLoginTitle">Area riservata 3DMAKES</h2>' +
             '<p>Accedi con il tuo account Google autorizzato per usare il gestionale.</p>' +
+            '<p id="staffLoginStatus" class="staff-login-status">Verifica accesso…</p>' +
             '<p id="staffLoginMessage" class="staff-login-error"></p>' +
             '<button type="button" class="staff-google-btn" id="staffGoogleSignInBtn">' +
             '<span aria-hidden="true">G</span> Accedi con Google' +
@@ -69,12 +79,28 @@
             const btn = document.getElementById('staffGoogleSignInBtn');
             btn.disabled = true;
             setStaffLoginMessage('');
+            setStaffLoginStatus('Reindirizzamento a Google…');
             signInWithGoogleStaff().catch(function (err) {
                 console.error(err);
                 setStaffLoginMessage(formatStaffAuthError(err));
+                setStaffLoginStatus('');
                 btn.disabled = false;
+                resetGoogleButton();
             });
         });
+    }
+
+    function resetGoogleButton() {
+        const btn = document.getElementById('staffGoogleSignInBtn');
+        if (!btn) return;
+        btn.innerHTML = '<span aria-hidden="true">G</span> Accedi con Google';
+    }
+
+    function setStaffLoginStatus(message) {
+        const el = document.getElementById('staffLoginStatus');
+        if (!el) return;
+        el.textContent = message || '';
+        el.classList.toggle('is-visible', !!message);
     }
 
     function setStaffLoginMessage(message) {
@@ -96,15 +122,16 @@
             return 'Google Sign-In non abilitato su Firebase. Abilitalo in Authentication → Sign-in method.';
         }
         if (err.code === 'auth/unauthorized-domain') {
-            return 'Dominio non autorizzato. Aggiungi questo sito in Firebase → Authentication → Authorized domains.';
+            return 'Dominio non autorizzato. Aggiungi clienti.3dmakes.ch in Firebase → Authentication → Authorized domains.';
         }
         return err.message || 'Accesso non riuscito. Riprova.';
     }
 
-    function showStaffLoginScreen(message) {
+    function showStaffLoginScreen(message, status) {
         ensureLoginOverlay();
         document.getElementById('staffLoginOverlay').classList.add('is-visible');
         document.body.classList.add('staff-login-active');
+        setStaffLoginStatus(status || '');
         if (message) setStaffLoginMessage(message);
     }
 
@@ -113,6 +140,7 @@
         if (el) el.classList.remove('is-visible');
         document.body.classList.remove('staff-login-active');
         setStaffLoginMessage('');
+        setStaffLoginStatus('');
     }
 
     function updateStaffUserUI(user) {
@@ -127,39 +155,53 @@
         }
     }
 
-    function handleStaffUser(user) {
-        if (user && isAllowedStaffEmail(user.email)) {
+    function resolveAllowedUser(user) {
+        if (!user) return Promise.resolve(null);
+
+        const email = user.email || '';
+        if (isAllowedStaffEmail(email)) {
+            lastDeniedEmail = '';
             hideStaffLoginScreen();
             updateStaffUserUI(user);
             return Promise.resolve(user);
         }
-        if (user && !isAllowedStaffEmail(user.email)) {
-            return firebase.auth().signOut().then(function () {
-                showStaffLoginScreen('Account non autorizzato: ' + (user.email || ''));
-                return null;
-            });
-        }
-        updateStaffUserUI(null);
-        const msgEl = document.getElementById('staffLoginMessage');
-        const hasVisibleError = msgEl && msgEl.classList.contains('is-visible') && msgEl.textContent;
-        if (!hasVisibleError) {
-            showStaffLoginScreen();
-        } else {
-            ensureLoginOverlay();
-            document.getElementById('staffLoginOverlay').classList.add('is-visible');
-            document.body.classList.add('staff-login-active');
-        }
-        return Promise.resolve(null);
+
+        lastDeniedEmail = email;
+        return firebase.auth().signOut().then(function () {
+            showStaffLoginScreen(
+                'Account non autorizzato: ' + (email || 'email mancante') + '. Contatta l\'amministratore.',
+                ''
+            );
+            return null;
+        });
+    }
+
+    function applyAuthState(user) {
+        staffAuthChecked = true;
+        return resolveAllowedUser(user).then(function (allowedUser) {
+            if (allowedUser && !staffAuthResolved) {
+                staffAuthResolved = true;
+            }
+            if (!allowedUser && staffAuthChecked) {
+                if (lastDeniedEmail) {
+                    showStaffLoginScreen(
+                        'Account non autorizzato: ' + lastDeniedEmail + '.',
+                        ''
+                    );
+                } else {
+                    showStaffLoginScreen('', '');
+                }
+            }
+            return allowedUser;
+        });
     }
 
     function signInWithGoogleStaff() {
         ensureFirebaseApp();
+        normalizeAuthUrl();
         const auth = firebase.auth();
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
-        const btn = document.getElementById('staffGoogleSignInBtn');
-        if (btn) btn.textContent = 'G Reindirizzamento a Google…';
-        setStaffLoginMessage('Attendi, ti portiamo alla pagina di accesso Google…');
         return auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
             .then(function () { return auth.signInWithRedirect(provider); });
     }
@@ -169,7 +211,9 @@
         return firebase.auth().signOut().then(function () {
             staffAuthPromise = null;
             staffAuthResolved = false;
-            showStaffLoginScreen('Sei uscito. Accedi di nuovo per continuare.');
+            staffAuthChecked = true;
+            lastDeniedEmail = '';
+            showStaffLoginScreen('Sei uscito. Accedi di nuovo per continuare.', '');
         });
     }
 
@@ -179,32 +223,38 @@
         staffAuthPromise = new Promise(function (resolve, reject) {
             try {
                 ensureFirebaseApp();
+                normalizeAuthUrl();
                 const auth = firebase.auth();
+
+                ensureLoginOverlay();
+                setStaffLoginStatus('Verifica accesso…');
+                document.getElementById('staffLoginOverlay').classList.add('is-visible');
+                document.body.classList.add('staff-login-active');
+
                 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function () { /* ignore */ });
 
                 auth.getRedirectResult()
                     .then(function (result) {
                         if (result && result.user) {
-                            return handleStaffUser(result.user);
+                            return applyAuthState(result.user);
+                        }
+                        if (auth.currentUser) {
+                            return applyAuthState(auth.currentUser);
                         }
                         return null;
                     })
                     .catch(function (err) {
                         console.error('getRedirectResult:', err);
-                        showStaffLoginScreen(formatStaffAuthError(err));
-                    })
-                    .finally(function () {
-                        auth.onAuthStateChanged(function (user) {
-                            handleStaffUser(user).then(function (allowedUser) {
-                                if (allowedUser && !staffAuthResolved) {
-                                    staffAuthResolved = true;
-                                    resolve(allowedUser);
-                                }
-                            });
-                        }, function (err) {
-                            if (!staffAuthResolved) reject(err);
-                        });
+                        showStaffLoginScreen(formatStaffAuthError(err), '');
                     });
+
+                auth.onAuthStateChanged(function (user) {
+                    applyAuthState(user).then(function (allowedUser) {
+                        if (allowedUser) resolve(allowedUser);
+                    });
+                }, function (err) {
+                    if (!staffAuthResolved) reject(err);
+                });
             } catch (err) {
                 reject(err);
             }
@@ -228,11 +278,19 @@
     window.signOutStaff = signOutStaff;
     window.isAllowedStaffEmail = isAllowedStaffEmail;
 
-    document.addEventListener('DOMContentLoaded', function () {
-        if (document.body && document.body.dataset.staffPublic === 'true') return;
+    function bootStaffAuthUi() {
+        if (!document.body || document.body.dataset.staffPublic === 'true') return;
         ensureLoginOverlay();
         setupStaffLogoutButtons();
-        document.body.classList.add('staff-login-active');
-        document.getElementById('staffLoginOverlay').classList.add('is-visible');
-    });
+        initFirebaseStaffAuth().catch(function (err) {
+            console.error('Staff auth boot:', err);
+            showStaffLoginScreen(formatStaffAuthError(err), '');
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootStaffAuthUi);
+    } else {
+        bootStaffAuthUi();
+    }
 })();

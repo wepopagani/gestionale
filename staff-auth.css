@@ -62,6 +62,17 @@ body.staff-login-active .fab-action {
     display: block;
 }
 
+.staff-login-status {
+    margin: 0 0 12px;
+    color: #5c6b7a;
+    font-size: 0.85rem;
+    display: none;
+}
+
+.staff-login-status.is-visible {
+    display: block;
+}
+
 .staff-google-btn {
     display: inline-flex;
     align-items: center;

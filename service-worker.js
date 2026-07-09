@@ -4,7 +4,7 @@
 // frammenti da migrazione parziale): riconciliazione automatica con merge
 // dei nodi fantasma per evitare perdite di ordini.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.28';
+const CACHE_NAME = '3dmakes-gestionale-v3.29';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -16,12 +16,22 @@ const urlsToCache = [
   '/calcolatore.html',
   '/migrazione-preventivi.html',
   '/recupero.html',
-  '/app.js',
   '/style.css',
-  '/firebase-config.js',
-  '/firestore-init.js',
   '/logo.png'
 ];
+
+// File che cambiano spesso (auth, config): non metterli in cache install.
+const NETWORK_ONLY_PATTERNS = [
+  'firebase-config.js',
+  'auth-staff.js',
+  'app.js',
+  'firestore-init.js',
+  'staff-auth.css'
+];
+
+function isNetworkOnlyRequest(url) {
+  return NETWORK_ONLY_PATTERNS.some(function (p) { return url.includes(p); });
+}
 
 // Installazione - Caching dei file statici
 self.addEventListener('install', (event) => {
@@ -65,6 +75,12 @@ self.addEventListener('fetch', (event) => {
   // Ignora richieste Firebase
   if (event.request.url.includes('firebaseio.com') || 
       event.request.url.includes('googleapis.com')) {
+    return;
+  }
+
+  // Auth/config: sempre rete, mai cache (evita login bloccato su JS vecchio)
+  if (isNetworkOnlyRequest(event.request.url)) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
