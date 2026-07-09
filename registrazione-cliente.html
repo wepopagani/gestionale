@@ -139,6 +139,16 @@
         .intake-type-panel.is-active {
             display: block !important;
         }
+        .intake-type-fixed {
+            margin: 0 0 16px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(0, 174, 239, 0.08);
+            color: var(--dm-navy);
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-align: center;
+        }
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -204,9 +214,28 @@
     }
 
     function renderForm(linkData) {
+        const clientType = linkData.clientType === 'aziendale' ? 'aziendale' : 'privato';
+        const isAzienda = clientType === 'aziendale';
         const labelNote = linkData.label
             ? '<p style="margin-top:8px;font-size:0.85rem;color:var(--dm-cyan);font-weight:600;">' + escapeHtml(linkData.label) + '</p>'
             : '';
+        const typeBanner = isAzienda
+            ? '<p class="intake-type-fixed">🏢 Registrazione azienda</p>'
+            : '<p class="intake-type-fixed">👤 Registrazione privato</p>';
+
+        let identityFields = '';
+        if (isAzienda) {
+            identityFields =
+                '<div class="form-group"><label for="ragioneSociale">Ragione sociale *</label><input type="text" id="ragioneSociale" autocomplete="organization"></div>' +
+                '<div class="form-group"><label for="vat">P.IVA / Codice Fiscale *</label><input type="text" id="vat"></div>';
+        } else {
+            identityFields =
+                '<div class="form-row">' +
+                '<div class="form-group"><label for="nome">Nome *</label><input type="text" id="nome" autocomplete="given-name"></div>' +
+                '<div class="form-group"><label for="cognome">Cognome *</label><input type="text" id="cognome" autocomplete="family-name"></div>' +
+                '</div>';
+        }
+
         showState(
             '<div class="intake-card__head">' +
             '<h1>I tuoi dati</h1>' +
@@ -215,20 +244,8 @@
             '</div>' +
             '<div class="intake-card__body">' +
             '<form class="intake-form" id="intakeForm" novalidate>' +
-            '<div class="form-group"><label>Tipo cliente *</label>' +
-            '<div class="intake-type-toggle" role="tablist">' +
-            '<button type="button" class="intake-type-btn is-active" data-type="privato">👤 Privato</button>' +
-            '<button type="button" class="intake-type-btn" data-type="aziendale">🏢 Aziendale</button>' +
-            '</div></div>' +
-            '<div id="panelPrivato" class="intake-type-panel is-active" data-client-panel="privato">' +
-            '<div class="form-row">' +
-            '<div class="form-group"><label for="nome">Nome *</label><input type="text" id="nome" autocomplete="given-name"></div>' +
-            '<div class="form-group"><label for="cognome">Cognome *</label><input type="text" id="cognome" autocomplete="family-name"></div>' +
-            '</div></div>' +
-            '<div id="panelAziendale" class="intake-type-panel" data-client-panel="aziendale" hidden>' +
-            '<div class="form-group"><label for="ragioneSociale">Ragione sociale *</label><input type="text" id="ragioneSociale" autocomplete="organization"></div>' +
-            '<div class="form-group"><label for="vat">P.IVA / Codice Fiscale *</label><input type="text" id="vat"></div>' +
-            '</div>' +
+            typeBanner +
+            identityFields +
             '<div class="form-group"><label for="email">Email *</label><input type="email" id="email" required autocomplete="email"></div>' +
             '<div class="form-group"><label for="phone">Telefono *</label><input type="tel" id="phone" required autocomplete="tel"></div>' +
             '<div class="form-group"><label for="address">Indirizzo</label><input type="text" id="address" autocomplete="street-address" placeholder="Via, numero civico"></div>' +
@@ -242,36 +259,9 @@
             '</form></div>'
         );
 
-        let currentType = 'privato';
-
-        function setIntakeClientType(type) {
-            currentType = type;
-            document.querySelectorAll('.intake-type-btn').forEach(function (btn) {
-                btn.classList.toggle('is-active', btn.getAttribute('data-type') === type);
-            });
-            const privatoPanel = document.getElementById('panelPrivato');
-            const aziendaPanel = document.getElementById('panelAziendale');
-            const isPrivato = type === 'privato';
-            if (privatoPanel) {
-                privatoPanel.classList.toggle('is-active', isPrivato);
-                privatoPanel.hidden = !isPrivato;
-            }
-            if (aziendaPanel) {
-                aziendaPanel.classList.toggle('is-active', !isPrivato);
-                aziendaPanel.hidden = isPrivato;
-            }
-        }
-
-        document.querySelectorAll('.intake-type-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                setIntakeClientType(btn.getAttribute('data-type'));
-            });
-        });
-        setIntakeClientType('privato');
-
         document.getElementById('intakeForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            submitForm(linkData, currentType);
+            submitForm(linkData, clientType);
         });
     }
 

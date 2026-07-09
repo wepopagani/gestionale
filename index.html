@@ -31,7 +31,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js?v=3"></script>
     <script src="firestore-init.js"></script>
-    <script src="auth-staff.js?v=6"></script>
+    <script src="auth-staff.js?v=7"></script>
     
     <!-- Chart.js per grafici -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -591,6 +591,22 @@
                 <button class="modal-close" onclick="closeModal('intakeLinkModal')">&times;</button>
             </div>
             <div class="modal-body">
+                <p style="margin:0 0 16px; color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
+                    Scegli che modulo riceve il cliente nel link. Il tipo non potrà essere cambiato dal cliente.
+                </p>
+                <div class="form-group">
+                    <label>Modulo per il cliente *</label>
+                    <div class="client-type-toggle">
+                        <label class="client-type-option">
+                            <input type="radio" name="intakeLinkClientType" value="privato" checked>
+                            <span>👤 Privato</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="intakeLinkClientType" value="aziendale">
+                            <span>🏢 Aziendale</span>
+                        </label>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Nota interna (opzionale)</label>
                     <input type="text" id="intakeLinkLabel" placeholder="es. Cliente da fiera, Mario Rossi…">
@@ -983,7 +999,7 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=4.3"></script>
+    <script src="app.js?v=4.4"></script>
 </body>
 </html>
 

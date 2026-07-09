@@ -1620,15 +1620,17 @@ function getIntakeFirestore() {
     return window._gestionaleFirestore;
 }
 
-function createClientIntakeLink(label) {
+function createClientIntakeLink(label, clientType) {
     if (typeof initFirebaseStaffAuth !== 'function' && typeof initFirebaseAuthAnon !== 'function') {
         showNotification('Firebase non configurato', 'error');
         return Promise.resolve(null);
     }
+    const tipo = clientType === 'aziendale' ? 'aziendale' : 'privato';
     const token = generateIntakeToken();
     const link = {
         token: token,
         label: (label || '').trim(),
+        clientType: tipo,
         active: true,
         used: false,
         workspace: userId || 'shared_gestionale',
@@ -1683,11 +1685,19 @@ function openIntakeLinkModal() {
     document.getElementById('intakeLinkLabel').value = '';
     document.getElementById('intakeLinkResult').style.display = 'none';
     document.getElementById('intakeLinkUrl').value = '';
+    const typeRadio = document.querySelector('input[name="intakeLinkClientType"][value="privato"]');
+    if (typeRadio) typeRadio.checked = true;
     openModal('intakeLinkModal');
+}
+
+function readIntakeLinkClientType() {
+    const selected = document.querySelector('input[name="intakeLinkClientType"]:checked');
+    return selected && selected.value === 'aziendale' ? 'aziendale' : 'privato';
 }
 
 function handleGenerateIntakeLink() {
     const label = document.getElementById('intakeLinkLabel').value.trim();
+    const clientType = readIntakeLinkClientType();
     const baseUrl = getGestionalePublicBaseUrl();
     if (!/^https?:\/\/.+/i.test(baseUrl)) {
         showNotification('URL pubblico non configurato (clienti.3dmakes.ch)', 'error');
@@ -1696,18 +1706,23 @@ function handleGenerateIntakeLink() {
     const btn = document.getElementById('generateIntakeLinkBtn');
     btn.disabled = true;
     btn.textContent = 'Generazione…';
-    createClientIntakeLink(label).then(function (link) {
-        btn.disabled = false;
-        btn.textContent = 'Genera link';
+    createClientIntakeLink(label, clientType).then(function (link) {
         if (!link) return;
         const url = buildIntakeLinkUrl(link.token);
         document.getElementById('intakeLinkUrl').value = url;
         document.getElementById('intakeLinkResult').style.display = 'block';
+        const tipoLabel = clientType === 'aziendale' ? 'azienda' : 'privato';
         return copyTextToClipboard(url).then(function () {
-            showNotification('Link creato e copiato negli appunti', 'success');
+            showNotification('Link ' + tipoLabel + ' creato e copiato negli appunti', 'success');
         }).catch(function () {
-            showNotification('Link creato: copialo manualmente dal campo', 'success');
+            showNotification('Link ' + tipoLabel + ' creato: copialo dal campo', 'success');
         });
+    }).catch(function (err) {
+        console.error('handleGenerateIntakeLink:', err);
+        showNotification('Errore creazione link', 'error');
+    }).finally(function () {
+        btn.disabled = false;
+        btn.textContent = 'Genera link';
     });
 }
 

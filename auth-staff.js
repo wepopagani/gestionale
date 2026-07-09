@@ -186,7 +186,10 @@
 
                 if (hasValidStaffSession()) {
                     signInFirebaseAnon()
-                        .then(completeStaffLogin)
+                        .then(function (user) {
+                            completeStaffLogin(user);
+                            resolve(user);
+                        })
                         .catch(function (err) {
                             clearStaffSession();
                             showStaffLoginScreen('Sessione scaduta. Reinserisci la password.');
