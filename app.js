@@ -2555,8 +2555,14 @@ function setModalClientType(type) {
     });
     const privatoEl = document.getElementById('modalClientPrivatoFields');
     const aziendaEl = document.getElementById('modalClientAziendaFields');
-    if (privatoEl) privatoEl.style.display = isAzienda ? 'none' : '';
-    if (aziendaEl) aziendaEl.style.display = isAzienda ? '' : 'none';
+    if (privatoEl) {
+        privatoEl.hidden = isAzienda;
+        privatoEl.style.display = isAzienda ? 'none' : '';
+    }
+    if (aziendaEl) {
+        aziendaEl.hidden = !isAzienda;
+        aziendaEl.style.display = isAzienda ? '' : 'none';
+    }
 }
 
 function readClientIdentityFromModal() {
