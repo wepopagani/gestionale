@@ -20,17 +20,26 @@
         return String(email || '').trim().toLowerCase();
     }
 
+    function getAllowedEmails() {
+        return Array.isArray(window.gestionaleAllowedEmails) ? window.gestionaleAllowedEmails : [];
+    }
+
+    function getAllowedDomains() {
+        return Array.isArray(window.gestionaleAllowedDomains) ? window.gestionaleAllowedDomains : [];
+    }
+
     function isAllowedStaffEmail(email) {
         const e = normalizeEmail(email);
         if (!e) return false;
 
-        if (Array.isArray(window.gestionaleAllowedEmails) && window.gestionaleAllowedEmails.length) {
-            const allowed = window.gestionaleAllowedEmails.map(normalizeEmail);
-            if (allowed.includes(e)) return true;
+        const allowedEmails = getAllowedEmails();
+        if (allowedEmails.length) {
+            if (allowedEmails.map(normalizeEmail).includes(e)) return true;
         }
 
-        if (Array.isArray(window.gestionaleAllowedDomains) && window.gestionaleAllowedDomains.length) {
-            return window.gestionaleAllowedDomains.some(function (domain) {
+        const allowedDomains = getAllowedDomains();
+        if (allowedDomains.length) {
+            return allowedDomains.some(function (domain) {
                 const d = String(domain || '').trim().toLowerCase().replace(/^@/, '');
                 return d && e.endsWith('@' + d);
             });
@@ -131,7 +140,15 @@
             });
         }
         updateStaffUserUI(null);
-        showStaffLoginScreen();
+        const msgEl = document.getElementById('staffLoginMessage');
+        const hasVisibleError = msgEl && msgEl.classList.contains('is-visible') && msgEl.textContent;
+        if (!hasVisibleError) {
+            showStaffLoginScreen();
+        } else {
+            ensureLoginOverlay();
+            document.getElementById('staffLoginOverlay').classList.add('is-visible');
+            document.body.classList.add('staff-login-active');
+        }
         return Promise.resolve(null);
     }
 

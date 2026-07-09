@@ -24,6 +24,13 @@ const gestionaleAllowedEmails = [
 // Oppure autorizza tutto un dominio (es. @3dmakes.ch). Lascia [] se usi solo la lista sopra.
 const gestionaleAllowedDomains = ['3dmakes.ch'];
 
+// Esposto su window per auth-staff.js (const non finisce su window da sola).
+if (typeof window !== 'undefined') {
+    window.gestionaleAllowedEmails = gestionaleAllowedEmails;
+    window.gestionaleAllowedDomains = gestionaleAllowedDomains;
+    window.gestionalePublicUrl = gestionalePublicUrl;
+}
+
 // IMPORTANTE: Abilita Realtime Database
 // 1. Nel menu Firebase Console, vai su "Realtime Database"
 // 2. Click "Crea database"
