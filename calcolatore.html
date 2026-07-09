@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="3dmakes-theme.css">
+    <link rel="stylesheet" href="staff-auth.css?v=1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="dm-page">
@@ -24,6 +25,10 @@
         </nav>
         <div class="dm-header__actions">
             <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <div class="staff-header-auth">
+                <span id="staffUserLabel" class="staff-user-pill"></span>
+                <button type="button" id="staffLogoutBtn" class="staff-logout-btn" data-staff-logout>Esci</button>
+            </div>
             <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
         </div>
     </header>
@@ -777,6 +782,13 @@
         calcolaPrezzi();
     });
 })();
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="auth-staff.js?v=1"></script>
+    <script>
+        initFirebaseStaffAuth().catch(function (err) { console.error(err); });
     </script>
     <script src="dm-mobile-nav.js?v=1.0"></script>
 </body>

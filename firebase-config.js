@@ -16,6 +16,14 @@ const firebaseConfig = {
 // URL pubblico dove è online il gestionale (https), per i link registrazione clienti.
 const gestionalePublicUrl = 'https://clienti.3dmakes.ch';
 
+// Account Google autorizzati al gestionale (minuscolo). Aggiungi le email del team.
+const gestionaleAllowedEmails = [
+    'info@3dmakes.ch'
+];
+
+// Oppure autorizza tutto un dominio (es. @3dmakes.ch). Lascia [] se usi solo la lista sopra.
+const gestionaleAllowedDomains = ['3dmakes.ch'];
+
 // IMPORTANTE: Abilita Realtime Database
 // 1. Nel menu Firebase Console, vai su "Realtime Database"
 // 2. Click "Crea database"
@@ -47,17 +55,8 @@ service cloud.firestore {
 }
 */
 
-// ===== AUTENTICAZIONE ANONIMA (per regole DB sicure) =====
-// Tutte le pagine che leggono/scrivono sul cloud devono attendere che questa
-// Promise sia risolta prima di chiamare la prima operazione sui DB.
-//
-// Per funzionare richiede:
-//  • firebase-auth-compat.js incluso nella pagina
-//  • Authentication → Sign-in method → Anonymous = ABILITATO nel progetto Firebase
-//
-// Tutte le sessioni utente diventano `auth.uid` univoci (firebase ne genera uno
-// per browser e lo conserva localmente). Le regole DB possono quindi richiedere
-// `request.auth != null` (Firestore) / `auth != null` (Realtime DB).
+// ===== AUTENTICAZIONE ANONIMA (modulo pubblico registrazione clienti) =====
+// Il gestionale staff usa Google Sign-In via auth-staff.js.
 let _firebaseAuthPromise = null;
 function initFirebaseAuthAnon() {
     if (_firebaseAuthPromise) return _firebaseAuthPromise;

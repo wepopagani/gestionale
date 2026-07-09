@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="3dmakes-theme.css">
+    <link rel="stylesheet" href="staff-auth.css?v=1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -16,6 +17,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="firestore-init.js"></script>
+    <script src="auth-staff.js?v=1"></script>
     <script src="preventivo-config-servizi.js?v=20260608"></script>
 </head>
 <body class="dm-page">
@@ -31,6 +33,10 @@
         </nav>
         <div class="dm-header__actions">
             <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <div class="staff-header-auth">
+                <span id="staffUserLabel" class="staff-user-pill"></span>
+                <button type="button" id="staffLogoutBtn" class="staff-logout-btn" data-staff-logout>Esci</button>
+            </div>
             <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
         </div>
     </header>
@@ -261,15 +267,12 @@
         // Promise che si risolve quando Anonymous Auth ha completato.
         // Tutte le operazioni di lettura/scrittura sui DB devono awaitarla,
         // altrimenti le regole (`auth != null`) le rifiutano.
-        const authReady = (typeof initFirebaseAuthAnon === 'function')
-            ? initFirebaseAuthAnon().catch(function (err) {
-                console.error('❌ Anonymous Auth fallita:', err);
-                if (err && err.code === 'auth/operation-not-allowed') {
-                    console.error('👉 Abilita "Anonymous" in Firebase Console → Authentication → Sign-in method.');
-                }
+        const authReady = (typeof initFirebaseStaffAuth === 'function')
+            ? initFirebaseStaffAuth().catch(function (err) {
+                console.error('❌ Accesso staff fallito:', err);
                 throw err;
             })
-            : Promise.reject(new Error('initFirebaseAuthAnon non disponibile'));
+            : Promise.reject(new Error('initFirebaseStaffAuth non disponibile'));
 
         try {
             db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;

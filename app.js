@@ -219,26 +219,23 @@ function initFirebase() {
         // sync. Le regole del Realtime Database richiedono `auth != null`,
         // quindi non possiamo leggere/scrivere finché Anonymous Auth non ha
         // restituito un uid.
-        if (typeof initFirebaseAuthAnon !== 'function') {
-            console.error('❌ initFirebaseAuthAnon mancante: includi firebase-config.js aggiornato e firebase-auth-compat.js');
+        if (typeof initFirebaseStaffAuth !== 'function') {
+            console.error('❌ initFirebaseStaffAuth mancante: includi auth-staff.js');
             updateCloudStatus(false);
             return;
         }
 
-        initFirebaseAuthAnon()
+        initFirebaseStaffAuth()
             .then(function (user) {
                 firebaseDb = firebase.database();
                 userId = 'shared_gestionale';
                 firebaseReady = true;
-                console.log('✅ Firebase inizializzato (auth uid: ' + (user && user.uid ? user.uid.slice(0, 6) + '…' : 'n/d') + ')');
+                console.log('✅ Firebase inizializzato (staff: ' + (user && user.email ? user.email : 'n/d') + ')');
                 console.log('📊 Modalità condivisa: tutti gli utenti vedono gli stessi dati');
                 setupCloudSync();
             })
             .catch(function (err) {
-                console.error('❌ Anonymous Auth fallita:', err);
-                if (err && err.code === 'auth/operation-not-allowed') {
-                    console.error('👉 Apri Firebase Console → Authentication → Sign-in method e abilita "Anonymous".');
-                }
+                console.error('❌ Accesso staff fallito:', err);
                 updateCloudStatus(false);
             });
     } catch (error) {
@@ -1656,7 +1653,7 @@ function getIntakeFirestore() {
 }
 
 function createClientIntakeLink(label) {
-    if (typeof initFirebaseAuthAnon !== 'function') {
+    if (typeof initFirebaseStaffAuth !== 'function' && typeof initFirebaseAuthAnon !== 'function') {
         showNotification('Firebase non configurato', 'error');
         return Promise.resolve(null);
     }
@@ -1669,7 +1666,10 @@ function createClientIntakeLink(label) {
         workspace: userId || 'shared_gestionale',
         createdAt: new Date().toISOString()
     };
-    return initFirebaseAuthAnon()
+    const authPromise = typeof initFirebaseStaffAuth === 'function'
+        ? initFirebaseStaffAuth()
+        : initFirebaseAuthAnon();
+    return authPromise
         .then(function () {
             const fs = getIntakeFirestore();
             if (!fs) {
@@ -2111,8 +2111,8 @@ function setupMobileUX() {
         }
     });
 
-    // Command Palette (⌘K / Ctrl+K / "/")
-    setupCommandPalette();
+    // Command Palette (⌘K) — disabilitata
+    // setupCommandPalette();
 }
 
 // ============================================================

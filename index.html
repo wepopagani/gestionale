@@ -21,7 +21,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.5">
+    <link rel="stylesheet" href="style.css?v=3.6">
+    <link rel="stylesheet" href="staff-auth.css?v=1">
     
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -30,6 +31,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="firestore-init.js"></script>
+    <script src="auth-staff.js?v=1"></script>
     
     <!-- Chart.js per grafici -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -46,12 +48,11 @@
             <a href="storico-preventivi.html" data-icon="🗂️">Storico</a>
         </nav>
         <div class="dm-header__actions">
-            <button type="button" class="dm-search-trigger" id="cmdkTrigger" title="Cerca ovunque (⌘K)" aria-label="Cerca ovunque">
-                <span class="dm-search-trigger__icon" aria-hidden="true">🔍</span>
-                <span class="dm-search-trigger__text">Cerca…</span>
-                <span class="dm-search-trigger__kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>K</kbd></span>
-            </button>
             <a href="genera-preventivo.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo preventivo</a>
+            <div class="staff-header-auth">
+                <span id="staffUserLabel" class="staff-user-pill" title="Account connesso"></span>
+                <button type="button" id="staffLogoutBtn" class="staff-logout-btn" data-staff-logout>Esci</button>
+            </div>
             <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
         </div>
     </header>
@@ -97,7 +98,7 @@
             <div class="empty-state client-pick-hint" id="clientPickHint" style="display: none;" aria-live="polite">
                 <div class="empty-state-icon">👥</div>
                 <h2>Seleziona un cliente</h2>
-                <p>Usa la colonna a sinistra o premi <span class="client-pick-hint__keys"><kbd>⌘</kbd><kbd>K</kbd></span> (Mac) / <span class="client-pick-hint__keys"><kbd>Ctrl</kbd><kbd>K</kbd></span> (Windows) per cercare.</p>
+                <p>Usa la colonna a sinistra per cercare un cliente.</p>
                 <button type="button" class="btn-primary" onclick="showDashboard()">📊 Apri dashboard</button>
             </div>
 
@@ -948,26 +949,6 @@
         </div>
     </div>
 
-    <!-- Command Palette (⌘K) -->
-    <div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Ricerca rapida" hidden>
-        <div class="cmdk__backdrop" data-cmdk-close></div>
-        <div class="cmdk__panel" role="document">
-            <div class="cmdk__input-wrap">
-                <span class="cmdk__icon" aria-hidden="true">🔍</span>
-                <input type="text" id="cmdkInput" class="cmdk__input" placeholder="Cerca clienti, ordini, descrizioni…" autocomplete="off" spellcheck="false">
-                <span class="cmdk__hint" aria-hidden="true"><kbd>Esc</kbd></span>
-            </div>
-            <div class="cmdk__results" id="cmdkResults" role="listbox" aria-label="Risultati">
-                <!-- popolato via JS -->
-            </div>
-            <div class="cmdk__footer" aria-hidden="true">
-                <span><kbd>↑</kbd><kbd>↓</kbd> naviga</span>
-                <span><kbd>⏎</kbd> apri</span>
-                <span><kbd>Esc</kbd> chiudi</span>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -1002,7 +983,7 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=4.1"></script>
+    <script src="app.js?v=4.2"></script>
 </body>
 </html>
 
