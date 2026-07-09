@@ -1,5 +1,5 @@
 /**
- * Accesso staff al gestionale tramite Google Sign-In.
+ * Accesso staff al gestionale tramite Google Sign-In (redirect, no popup).
  * La sessione resta attiva nel browser (Firebase LOCAL persistence) fino a logout.
  */
 (function () {
@@ -60,14 +60,11 @@
             const btn = document.getElementById('staffGoogleSignInBtn');
             btn.disabled = true;
             setStaffLoginMessage('');
-            signInWithGoogleStaff()
-                .catch(function (err) {
-                    console.error(err);
-                    setStaffLoginMessage(formatStaffAuthError(err));
-                })
-                .finally(function () {
-                    btn.disabled = false;
-                });
+            signInWithGoogleStaff().catch(function (err) {
+                console.error(err);
+                setStaffLoginMessage(formatStaffAuthError(err));
+                btn.disabled = false;
+            });
         });
     }
 
@@ -86,9 +83,11 @@
     function formatStaffAuthError(err) {
         if (!err) return 'Accesso non riuscito. Riprova.';
         if (err.message && /non autorizzato|Accesso negato/i.test(err.message)) return err.message;
-        if (err.code === 'auth/popup-closed-by-user') return 'Accesso annullato.';
         if (err.code === 'auth/operation-not-allowed') {
             return 'Google Sign-In non abilitato su Firebase. Abilitalo in Authentication → Sign-in method.';
+        }
+        if (err.code === 'auth/unauthorized-domain') {
+            return 'Dominio non autorizzato. Aggiungi questo sito in Firebase → Authentication → Authorized domains.';
         }
         return err.message || 'Accesso non riuscito. Riprova.';
     }
@@ -119,22 +118,33 @@
         }
     }
 
+    function handleStaffUser(user) {
+        if (user && isAllowedStaffEmail(user.email)) {
+            hideStaffLoginScreen();
+            updateStaffUserUI(user);
+            return Promise.resolve(user);
+        }
+        if (user && !isAllowedStaffEmail(user.email)) {
+            return firebase.auth().signOut().then(function () {
+                showStaffLoginScreen('Account non autorizzato: ' + (user.email || ''));
+                return null;
+            });
+        }
+        updateStaffUserUI(null);
+        showStaffLoginScreen();
+        return Promise.resolve(null);
+    }
+
     function signInWithGoogleStaff() {
         ensureFirebaseApp();
         const auth = firebase.auth();
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
+        const btn = document.getElementById('staffGoogleSignInBtn');
+        if (btn) btn.textContent = 'G Reindirizzamento a Google…';
+        setStaffLoginMessage('Attendi, ti portiamo alla pagina di accesso Google…');
         return auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-            .then(function () { return auth.signInWithPopup(provider); })
-            .then(function (cred) {
-                const email = cred.user && cred.user.email;
-                if (!isAllowedStaffEmail(email)) {
-                    return auth.signOut().then(function () {
-                        throw new Error('Accesso negato per ' + (email || 'questo account') + '.');
-                    });
-                }
-                return cred.user;
-            });
+            .then(function () { return auth.signInWithRedirect(provider); });
     }
 
     function signOutStaff() {
@@ -155,28 +165,29 @@
                 const auth = firebase.auth();
                 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function () { /* ignore */ });
 
-                auth.onAuthStateChanged(function (user) {
-                    if (user && isAllowedStaffEmail(user.email)) {
-                        hideStaffLoginScreen();
-                        updateStaffUserUI(user);
-                        if (!staffAuthResolved) {
-                            staffAuthResolved = true;
-                            resolve(user);
+                auth.getRedirectResult()
+                    .then(function (result) {
+                        if (result && result.user) {
+                            return handleStaffUser(result.user);
                         }
-                        return;
-                    }
-
-                    if (user && !isAllowedStaffEmail(user.email)) {
-                        auth.signOut();
-                        showStaffLoginScreen('Account non autorizzato: ' + (user.email || ''));
-                        return;
-                    }
-
-                    updateStaffUserUI(null);
-                    showStaffLoginScreen();
-                }, function (err) {
-                    if (!staffAuthResolved) reject(err);
-                });
+                        return null;
+                    })
+                    .catch(function (err) {
+                        console.error('getRedirectResult:', err);
+                        showStaffLoginScreen(formatStaffAuthError(err));
+                    })
+                    .finally(function () {
+                        auth.onAuthStateChanged(function (user) {
+                            handleStaffUser(user).then(function (allowedUser) {
+                                if (allowedUser && !staffAuthResolved) {
+                                    staffAuthResolved = true;
+                                    resolve(allowedUser);
+                                }
+                            });
+                        }, function (err) {
+                            if (!staffAuthResolved) reject(err);
+                        });
+                    });
             } catch (err) {
                 reject(err);
             }
