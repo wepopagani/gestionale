@@ -133,20 +133,68 @@ input, textarea, [contenteditable] {
     box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
+.clients-sort {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.clients-sort__label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-right: 2px;
+}
+
+.clients-sort__btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 10px;
+    min-height: 36px;
+    border-radius: 999px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.clients-sort__btn:hover {
+    border-color: var(--primary);
+    color: var(--primary-dark);
+}
+
+.clients-sort__btn.is-active {
+    border-color: var(--primary);
+    background: rgba(0, 174, 239, 0.12);
+    color: var(--primary-dark, #003b5c);
+}
+
 /* Lista clienti */
 .clients-list {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 6px 8px;
 }
 
 .client-item {
-    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
     margin-bottom: 4px;
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all var(--transition-base);
-    border: 1px solid transparent;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
     position: relative;
     overflow: hidden;
 }
@@ -165,7 +213,7 @@ input, textarea, [contenteditable] {
 
 .client-item:hover {
     background: var(--bg-tertiary);
-    transform: translateX(4px);
+    border-color: rgba(0, 174, 239, 0.35);
     box-shadow: var(--shadow-md);
 }
 
@@ -183,15 +231,61 @@ input, textarea, [contenteditable] {
     transform: scaleY(1);
 }
 
+.client-avatar {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.client-item-main {
+    min-width: 0;
+    flex: 1;
+}
+
 .client-item-name {
     font-weight: 600;
     font-size: 14px;
-    margin-bottom: 4px;
+    line-height: 1.25;
+    margin-bottom: 1px;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .client-item-info {
     font-size: 12px;
+    line-height: 1.25;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.client-item-badge {
+    flex-shrink: 0;
+    min-width: 28px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(0, 174, 239, 0.12);
+    color: var(--primary-dark);
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.client-item-badge--empty {
+    background: var(--bg-tertiary);
     color: var(--text-secondary);
 }
 
@@ -2226,15 +2320,48 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 .intake-link-result .intake-link-url {
     width: 100%;
     margin-bottom: 10px;
-    font-size: 12px;
+    font-size: 16px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     color: var(--text-primary);
     background: #f8fafc;
     word-break: break-all;
+    user-select: all;
+    -webkit-user-select: all;
 }
 
 .intake-link-result .intake-link-copy {
     width: 100%;
+}
+
+.intake-link-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.intake-link-actions .btn-primary,
+.intake-link-actions .btn-secondary,
+.intake-link-actions a.btn-secondary {
+    width: 100%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.sidebar-cta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.sidebar-cta-row .btn-primary,
+.sidebar-cta-row .btn-secondary {
+    width: 100%;
+    margin-top: 0;
 }
 
 .client-type-toggle {
@@ -2244,25 +2371,36 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 }
 
 .client-type-option {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px 14px;
+    padding: 14px 14px;
+    min-height: 48px;
     border: 2px solid var(--border);
     border-radius: 10px;
     cursor: pointer;
     font-weight: 600;
+    -webkit-tap-highlight-color: rgba(0, 174, 239, 0.2);
+    touch-action: manipulation;
     transition: border-color 0.15s, background 0.15s;
 }
 
 .client-type-option input {
     position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
     opacity: 0;
-    pointer-events: none;
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.client-type-option:has(input:checked) {
+.client-type-option:has(input:checked),
+.client-type-option.is-selected {
     border-color: var(--primary);
     background: rgba(0, 174, 239, 0.08);
 }
@@ -3020,7 +3158,12 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
     body.modal-open {
         overflow: hidden;
-        touch-action: none;
+    }
+
+    .modal.active,
+    .modal-content {
+        touch-action: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* Su body.has-site-nav il layout è fisso a 100vh con overflow hidden;
@@ -3083,13 +3226,48 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         border-radius: 12px;
     }
 
-    /* "+ Nuovo Cliente" più prominente come CTA mobile */
-    .sidebar-section .btn-primary {
+    .clients-sort {
+        margin-top: 8px;
+        gap: 6px;
+    }
+
+    .clients-sort__label {
         width: 100%;
-        padding: 13px 16px;
-        font-size: 15px;
+        margin-bottom: 2px;
+    }
+
+    .clients-sort__btn {
+        flex: 1 1 calc(25% - 6px);
+        min-width: 0;
+        min-height: 40px;
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+
+    .sidebar-cta-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 0;
+        margin-bottom: 4px;
+    }
+
+    .sidebar-cta-row .btn-primary,
+    .sidebar-cta-row .btn-secondary {
+        min-height: 48px;
+        padding: 12px 10px;
+        font-size: 13px;
         font-weight: 700;
         border-radius: 12px;
+        touch-action: manipulation;
+    }
+
+    .intake-link-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .intake-link-actions .intake-link-whatsapp {
+        grid-column: 1 / -1;
     }
 
     /* Collassa i bottoni di backup dietro un toggle */
@@ -3124,15 +3302,22 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         border-color: var(--primary);
     }
 
-    /* Clients list: card più toccabili */
+    /* Clients list: righe compatte, nome + contatto + badge in orizzontale */
     .clients-list {
-        padding: 8px 10px;
+        padding: 6px 8px;
     }
 
     .client-item {
-        padding: 14px 14px;
-        border-radius: 14px;
-        margin-bottom: 6px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        margin-bottom: 4px;
+        gap: 10px;
+    }
+
+    .client-avatar {
+        width: 34px;
+        height: 34px;
+        font-size: 11px;
     }
 
     /* Empty state compatto su mobile (la home non deve sembrare vuota) */
@@ -3237,49 +3422,10 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         background: rgba(0, 174, 239, 0.1);
     }
 
-    /* === FAB === */
-    .fab-action {
-        position: fixed;
-        right: 16px;
-        bottom: calc(72px + env(safe-area-inset-bottom));
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 14px 18px;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: #fff;
-        font-family: var(--font-brand);
-        font-weight: 800;
-        font-size: 14px;
-        border: none;
-        border-radius: 999px;
-        box-shadow: 0 10px 28px rgba(0, 174, 239, 0.45);
-        cursor: pointer;
-        z-index: 120;
-        transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .fab-action:active {
-        transform: scale(0.96);
-    }
-
-    .fab-action__icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        line-height: 1;
-        font-weight: 800;
-    }
-
-    .fab-action__label {
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-    }
-
-    .fab-action.is-hidden {
+    /* FAB rimosso: «+ Nuovo Cliente» è già in cima alla lista */
+    .fab-action,
+    .fab-action.is-hidden,
+    body.has-site-nav.mobile-view-client-detail .fab-action {
         display: none !important;
     }
 
@@ -3418,11 +3564,6 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         display: none;
     }
 
-    /* FAB solo lista clienti / dashboard; nel cliente si usano i pulsanti in tab */
-    body.has-site-nav.mobile-view-client-detail .fab-action {
-        display: none !important;
-    }
-
     body.has-site-nav .client-info-chips {
         flex-wrap: nowrap;
         overflow-x: auto;
@@ -3526,18 +3667,6 @@ body.sidebar-collapsed .btn-toggle-sidebar {
 
     .mbn-icon {
         font-size: 18px;
-    }
-
-    .fab-action {
-        padding: 12px 14px;
-    }
-
-    .fab-action__label {
-        display: none;
-    }
-
-    .fab-action__icon {
-        font-size: 26px;
     }
 }
 
@@ -3883,83 +4012,26 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         border-color: transparent;
     }
 
-    /* Lista clienti come card più "app-like" con avatar */
+    /* Lista clienti compatta (stesso layout telefono/computer) */
     .clients-list {
-        padding: 10px 12px 16px;
+        padding: 8px 10px 16px;
         scrollbar-gutter: stable;
     }
 
     .client-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 14px 12px 12px;
-        margin-bottom: 6px;
-        border-radius: 14px;
-        background: var(--bg-primary);
-        border: 1px solid transparent;
-        box-shadow: 0 1px 0 rgba(0, 27, 41, 0.02);
-        position: relative;
+        padding: 8px 12px 8px 10px;
+        margin-bottom: 4px;
     }
 
     .client-item:hover {
-        transform: translateX(2px);
-        border-color: rgba(0, 174, 239, 0.25);
-        box-shadow: 0 6px 18px rgba(0, 27, 41, 0.06);
+        transform: none;
+        border-color: rgba(0, 174, 239, 0.35);
+        box-shadow: 0 4px 14px rgba(0, 27, 41, 0.06);
     }
 
     .client-item.active {
         background: linear-gradient(135deg, rgba(0, 174, 239, 0.14), rgba(0, 59, 92, 0.06));
         border-color: rgba(0, 174, 239, 0.45);
-        box-shadow: 0 8px 22px rgba(0, 27, 41, 0.07);
-    }
-
-    .client-avatar {
-        flex-shrink: 0;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 13px;
-        letter-spacing: 0.02em;
-        box-shadow: 0 2px 6px rgba(0, 59, 92, 0.18);
-        text-transform: uppercase;
-    }
-
-    .client-item-main {
-        min-width: 0;
-        flex: 1;
-    }
-
-    .client-item-name {
-        margin-bottom: 2px;
-    }
-
-    .client-item-info {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .client-item-badge {
-        flex-shrink: 0;
-        padding: 4px 8px;
-        border-radius: 999px;
-        background: rgba(0, 174, 239, 0.12);
-        color: var(--primary-dark);
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.02em;
-    }
-
-    .client-item-badge--empty {
-        background: var(--bg-tertiary);
-        color: var(--text-secondary);
     }
 
     /* ============ MAIN: titoli sezione con accent ============ */

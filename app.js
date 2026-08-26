@@ -17,10 +17,70 @@ let state = {
     reportData: [],
     orderCounter: 1, // Counter per numeri ordine sequenziali (aggiornato via transaction Firebase)
     /** true se il dettaglio cliente è stato aperto dalla tabella "Clienti acquisiti" nel report */
-    cameFromReport: false
+    cameFromReport: false,
+    clientsSort: 'name-asc'
 };
 
 const REPORT_FILTERS_STORAGE_KEY = '3dmakes_report_filters_v1';
+const CLIENTS_SORT_STORAGE_KEY = 'gestionale_clients_sort';
+const CLIENTS_SORT_MODES = ['name-asc', 'name-desc', 'date-desc', 'date-asc'];
+
+function getClientsSortMode() {
+    try {
+        const stored = localStorage.getItem(CLIENTS_SORT_STORAGE_KEY);
+        if (CLIENTS_SORT_MODES.indexOf(stored) !== -1) return stored;
+    } catch (e) { /* ignore */ }
+    return state.clientsSort || 'name-asc';
+}
+
+function setClientsSortMode(mode) {
+    if (CLIENTS_SORT_MODES.indexOf(mode) === -1) return;
+    state.clientsSort = mode;
+    try { localStorage.setItem(CLIENTS_SORT_STORAGE_KEY, mode); } catch (e) { /* ignore */ }
+    syncClientsSortButtons();
+    const input = document.getElementById('searchInput');
+    renderClients(input ? String(input.value || '').toLowerCase() : '');
+}
+
+function syncClientsSortButtons() {
+    const mode = getClientsSortMode();
+    document.querySelectorAll('[data-clients-sort]').forEach(function (btn) {
+        btn.classList.toggle('is-active', btn.getAttribute('data-clients-sort') === mode);
+    });
+}
+
+function setupClientsSortControls() {
+    const saved = getClientsSortMode();
+    state.clientsSort = saved;
+    syncClientsSortButtons();
+    document.querySelectorAll('[data-clients-sort]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setClientsSortMode(btn.getAttribute('data-clients-sort'));
+        });
+    });
+}
+
+function getClientSortTimestamp(client) {
+    const raw = client && (client.acquisitionDate || client.createdAt || '');
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? t : 0;
+}
+
+function sortClientsForList(clients) {
+    const mode = getClientsSortMode();
+    const copy = clients.slice();
+    copy.sort(function (a, b) {
+        const nameCmp = String(a.name || '').localeCompare(String(b.name || ''), 'it', { sensitivity: 'base' });
+        if (mode === 'name-desc') return -nameCmp;
+        if (mode === 'date-desc' || mode === 'date-asc') {
+            const diff = getClientSortTimestamp(b) - getClientSortTimestamp(a);
+            if (diff !== 0) return mode === 'date-desc' ? diff : -diff;
+            return nameCmp;
+        }
+        return nameCmp;
+    });
+    return copy;
+}
 
 function saveReportFiltersToStorage() {
     try {
@@ -1660,24 +1720,73 @@ function createClientIntakeLink(label, clientType) {
 }
 
 function copyTextToClipboard(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text);
+    if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () {
+            return copyTextToClipboardFallback(text);
+        });
     }
+    return copyTextToClipboardFallback(text);
+}
+
+function copyTextToClipboardFallback(text) {
     return new Promise(function (resolve, reject) {
         const ta = document.createElement('textarea');
         ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;padding:0;border:0;';
         document.body.appendChild(ta);
+        ta.focus();
         ta.select();
+        ta.setSelectionRange(0, text.length);
         try {
-            document.execCommand('copy');
-            resolve();
-        } catch (e) {
-            reject(e);
-        } finally {
+            const ok = document.execCommand('copy');
             document.body.removeChild(ta);
+            if (ok) resolve();
+            else reject(new Error('copy failed'));
+        } catch (e) {
+            try { document.body.removeChild(ta); } catch (e2) { /* ignore */ }
+            reject(e);
         }
+    });
+}
+
+function getIntakeShareText(url) {
+    return 'Ciao! Compila i tuoi dati per registrarti come cliente 3DMAKES:\n' + url;
+}
+
+function updateIntakeShareButtons(url) {
+    const wa = document.getElementById('whatsappIntakeLinkBtn');
+    if (wa) {
+        wa.href = url
+            ? 'https://wa.me/?text=' + encodeURIComponent(getIntakeShareText(url))
+            : '#';
+    }
+}
+
+function handleShareIntakeLink() {
+    const url = document.getElementById('intakeLinkUrl').value;
+    if (!url) return;
+    const text = getIntakeShareText(url);
+    if (navigator.share) {
+        navigator.share({ title: 'Registrazione 3DMAKES', text: text, url: url }).catch(function () {
+            /* utente ha annullato */
+        });
+        return;
+    }
+    const wa = document.getElementById('whatsappIntakeLinkBtn');
+    if (wa && wa.href && wa.href !== '#') {
+        window.open(wa.href, '_blank', 'noopener');
+        return;
+    }
+    copyTextToClipboard(url)
+        .then(function () { showNotification('Link copiato: incollalo in WhatsApp o email', 'success'); })
+        .catch(function () { showNotification('Copia il link dal campo e invialo al cliente', 'info'); });
+}
+
+function syncClientTypeOptionClasses(groupName) {
+    document.querySelectorAll('input[name="' + groupName + '"]').forEach(function (radio) {
+        const option = radio.closest('.client-type-option');
+        if (option) option.classList.toggle('is-selected', radio.checked);
     });
 }
 
@@ -1685,8 +1794,10 @@ function openIntakeLinkModal() {
     document.getElementById('intakeLinkLabel').value = '';
     document.getElementById('intakeLinkResult').style.display = 'none';
     document.getElementById('intakeLinkUrl').value = '';
+    updateIntakeShareButtons('');
     const typeRadio = document.querySelector('input[name="intakeLinkClientType"][value="privato"]');
     if (typeRadio) typeRadio.checked = true;
+    syncClientTypeOptionClasses('intakeLinkClientType');
     openModal('intakeLinkModal');
 }
 
@@ -1711,6 +1822,12 @@ function handleGenerateIntakeLink() {
         const url = buildIntakeLinkUrl(link.token);
         document.getElementById('intakeLinkUrl').value = url;
         document.getElementById('intakeLinkResult').style.display = 'block';
+        updateIntakeShareButtons(url);
+        const urlField = document.getElementById('intakeLinkUrl');
+        if (urlField) {
+            urlField.focus();
+            urlField.select();
+        }
         const tipoLabel = clientType === 'aziendale' ? 'azienda' : 'privato';
         return copyTextToClipboard(url).then(function () {
             showNotification('Link ' + tipoLabel + ' creato e copiato negli appunti', 'success');
@@ -1796,21 +1913,47 @@ function setupEventListeners() {
             renderClients(searchTerm);
         }, 300); // Attende 300ms dopo che l'utente smette di digitare
     });
+    setupClientsSortControls();
 
     // Bottoni clienti
     document.getElementById('addClientBtn').addEventListener('click', openAddClientModal);
+    document.querySelectorAll('.client-type-option').forEach(function (option) {
+        option.addEventListener('click', function () {
+            const radio = option.querySelector('input[type="radio"]');
+            if (!radio) return;
+            if (!radio.checked) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                syncClientTypeOptionClasses(radio.name);
+            }
+        });
+    });
     const createIntakeLinkBtn = document.getElementById('createIntakeLinkBtn');
     if (createIntakeLinkBtn) createIntakeLinkBtn.addEventListener('click', openIntakeLinkModal);
     const generateIntakeLinkBtn = document.getElementById('generateIntakeLinkBtn');
     if (generateIntakeLinkBtn) generateIntakeLinkBtn.addEventListener('click', handleGenerateIntakeLink);
     const copyIntakeLinkBtn = document.getElementById('copyIntakeLinkBtn');
     if (copyIntakeLinkBtn) copyIntakeLinkBtn.addEventListener('click', handleCopyIntakeLink);
+    const shareIntakeLinkBtn = document.getElementById('shareIntakeLinkBtn');
+    if (shareIntakeLinkBtn) shareIntakeLinkBtn.addEventListener('click', handleShareIntakeLink);
+    document.querySelectorAll('input[name="intakeLinkClientType"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            syncClientTypeOptionClasses('intakeLinkClientType');
+        });
+    });
+    const intakeUrlField = document.getElementById('intakeLinkUrl');
+    if (intakeUrlField) {
+        intakeUrlField.addEventListener('focus', function () { this.select(); });
+        intakeUrlField.addEventListener('click', function () { this.select(); });
+    }
     document.getElementById('editClientBtn').addEventListener('click', openEditClientModal);
     document.getElementById('deleteClientBtn').addEventListener('click', deleteCurrentClient);
     document.getElementById('saveClientBtn').addEventListener('click', saveClient);
     document.querySelectorAll('input[name="modalClientType"]').forEach(function (radio) {
         radio.addEventListener('change', function () {
             setModalClientType(radio.value);
+            syncClientTypeOptionClasses('modalClientType');
         });
     });
 
@@ -2007,26 +2150,11 @@ function showClientsList() {
 /** Aggiorna il FAB in base alla view corrente */
 function updateFab() {
     const fab = document.getElementById('fabAction');
-    const label = document.getElementById('fabActionLabel');
-    if (!fab || !label) return;
-
-    const view = state.mobileView || 'clients';
-
-    if (view === 'client-detail' && state.currentClientId) {
-        fab.classList.remove('is-hidden');
-        label.textContent = 'Ordine';
-        fab.dataset.action = 'add-order';
-        fab.setAttribute('aria-label', 'Aggiungi ordine');
-    } else if (view === 'clients' || view === 'dashboard') {
-        fab.classList.remove('is-hidden');
-        label.textContent = 'Cliente';
-        fab.dataset.action = 'add-client';
-        fab.setAttribute('aria-label', 'Aggiungi cliente');
-    } else {
-        // Report → nascosto
-        fab.classList.add('is-hidden');
-        fab.dataset.action = '';
-    }
+    if (!fab) return;
+    fab.classList.add('is-hidden');
+    fab.dataset.action = '';
+    fab.setAttribute('aria-hidden', 'true');
+    fab.hidden = true;
 }
 
 function handleFabClick() {
@@ -2359,10 +2487,12 @@ function renderClients(searchTerm = '') {
     // Difesa: scarta dal rendering eventuali client senza id/name (frammenti
     // di cloud non riconciliati). Così l'UI non crasha mai anche se il
     // database è temporaneamente in stato inconsistente.
+    const search = String(searchTerm || '').toLowerCase();
     const validClients = state.clients.filter(c => c && c.id && c.name);
     const filteredClients = validClients.filter(client =>
-        client.name.toLowerCase().includes(searchTerm) ||
-        (client.email && client.email.toLowerCase().includes(searchTerm))
+        client.name.toLowerCase().includes(search) ||
+        (client.email && client.email.toLowerCase().includes(search)) ||
+        (client.phone && String(client.phone).toLowerCase().includes(search))
     );
 
     if (filteredClients.length === 0) {
@@ -2370,9 +2500,9 @@ function renderClients(searchTerm = '') {
         return;
     }
 
-    filteredClients.sort((a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }));
+    const sortedClients = sortClientsForList(filteredClients);
 
-    clientsList.innerHTML = filteredClients.map(client => {
+    clientsList.innerHTML = sortedClients.map(client => {
         const initials = getClientInitials(client.name);
         const ordersCount = (client.orders && client.orders.length) || 0;
         const subtitle = client.email || client.phone || 'Nessun contatto';
@@ -2578,6 +2708,7 @@ function setModalClientType(type) {
         aziendaEl.hidden = !isAzienda;
         aziendaEl.style.display = isAzienda ? '' : 'none';
     }
+    syncClientTypeOptionClasses('modalClientType');
 }
 
 function readClientIdentityFromModal() {

@@ -60,6 +60,7 @@ service cloud.firestore {
 // ===== AUTENTICAZIONE ANONIMA =====
 // Staff: password in auth-staff.js → poi login anonimo Firebase.
 // Pubblico: registrazione-cliente.html usa initFirebaseAuthAnon() direttamente.
+// Persistence.NONE evita i hang su iOS / WebView (WhatsApp, Instagram) dove IndexedDB è bloccato.
 let _firebaseAuthPromise = null;
 function initFirebaseAuthAnon() {
     if (_firebaseAuthPromise) return _firebaseAuthPromise;
@@ -79,22 +80,45 @@ function initFirebaseAuthAnon() {
                 resolve(auth.currentUser);
                 return;
             }
-            let resolved = false;
-            const unsub = auth.onAuthStateChanged(user => {
-                if (user && !resolved) {
-                    resolved = true;
-                    try { unsub(); } catch (e) { /* ignore */ }
-                    resolve(user);
-                }
+
+            let settled = false;
+            let unsub = function () {};
+            const timer = setTimeout(function () {
+                finishErr(new Error('Timeout autenticazione su questo browser. Apri il link in Safari o Chrome.'));
+            }, 12000);
+
+            function finishOk(user) {
+                if (settled || !user) return;
+                settled = true;
+                clearTimeout(timer);
+                try { unsub(); } catch (e) { /* ignore */ }
+                resolve(user);
+            }
+            function finishErr(err) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                try { unsub(); } catch (e) { /* ignore */ }
+                _firebaseAuthPromise = null;
+                reject(err);
+            }
+
+            unsub = auth.onAuthStateChanged(function (user) {
+                if (user) finishOk(user);
             });
-            auth.signInAnonymously().catch(err => {
-                if (!resolved) {
-                    resolved = true;
-                    try { unsub(); } catch (e) { /* ignore */ }
-                    reject(err);
-                }
-            });
+
+            const persist = auth.setPersistence
+                ? auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
+                : Promise.resolve();
+            persist
+                .catch(function () { /* iOS privato / in-app browser */ })
+                .then(function () { return auth.signInAnonymously(); })
+                .then(function (cred) {
+                    if (cred && cred.user) finishOk(cred.user);
+                })
+                .catch(finishErr);
         } catch (e) {
+            _firebaseAuthPromise = null;
             reject(e);
         }
     });

@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.6">
+    <link rel="stylesheet" href="style.css?v=3.9">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     
     <!-- Firebase -->
@@ -29,7 +29,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="firebase-config.js?v=3"></script>
+    <script src="firebase-config.js?v=4"></script>
     <script src="firestore-init.js"></script>
     <script src="auth-staff.js?v=7"></script>
     
@@ -63,8 +63,17 @@
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="🔍 Cerca cliente...">
                 </div>
-                <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
-                <button class="btn-secondary" id="createIntakeLinkBtn" title="Genera un link da inviare al cliente per la registrazione autonoma" style="width:100%; margin-top:8px;">🔗 Crea link registrazione</button>
+                <div class="sidebar-cta-row">
+                    <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
+                    <button class="btn-secondary" id="createIntakeLinkBtn" title="Genera un link da inviare al cliente per la registrazione autonoma">🔗 Crea link</button>
+                </div>
+                <div class="clients-sort" role="group" aria-label="Ordina lista clienti">
+                    <span class="clients-sort__label">Ordina</span>
+                    <button type="button" class="clients-sort__btn is-active" data-clients-sort="name-asc">A–Z</button>
+                    <button type="button" class="clients-sort__btn" data-clients-sort="name-desc">Z–A</button>
+                    <button type="button" class="clients-sort__btn" data-clients-sort="date-desc">Recenti</button>
+                    <button type="button" class="clients-sort__btn" data-clients-sort="date-asc">Vecchi</button>
+                </div>
 
                 <!-- Backup / Ripristino -->
                 <div class="backup-actions" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
@@ -596,8 +605,8 @@
                 </p>
                 <div class="form-group">
                     <label>Modulo per il cliente *</label>
-                    <div class="client-type-toggle">
-                        <label class="client-type-option">
+                    <div class="client-type-toggle" role="radiogroup" aria-label="Tipo modulo">
+                        <label class="client-type-option is-selected">
                             <input type="radio" name="intakeLinkClientType" value="privato" checked>
                             <span>👤 Privato</span>
                         </label>
@@ -615,10 +624,14 @@
                     <div class="form-group intake-link-result">
                         <label>Link da inviare</label>
                         <input type="text" id="intakeLinkUrl" class="intake-link-url" readonly>
-                        <button type="button" class="btn-primary intake-link-copy" id="copyIntakeLinkBtn">📋 Copia link</button>
+                        <div class="intake-link-actions">
+                            <button type="button" class="btn-primary intake-link-copy" id="copyIntakeLinkBtn">📋 Copia</button>
+                            <button type="button" class="btn-secondary intake-link-share" id="shareIntakeLinkBtn">📤 Condividi</button>
+                            <a class="btn-secondary intake-link-whatsapp" id="whatsappIntakeLinkBtn" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+                        </div>
                     </div>
                     <p style="margin:0; font-size:12px; color: var(--text-secondary);">
-                        Il link è monouso: dopo la registrazione del cliente non sarà più utilizzabile.
+                        Il link è monouso: dopo la registrazione del cliente non sarà più utilizzabile. Su telefono usa <strong>Condividi</strong> o <strong>WhatsApp</strong>.
                     </p>
                 </div>
             </div>
@@ -640,7 +653,7 @@
                 <div class="form-group">
                     <label>Tipo cliente *</label>
                     <div class="client-type-toggle">
-                        <label class="client-type-option">
+                        <label class="client-type-option is-selected">
                             <input type="radio" name="modalClientType" value="privato" checked>
                             <span>👤 Privato</span>
                         </label>
@@ -993,13 +1006,13 @@
     </nav>
 
     <!-- Floating Action Button (mobile) -->
-    <button type="button" class="fab-action" id="fabAction" aria-label="Azione rapida" title="Azione rapida">
+    <button type="button" class="fab-action is-hidden" id="fabAction" aria-hidden="true" hidden>
         <span class="fab-action__icon" aria-hidden="true">+</span>
         <span class="fab-action__label" id="fabActionLabel">Aggiungi</span>
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=4.4"></script>
+    <script src="app.js?v=4.7"></script>
 </body>
 </html>
 
