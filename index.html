@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.9">
+    <link rel="stylesheet" href="style.css?v=4.1">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     
     <!-- Firebase -->
@@ -386,6 +386,18 @@
                             <option value="annullato">Annullato</option>
                         </select>
                     </div>
+
+                    <div class="filter-group">
+                        <label>Categoria</label>
+                        <select id="reportCategory" onchange="generateReport()">
+                            <option value="all">Tutte le Categorie</option>
+                            <option value="stampa_3d">🖨️ Stampa 3D</option>
+                            <option value="scansione_3d">📷 Scansione 3D</option>
+                            <option value="incisione_laser">⚡ Incisione laser</option>
+                            <option value="design">✏️ Design / Prototipazione</option>
+                            <option value="manutenzione">🔧 Manutenzione</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Report Summary -->
@@ -476,6 +488,63 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Breakdown per Categoria -->
+                <div class="status-breakdown" id="categoryBreakdown">
+                    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">📂 Area più remunerativa</h3>
+                    <div class="status-cards category-cards">
+                        <div class="status-card category-card category-stampa_3d" onclick="filterByCategory('stampa_3d')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">🖨️</div>
+                                <div class="status-card-label">Stampa 3D</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="catCount_stampa_3d">0</div>
+                                <div class="status-card-amount" id="catAmount_stampa_3d">CHF 0.00</div>
+                            </div>
+                        </div>
+                        <div class="status-card category-card category-scansione_3d" onclick="filterByCategory('scansione_3d')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">📷</div>
+                                <div class="status-card-label">Scansione 3D</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="catCount_scansione_3d">0</div>
+                                <div class="status-card-amount" id="catAmount_scansione_3d">CHF 0.00</div>
+                            </div>
+                        </div>
+                        <div class="status-card category-card category-incisione_laser" onclick="filterByCategory('incisione_laser')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">⚡</div>
+                                <div class="status-card-label">Incisione laser</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="catCount_incisione_laser">0</div>
+                                <div class="status-card-amount" id="catAmount_incisione_laser">CHF 0.00</div>
+                            </div>
+                        </div>
+                        <div class="status-card category-card category-design" onclick="filterByCategory('design')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">✏️</div>
+                                <div class="status-card-label">Design / Prototipazione</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="catCount_design">0</div>
+                                <div class="status-card-amount" id="catAmount_design">CHF 0.00</div>
+                            </div>
+                        </div>
+                        <div class="status-card category-card category-manutenzione" onclick="filterByCategory('manutenzione')" title="Clicca per filtrare">
+                            <div class="status-card-header">
+                                <div class="status-card-icon">🔧</div>
+                                <div class="status-card-label">Manutenzione</div>
+                            </div>
+                            <div class="status-card-stats">
+                                <div class="status-card-count" id="catCount_manutenzione">0</div>
+                                <div class="status-card-amount" id="catAmount_manutenzione">CHF 0.00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Report Table - Dettaglio Ordini -->
                 <div class="report-table-container" style="margin-bottom: 32px;">
@@ -495,6 +564,7 @@
                                     <th>Cliente</th>
                                     <th>N° Ordine</th>
                                     <th>Descrizione</th>
+                                    <th>Categoria</th>
                                     <th>Stato</th>
                                     <th>💳 Pagamento</th>
                                     <th>🧾 IVA</th>
@@ -503,7 +573,7 @@
                             </thead>
                             <tbody id="reportTableBody">
                                 <tr>
-                                    <td colspan="8" class="empty-report">Seleziona i filtri e genera il report</td>
+                                    <td colspan="9" class="empty-report">Seleziona i filtri e genera il report</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -569,6 +639,7 @@
                         <h3>Ordini</h3>
                         <button class="btn-small" id="addOrderBtn">+ Nuovo Ordine</button>
                     </div>
+                    <div class="order-category-chips" id="orderCategoryChips" hidden></div>
                     <div class="orders-list" id="ordersList">
                         <div class="empty-section">
                             <p>Nessun ordine presente</p>
@@ -797,6 +868,31 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
+                    <label>Categoria *</label>
+                    <div class="client-type-toggle order-category-toggle" id="orderCategoryToggle" role="radiogroup" aria-label="Categoria ordine" data-manual="0">
+                        <label class="client-type-option is-selected">
+                            <input type="radio" name="modalOrderCategory" value="stampa_3d" checked>
+                            <span>🖨️ Stampa 3D</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="modalOrderCategory" value="scansione_3d">
+                            <span>📷 Scansione 3D</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="modalOrderCategory" value="incisione_laser">
+                            <span>⚡ Incisione laser</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="modalOrderCategory" value="design">
+                            <span>✏️ Design / Prototipazione</span>
+                        </label>
+                        <label class="client-type-option">
+                            <input type="radio" name="modalOrderCategory" value="manutenzione">
+                            <span>🔧 Manutenzione</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
                     <label>Numero Ordine *</label>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="modalOrderNumber" placeholder="es. ORD-2025-001" style="flex:1;">
@@ -1012,7 +1108,7 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=4.7"></script>
+    <script src="app.js?v=4.9"></script>
 </body>
 </html>
 

@@ -18,7 +18,8 @@ let state = {
     orderCounter: 1, // Counter per numeri ordine sequenziali (aggiornato via transaction Firebase)
     /** true se il dettaglio cliente è stato aperto dalla tabella "Clienti acquisiti" nel report */
     cameFromReport: false,
-    clientsSort: 'name-asc'
+    clientsSort: 'name-asc',
+    clientOrdersCategoryFilter: 'all'
 };
 
 const REPORT_FILTERS_STORAGE_KEY = '3dmakes_report_filters_v1';
@@ -82,6 +83,171 @@ function sortClientsForList(clients) {
     return copy;
 }
 
+const ORDER_CATEGORIES = [
+    { id: 'stampa_3d', label: 'Stampa 3D', icon: '🖨️' },
+    { id: 'scansione_3d', label: 'Scansione 3D', icon: '📷' },
+    { id: 'incisione_laser', label: 'Incisione laser', icon: '⚡' },
+    { id: 'design', label: 'Design / Prototipazione', icon: '✏️' },
+    { id: 'manutenzione', label: 'Manutenzione', icon: '🔧' }
+];
+const ORDER_CATEGORY_ALIASES = {
+    prototipazione_3d: 'design'
+};
+const ORDER_CATEGORY_IDS = ORDER_CATEGORIES.map(function (c) { return c.id; });
+const DEFAULT_ORDER_CATEGORY = 'stampa_3d';
+
+function isValidOrderCategory(id) {
+    return ORDER_CATEGORY_IDS.indexOf(id) !== -1;
+}
+
+function getOrderCategoryMeta(id) {
+    return ORDER_CATEGORIES.find(function (c) { return c.id === id; }) || ORDER_CATEGORIES[0];
+}
+
+function normalizeOrderText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9+]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function inferOrderCategory(description) {
+    const t = normalizeOrderText(description);
+    if (!t) return DEFAULT_ORDER_CATEGORY;
+
+    if (/\b(manutenzione|riparazione|sostituzione sensore|service)\b/.test(t)) {
+        return 'manutenzione';
+    }
+    if (/\b(filamento|filament)\b/.test(t) || /\bkg\b.*\b(pla|petg|abs|tpu)\b/.test(t)) {
+        return 'design';
+    }
+    if (/design\s*(\+|e|piu|con)?\s*stampa/.test(t) || /\bdesign\b/.test(t)) {
+        return 'design';
+    }
+    if (/\b(pacchetto\s*\d*\s*ore|ore di|modellazione|disegno|fusion|cad|sito web|contratto modellazione|prototip|prototipo)\b/.test(t)) {
+        return 'design';
+    }
+    if (/\b(scansione|scan 3d|reverse)\b/.test(t)) {
+        return 'scansione_3d';
+    }
+    if (/\b(incisione|laser|laseratura|marcatura|taglio legno|taglieri|monete incise|collana|portachiavi|biglietti)\b/.test(t)) {
+        return 'incisione_laser';
+    }
+    return DEFAULT_ORDER_CATEGORY;
+}
+
+function resolveOrderCategoryId(id) {
+    if (ORDER_CATEGORY_ALIASES[id]) return ORDER_CATEGORY_ALIASES[id];
+    return isValidOrderCategory(id) ? id : '';
+}
+
+function getOrderCategory(order) {
+    const resolved = resolveOrderCategoryId(order && order.category);
+    if (resolved) return resolved;
+    return inferOrderCategory(order && order.description);
+}
+
+function getOrderCategoryLabel(orderOrId) {
+    const id = typeof orderOrId === 'string' ? orderOrId : getOrderCategory(orderOrId);
+    const meta = getOrderCategoryMeta(id);
+    return meta.icon + ' ' + meta.label;
+}
+
+function setOrderCategorySelection(categoryId, options) {
+    const id = resolveOrderCategoryId(categoryId) || DEFAULT_ORDER_CATEGORY;
+    const toggle = document.getElementById('orderCategoryToggle');
+    if (toggle) {
+        if (options && options.resetManual) toggle.dataset.manual = '0';
+        else if (options && options.manual) toggle.dataset.manual = '1';
+    }
+    document.querySelectorAll('input[name="modalOrderCategory"]').forEach(function (input) {
+        input.checked = input.value === id;
+        const label = input.closest('.client-type-option');
+        if (label) label.classList.toggle('is-selected', input.checked);
+    });
+}
+
+function getSelectedOrderCategory() {
+    const selected = document.querySelector('input[name="modalOrderCategory"]:checked');
+    if (selected && isValidOrderCategory(selected.value)) return selected.value;
+    const desc = document.getElementById('modalOrderDescription');
+    return inferOrderCategory(desc ? desc.value : '');
+}
+
+function setupOrderCategoryControls() {
+    const desc = document.getElementById('modalOrderDescription');
+    if (desc) {
+        desc.addEventListener('input', function () {
+            const toggle = document.getElementById('orderCategoryToggle');
+            if (toggle && toggle.dataset.manual === '1') return;
+            setOrderCategorySelection(inferOrderCategory(desc.value));
+        });
+    }
+    document.querySelectorAll('input[name="modalOrderCategory"]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            const toggle = document.getElementById('orderCategoryToggle');
+            if (toggle) toggle.dataset.manual = '1';
+            const label = input.closest('.client-type-option');
+            document.querySelectorAll('#orderCategoryToggle .client-type-option').forEach(function (opt) {
+                opt.classList.toggle('is-selected', opt === label);
+            });
+        });
+    });
+}
+
+/**
+ * Classifica gli ordini senza categoria (o con un id sconosciuto) a partire
+ * dalla descrizione. Non sovrascrive una categoria già scelta a mano.
+ * Se pushCloud è true, aggiorna gli ordini sul database a lotti (un update
+ * per cliente) così i ~250 ordini storici finiscono già suddivisi.
+ */
+function migrateOrderCategories(options) {
+    const pushCloud = !!(options && options.pushCloud);
+    const byClient = {};
+    let changed = 0;
+
+    state.clients.forEach(function (client) {
+        (client.orders || []).forEach(function (order) {
+            if (!order) return;
+            const resolved = resolveOrderCategoryId(order.category);
+            let next = '';
+            if (resolved && resolved !== order.category) {
+                next = resolved;
+            } else if (!resolved) {
+                next = inferOrderCategory(order.description);
+            }
+            if (!next || next === order.category) return;
+            order.category = next;
+            changed++;
+            if (!byClient[client.id]) byClient[client.id] = {};
+            byClient[client.id][order.id] = order;
+        });
+    });
+
+    if (changed === 0) return 0;
+    saveToLocalOnly({ immediate: true });
+
+    if (pushCloud && cloudAvailable()) {
+        const clientIds = Object.keys(byClient);
+        let i = 0;
+        const writeNext = function () {
+            if (i >= clientIds.length) {
+                showNotification('📂 ' + changed + ' ordini classificati per categoria', 'success');
+                return;
+            }
+            const clientId = clientIds[i++];
+            firebaseDb.ref(pathOrders(clientId)).update(byClient[clientId])
+                .catch(function (err) { handleCloudError('classificazione ordini', err); })
+                .then(writeNext);
+        };
+        writeNext();
+    }
+    return changed;
+}
+
 function saveReportFiltersToStorage() {
     try {
         const periodEl = document.getElementById('reportPeriod');
@@ -89,6 +255,7 @@ function saveReportFiltersToStorage() {
         const data = {
             period: periodEl.value,
             status: document.getElementById('reportStatus').value,
+            category: document.getElementById('reportCategory') ? document.getElementById('reportCategory').value : 'all',
             client: document.getElementById('reportClient').value,
             dateFrom: document.getElementById('reportDateFrom').value,
             dateTo: document.getElementById('reportDateTo').value
@@ -107,6 +274,9 @@ function restoreReportFiltersFromStorage() {
 
         if (data.period) document.getElementById('reportPeriod').value = data.period;
         if (data.status) document.getElementById('reportStatus').value = data.status;
+        if (data.category && document.getElementById('reportCategory')) {
+            document.getElementById('reportCategory').value = data.category;
+        }
         if (data.dateFrom) document.getElementById('reportDateFrom').value = data.dateFrom;
         if (data.dateTo) document.getElementById('reportDateTo').value = data.dateTo;
 
@@ -902,6 +1072,7 @@ function setupCloudSync() {
                     }
                 });
                 migrateAllClientAddresses({ pushCloud: true });
+                migrateOrderCategories({ pushCloud: true });
                 renderClients();
 
                 if (state.currentClientId) {
@@ -910,6 +1081,7 @@ function setupCloudSync() {
                 }
             } else if (state.clients.length > 0) {
                 migrateAllClientAddresses({ pushCloud: true });
+                migrateOrderCategories({ pushCloud: true });
                 // Cloud vuoto e abbiamo dati locali: pushiamo ognuno separatamente
                 state.clients.forEach(c => cloudSetClient(c));
             }
@@ -1600,6 +1772,7 @@ function loadFromStorage() {
     if (data) {
         state.clients = JSON.parse(data);
         migrateAllClientAddresses({ pushCloud: false });
+        migrateOrderCategories({ pushCloud: false });
     }
     
     // Il counter verrà caricato dal cloud in setupCloudSync
@@ -2026,6 +2199,7 @@ function setupEventListeners() {
         calculateVat();
     });
     document.getElementById('modalOrderCost').addEventListener('input', calculateMargin);
+    setupOrderCategoryControls();
 
     // Report (chiusura)
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
@@ -2530,6 +2704,7 @@ function selectClient(clientId, options = {}) {
     }
 
     state.currentClientId = clientId;
+    state.clientOrdersCategoryFilter = 'all';
     const client = state.clients.find(c => c.id === clientId);
     
     if (!client) return;
@@ -3194,14 +3369,59 @@ function deleteNote(noteId) {
 }
 
 // ===== ORDINI =====
+function renderOrderCategoryChips(client) {
+    const el = document.getElementById('orderCategoryChips');
+    if (!el) return;
+    if (!client.orders || client.orders.length === 0) {
+        el.innerHTML = '';
+        el.hidden = true;
+        return;
+    }
+
+    const current = state.clientOrdersCategoryFilter || 'all';
+    const counts = { all: client.orders.length };
+    ORDER_CATEGORIES.forEach(function (c) { counts[c.id] = 0; });
+    client.orders.forEach(function (order) {
+        const cat = getOrderCategory(order);
+        counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const chips = [{ id: 'all', label: 'Tutti', icon: '📦' }].concat(ORDER_CATEGORIES);
+    el.innerHTML = chips.map(function (c) {
+        const n = counts[c.id] || 0;
+        if (c.id !== 'all' && n === 0) return '';
+        const active = current === c.id ? ' is-active' : '';
+        return '<button type="button" class="order-category-chip' + active + '" data-order-cat="' + c.id + '">' +
+            c.icon + ' ' + c.label + ' <span>' + n + '</span></button>';
+    }).join('');
+    el.hidden = false;
+    el.querySelectorAll('[data-order-cat]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            state.clientOrdersCategoryFilter = btn.getAttribute('data-order-cat');
+            renderOrders();
+        });
+    });
+}
+
 function renderOrders() {
     const client = state.clients.find(c => c.id === state.currentClientId);
     if (!client) return;
 
     const ordersList = document.getElementById('ordersList');
+    renderOrderCategoryChips(client);
     
     if (!client.orders || client.orders.length === 0) {
         ordersList.innerHTML = '<div class="empty-section"><p>Nessun ordine presente</p></div>';
+        return;
+    }
+
+    const categoryFilter = state.clientOrdersCategoryFilter || 'all';
+    const visibleOrders = categoryFilter === 'all'
+        ? client.orders
+        : client.orders.filter(function (order) { return getOrderCategory(order) === categoryFilter; });
+
+    if (visibleOrders.length === 0) {
+        ordersList.innerHTML = '<div class="empty-section"><p>Nessun ordine in questa categoria</p></div>';
         return;
     }
 
@@ -3218,7 +3438,7 @@ function renderOrders() {
         'parziale': '⏳ Parziale'
     };
 
-    ordersList.innerHTML = client.orders.map(order => {
+    ordersList.innerHTML = visibleOrders.map(order => {
         const paymentStatus = order.paymentStatus || 'non_pagato';
         const paymentMethod = order.paymentMethod || '';
         const methodLabels = {
@@ -3280,12 +3500,14 @@ function renderOrders() {
         if (order.vatEnabled && order.vatAmount) {
             vatInfo = `<div style="margin-top: 8px; padding: 6px 10px; background: rgba(245, 158, 11, 0.1); border-radius: 6px; font-size: 12px; color: #d97706; font-weight: 500;">🧾 IVA ${order.vatRate}%: ${formatCurrency(order.vatAmount)} <span style="color: var(--text-secondary); font-weight: 400;">(Netto: ${formatCurrency(order.netAmount)})</span></div>`;
         }
+
+        const categoryMeta = getOrderCategoryMeta(getOrderCategory(order));
         
         return `
         <div class="order-card" data-order-id="${order.id}" onclick="editOrder('${order.id}')" style="cursor: pointer;" title="Clicca per modificare l'ordine">
             <div class="order-card-header">
                 <div class="order-card-info">
-                    <h4>${order.number}</h4>
+                    <h4>${order.number} <span class="order-category-badge cat-${categoryMeta.id}">${categoryMeta.icon} ${categoryMeta.label}</span></h4>
                     <div class="order-card-description">${order.description}</div>
                     ${deadlineBadge}
                     ${marginInfo}
@@ -3335,6 +3557,7 @@ function openAddOrderModal() {
     if (hint) hint.style.display = 'none';
     
     document.getElementById('modalOrderDescription').value = '';
+    setOrderCategorySelection(DEFAULT_ORDER_CATEGORY, { resetManual: true });
     document.getElementById('modalOrderAmount').value = '';
     document.getElementById('modalOrderCost').value = '';
     document.getElementById('modalOrderDeadline').value = '';
@@ -3465,6 +3688,7 @@ function editOrder(orderId) {
     document.getElementById('modalOrderNumber').style.cursor = '';
     
     document.getElementById('modalOrderDescription').value = order.description;
+    setOrderCategorySelection(getOrderCategory(order), { manual: true });
     document.getElementById('modalOrderAmount').value = order.amount;
     document.getElementById('modalOrderCost').value = order.cost || 0;
     document.getElementById('modalOrderDeadline').value = order.deadline || '';
@@ -3562,6 +3786,7 @@ async function saveOrder() {
 
     const baseOrderData = {
         description,
+        category: getSelectedOrderCategory(),
         amount: amount,
         cost: cost,
         margin: margin,
@@ -4825,7 +5050,7 @@ function renderDashboardRecentOrders(orders) {
                     <div class="dashboard-item-title">${order.number}</div>
                     <span class="dashboard-item-badge" style="background: ${colors.bg}; color: ${colors.color};">${statusLabels[order.status]}</span>
                 </div>
-                <div class="dashboard-item-subtitle">${order.clientName} • ${formatDate(order.date)}</div>
+                <div class="dashboard-item-subtitle">${order.clientName} • ${getOrderCategoryLabel(order)} • ${formatDate(order.date)}</div>
                 <div class="dashboard-item-amount">${formatCurrency(order.amount)}</div>
             </div>
         `;
@@ -4902,6 +5127,7 @@ function openReportView() {
     if (!hadSaved) {
         document.getElementById('reportPeriod').value = 'month';
         document.getElementById('reportStatus').value = 'all';
+        if (document.getElementById('reportCategory')) document.getElementById('reportCategory').value = 'all';
         document.getElementById('reportClient').value = 'all';
         document.getElementById('customDates').style.display = 'none';
     } else {
@@ -4977,12 +5203,40 @@ function filterByStatus(status) {
 
 // Aggiorna le classi active sulle status cards
 function updateStatusCardsActive(selectedStatus) {
-    document.querySelectorAll('.status-card').forEach(card => {
+    document.querySelectorAll('#statusBreakdown .status-card').forEach(card => {
         card.classList.remove('active');
     });
     
     if (selectedStatus !== 'all') {
-        const activeCard = document.querySelector(`.status-card.status-${selectedStatus}`);
+        const activeCard = document.querySelector(`#statusBreakdown .status-card.status-${selectedStatus}`);
+        if (activeCard) {
+            activeCard.classList.add('active');
+        }
+    }
+}
+
+function filterByCategory(category) {
+    const categorySelect = document.getElementById('reportCategory');
+    if (!categorySelect) return;
+
+    if (categorySelect.value === category) {
+        categorySelect.value = 'all';
+    } else {
+        categorySelect.value = category;
+    }
+
+    updateCategoryCardsActive(categorySelect.value);
+    generateReport();
+    document.getElementById('reportTable').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function updateCategoryCardsActive(selectedCategory) {
+    document.querySelectorAll('#categoryBreakdown .status-card').forEach(card => {
+        card.classList.remove('active');
+    });
+
+    if (selectedCategory && selectedCategory !== 'all') {
+        const activeCard = document.querySelector(`#categoryBreakdown .category-card.category-${selectedCategory}`);
         if (activeCard) {
             activeCard.classList.add('active');
         }
@@ -5088,6 +5342,8 @@ function generateReport() {
     const period = document.getElementById('reportPeriod').value;
     const clientFilter = document.getElementById('reportClient').value;
     const statusFilter = document.getElementById('reportStatus').value;
+    const categoryEl = document.getElementById('reportCategory');
+    const categoryFilter = categoryEl ? categoryEl.value : 'all';
     
     const dateRange = getDateRange(period);
     
@@ -5118,10 +5374,13 @@ function generateReport() {
         });
     });
     
-    // Poi filtriamo per stato (per la tabella)
-    const filteredOrders = statusFilter === 'all' 
+    // Poi filtriamo per stato e categoria (per la tabella)
+    let filteredOrders = statusFilter === 'all' 
         ? [...allOrdersForStats]
         : allOrdersForStats.filter(order => order.status === statusFilter);
+    if (categoryFilter !== 'all') {
+        filteredOrders = filteredOrders.filter(order => getOrderCategory(order) === categoryFilter);
+    }
     
     // Ordina per data (più recenti prima)
     filteredOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -5244,30 +5503,39 @@ function generateReport() {
     
     document.getElementById('statusCountCompletatoNonPagato').textContent = statusStats.completato_non_pagato.count;
     document.getElementById('statusAmountCompletatoNonPagato').textContent = formatCurrency(statusStats.completato_non_pagato.amount);
+
+    const categoryStats = {};
+    ORDER_CATEGORIES.forEach(function (cat) {
+        categoryStats[cat.id] = { count: 0, amount: 0 };
+    });
+    allOrdersForStats.forEach(function (order) {
+        const cat = getOrderCategory(order);
+        if (!categoryStats[cat]) categoryStats[cat] = { count: 0, amount: 0 };
+        categoryStats[cat].count++;
+        categoryStats[cat].amount += (order.amount || 0);
+    });
+    ORDER_CATEGORIES.forEach(function (cat) {
+        const countEl = document.getElementById('catCount_' + cat.id);
+        const amountEl = document.getElementById('catAmount_' + cat.id);
+        if (countEl) countEl.textContent = categoryStats[cat.id].count;
+        if (amountEl) amountEl.textContent = formatCurrency(categoryStats[cat.id].amount);
+    });
     
     // ===== CALCOLA IMPORTO TOTALE E IVA IN BASE AL FILTRO =====
-    let totalRevenue = 0;
-    let totalVat = 0;
-    let revenueLabelText = 'Importo Totale';
-    
-    if (statusFilter === 'all') {
-        // Nessun filtro: mostra importo totale di TUTTI gli ordini
-        totalRevenue = allOrdersForStats.reduce((sum, order) => sum + (order.amount || 0), 0);
-        totalVat = allOrdersForStats.reduce((sum, order) => sum + (order.vatAmount || 0), 0);
-        revenueLabelText = 'Importo Totale (Tutti)';
-    } else {
-        // Filtro stato selezionato: mostra solo importo di quel stato
-        totalRevenue = statusStats[statusFilter].amount;
-        totalVat = allOrdersForStats
-            .filter(order => (order.status || 'in_lavorazione') === statusFilter)
-            .reduce((sum, order) => sum + (order.vatAmount || 0), 0);
-        const statusLabels = {
-            'in_lavorazione': 'In Lavorazione',
-            'completato': 'Completato',
-            'in_attesa': 'In Attesa',
-            'annullato': 'Annullato'
-        };
-        revenueLabelText = `Importo ${statusLabels[statusFilter]}`;
+    const statusLabels = {
+        'in_lavorazione': 'In Lavorazione',
+        'completato': 'Completato',
+        'in_attesa': 'In Attesa',
+        'annullato': 'Annullato'
+    };
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+    const totalVat = filteredOrders.reduce((sum, order) => sum + (order.vatAmount || 0), 0);
+    let revenueLabelText = 'Importo Totale (Tutti)';
+    if (statusFilter !== 'all' || categoryFilter !== 'all') {
+        const parts = [];
+        if (statusFilter !== 'all') parts.push(statusLabels[statusFilter] || statusFilter);
+        if (categoryFilter !== 'all') parts.push(getOrderCategoryMeta(categoryFilter).label);
+        revenueLabelText = 'Importo ' + parts.join(' · ');
     }
     
     // ===== ALTRE STATISTICHE =====
@@ -5290,6 +5558,7 @@ function generateReport() {
     
     // Aggiorna classi active sulle card
     updateStatusCardsActive(statusFilter);
+    updateCategoryCardsActive(categoryFilter);
     
     saveReportFiltersToStorage();
 }
@@ -5366,7 +5635,7 @@ function renderReportTable(orders) {
     const tbody = document.getElementById('reportTableBody');
     
     if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-report">Nessun ordine trovato per i filtri selezionati</td></tr>';
         return;
     }
     
@@ -5418,6 +5687,7 @@ function renderReportTable(orders) {
             <td><strong>${order.clientName}</strong></td>
             <td>${order.number}</td>
             <td>${order.description}</td>
+            <td><span class="order-category-badge cat-${getOrderCategory(order)}">${getOrderCategoryLabel(order)}</span></td>
             <td><span class="report-status-badge ${order.status}">${statusLabels[order.status]}</span></td>
             <td><span style="display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: ${paymentBgColor}; color: ${paymentTextColor};">${paymentLabels[paymentStatus]}</span></td>
             <td>${vatDisplay}</td>
@@ -5440,7 +5710,7 @@ function exportToCSV() {
     };
     
     // Intestazioni CSV con IVA
-    let csv = 'Data,Cliente,N° Ordine,Descrizione,Stato,Stato Pagamento,Aliquota IVA,IVA,Netto,Importo Lordo\n';
+    let csv = 'Data,Cliente,N° Ordine,Descrizione,Categoria,Stato,Stato Pagamento,Aliquota IVA,IVA,Netto,Importo Lordo\n';
     
     // Righe dati
     state.reportData.forEach(order => {
@@ -5454,6 +5724,7 @@ function exportToCSV() {
             `"${order.clientName}"`,
             `"${order.number}"`,
             `"${order.description}"`,
+            `"${getOrderCategoryMeta(getOrderCategory(order)).label}"`,
             order.status,
             paymentLabels[paymentStatus],
             vatRate,
@@ -5470,10 +5741,10 @@ function exportToCSV() {
     const totalNet = state.reportData.reduce((sum, o) => sum + (o.netAmount || o.amount || 0), 0);
     
     csv += '\n';
-    csv += `TOTALE ORDINI,${state.reportData.length},,,,,,,,\n`;
-    csv += `TOTALE IVA,,,,,,,${totalVat.toFixed(2)},,\n`;
-    csv += `TOTALE NETTO,,,,,,,,${totalNet.toFixed(2)},\n`;
-    csv += `TOTALE LORDO,,,,,,,,,${totalRevenue.toFixed(2)}\n`;
+    csv += `TOTALE ORDINI,${state.reportData.length},,,,,,,,,\n`;
+    csv += `TOTALE IVA,,,,,,,,${totalVat.toFixed(2)},,\n`;
+    csv += `TOTALE NETTO,,,,,,,,,${totalNet.toFixed(2)},\n`;
+    csv += `TOTALE LORDO,,,,,,,,,,${totalRevenue.toFixed(2)}\n`;
     
     // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -5638,6 +5909,7 @@ function printReport() {
                         <th>Cliente</th>
                         <th>N° Ordine</th>
                         <th>Descrizione</th>
+                        <th>Categoria</th>
                         <th>Stato</th>
                         <th>Pagamento</th>
                         <th>IVA</th>
@@ -5678,6 +5950,7 @@ function printReport() {
                             <td><strong>${order.clientName}</strong></td>
                             <td>${order.number}</td>
                             <td>${order.description}</td>
+                            <td>${getOrderCategoryMeta(getOrderCategory(order)).label}</td>
                             <td><span class="status-badge status-${order.status}">${statusLabels[order.status]}</span></td>
                             <td><span class="status-badge ${paymentClass}">${paymentLabels[paymentStatus]}</span></td>
                             <td style="color: #d97706;">${vatDisplay}</td>

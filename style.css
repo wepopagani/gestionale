@@ -959,6 +959,10 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     font-weight: 600;
     font-size: 16px;
     margin-bottom: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
 }
 
 .order-card-description {
@@ -1944,6 +1948,32 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     word-break: break-word;
 }
 
+.category-card.category-stampa_3d:hover,
+.category-card.category-stampa_3d.active {
+    border-color: #0284c7;
+    background: rgba(2, 132, 199, 0.06);
+}
+.category-card.category-scansione_3d:hover,
+.category-card.category-scansione_3d.active {
+    border-color: #7c3aed;
+    background: rgba(124, 58, 237, 0.06);
+}
+.category-card.category-incisione_laser:hover,
+.category-card.category-incisione_laser.active {
+    border-color: #d97706;
+    background: rgba(217, 119, 6, 0.06);
+}
+.category-card.category-design:hover,
+.category-card.category-design.active {
+    border-color: #db2777;
+    background: rgba(219, 39, 119, 0.06);
+}
+.category-card.category-manutenzione:hover,
+.category-card.category-manutenzione.active {
+    border-color: #4b5563;
+    background: rgba(75, 85, 99, 0.06);
+}
+
 .status-card.status-in-lavorazione .status-card-count {
     color: #1e40af;
 }
@@ -2404,6 +2434,74 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     border-color: var(--primary);
     background: rgba(0, 174, 239, 0.08);
 }
+
+.order-category-toggle {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.order-category-toggle .client-type-option {
+    padding: 10px 8px;
+    min-height: 44px;
+    font-size: 13px;
+    text-align: center;
+}
+
+@media (max-width: 600px) {
+    .order-category-toggle {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.order-category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.order-category-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.order-category-chip span {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.order-category-chip.is-active {
+    border-color: var(--primary);
+    background: rgba(0, 174, 239, 0.1);
+    color: var(--primary);
+}
+
+.order-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.order-category-badge.cat-stampa_3d { background: #e0f2fe; color: #0369a1; }
+.order-category-badge.cat-scansione_3d { background: #ede9fe; color: #6d28d9; }
+.order-category-badge.cat-incisione_laser { background: #fef3c7; color: #b45309; }
+.order-category-badge.cat-design { background: #fce7f3; color: #be185d; }
+.order-category-badge.cat-manutenzione { background: #e5e7eb; color: #374151; }
 
 .intake-file-warning {
     margin: 0 0 16px;
