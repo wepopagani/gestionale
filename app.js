@@ -2090,6 +2090,7 @@ function setupEventListeners() {
 
     // Bottoni clienti
     document.getElementById('addClientBtn').addEventListener('click', openAddClientModal);
+    setupClientPdfImport();
     document.querySelectorAll('.client-type-option').forEach(function (option) {
         option.addEventListener('click', function () {
             const radio = option.querySelector('input[type="radio"]');
@@ -2930,6 +2931,105 @@ function clearClientIdentityFields() {
     document.getElementById('modalClientVat').value = '';
 }
 
+function clearClientPdfReview() {
+    const banner = document.getElementById('clientPdfReviewBanner');
+    if (banner) banner.hidden = true;
+    document.querySelectorAll('#clientModal .form-group.is-pdf-filled').forEach(function (el) {
+        el.classList.remove('is-pdf-filled');
+    });
+}
+
+function markPdfFilledField(inputId, value) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = value || '';
+    const group = input.closest('.form-group');
+    if (group && value) group.classList.add('is-pdf-filled');
+}
+
+function applyParsedAnagraficaToModal(parsed) {
+    openAddClientModal();
+    const type = parsed.clientType === 'aziendale' ? 'aziendale' : 'privato';
+    setModalClientType(type);
+
+    if (type === 'aziendale') {
+        markPdfFilledField('modalClientCompanyName', parsed.companyName);
+        markPdfFilledField('modalClientVat', parsed.vat);
+    } else {
+        let firstName = parsed.firstName || '';
+        let lastName = parsed.lastName || '';
+        if ((!firstName || !lastName) && parsed.fullName && typeof splitClientNameParts === 'function') {
+            const parts = splitClientNameParts(parsed.fullName);
+            firstName = firstName || parts.firstName;
+            lastName = lastName || parts.lastName;
+        }
+        markPdfFilledField('modalClientFirstName', firstName);
+        markPdfFilledField('modalClientLastName', lastName);
+    }
+
+    markPdfFilledField('modalClientEmail', parsed.email);
+    markPdfFilledField('modalClientPhone', parsed.phone);
+    markPdfFilledField('modalClientAddress', parsed.address);
+    markPdfFilledField('modalClientPostalCode', parsed.postalCode);
+    markPdfFilledField('modalClientCity', parsed.city);
+    markPdfFilledField('modalClientCountry', parsed.country);
+
+    const banner = document.getElementById('clientPdfReviewBanner');
+    const textEl = document.getElementById('clientPdfReviewText');
+    if (banner) {
+        banner.hidden = false;
+        let msg = 'Controlla i campi evidenziati e correggi se serve, poi Salva.';
+        if (parsed.filled && parsed.filled.length) {
+            msg = 'Trovati: ' + parsed.filled.join(', ') + '. ' + msg;
+        }
+        if (parsed.missing && parsed.missing.length) {
+            msg += ' Manca: ' + parsed.missing.join(', ') + '.';
+        }
+        if (textEl) textEl.textContent = msg;
+    }
+    document.getElementById('modalClientTitle').textContent = 'Nuovo cliente da PDF';
+}
+
+function setupClientPdfImport() {
+    const input = document.getElementById('importClientPdfInput');
+    const sidebarBtn = document.getElementById('importClientPdfBtn');
+    const modalBtn = document.getElementById('modalImportClientPdfBtn');
+    if (!input) return;
+
+    function pickPdf() {
+        input.value = '';
+        input.click();
+    }
+    if (sidebarBtn) sidebarBtn.addEventListener('click', pickPdf);
+    if (modalBtn) modalBtn.addEventListener('click', pickPdf);
+
+    input.addEventListener('change', function () {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        handleImportClientPdf(file);
+    });
+}
+
+async function handleImportClientPdf(file) {
+    if (!file) return;
+    if (typeof parseAnagraficaPdf !== 'function') {
+        alert('Parser PDF non disponibile. Ricarica la pagina.');
+        return;
+    }
+    try {
+        if (typeof showNotification === 'function') showNotification('⏳ Lettura del modulo…', 'info');
+        const parsed = await parseAnagraficaPdf(await file.arrayBuffer());
+        if (!parsed || !parsed.hasAny) {
+            alert('Non ho trovato i campi del modulo in questo PDF. Se è una scansione (solo immagine), va compilato a mano.');
+            return;
+        }
+        applyParsedAnagraficaToModal(parsed);
+    } catch (err) {
+        console.error('PDF anagrafico:', err);
+        alert('Impossibile leggere il PDF. Prova un file diverso o compila a mano.');
+    }
+}
+
 function openAddClientModal() {
     state.editMode = false;
     document.getElementById('modalClientTitle').textContent = 'Nuovo Cliente';
@@ -2938,6 +3038,7 @@ function openAddClientModal() {
     document.getElementById('modalClientEmail').value = '';
     document.getElementById('modalClientPhone').value = '';
     clearClientAddressFields();
+    clearClientPdfReview();
     openModal('clientModal');
 }
 
@@ -2947,6 +3048,7 @@ function openEditClientModal() {
 
     state.editMode = true;
     document.getElementById('modalClientTitle').textContent = 'Modifica Cliente';
+    clearClientPdfReview();
     fillClientIdentityFields(client);
 
     const acquisitionDate = client.acquisitionDate || client.createdAt || new Date().toISOString();

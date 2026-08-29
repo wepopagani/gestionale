@@ -2394,6 +2394,23 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     margin-top: 0;
 }
 
+#clientPdfReviewBanner.client-pdf-banner,
+.client-pdf-banner {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.form-group.is-pdf-filled input {
+    border-color: #d97706;
+    background: #fffbeb;
+}
+
 .client-type-toggle {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -3358,6 +3375,10 @@ body.sidebar-collapsed .btn-toggle-sidebar {
         font-weight: 700;
         border-radius: 12px;
         touch-action: manipulation;
+    }
+
+    #importClientPdfBtn {
+        grid-column: 1 / -1;
     }
 
     .intake-link-actions {

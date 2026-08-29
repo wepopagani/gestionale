@@ -21,7 +21,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=4.1">
+    <link rel="stylesheet" href="style.css?v=4.2">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     
     <!-- Firebase -->
@@ -66,6 +66,8 @@
                 <div class="sidebar-cta-row">
                     <button class="btn-primary" id="addClientBtn">+ Nuovo Cliente</button>
                     <button class="btn-secondary" id="createIntakeLinkBtn" title="Genera un link da inviare al cliente per la registrazione autonoma">🔗 Crea link</button>
+                    <button type="button" class="btn-secondary" id="importClientPdfBtn" title="Compila il cliente dal modulo anagrafico firmato">📄 Da PDF</button>
+                    <input type="file" id="importClientPdfInput" accept="application/pdf" hidden>
                 </div>
                 <div class="clients-sort" role="group" aria-label="Ordina lista clienti">
                     <span class="clients-sort__label">Ordina</span>
@@ -721,6 +723,14 @@
                 <button class="modal-close" onclick="closeModal('clientModal')">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="client-pdf-banner" id="clientPdfReviewBanner" hidden>
+                    <strong>Dati letti dal PDF.</strong>
+                    <span id="clientPdfReviewText">Controlla i campi evidenziati e correggi se serve, poi Salva.</span>
+                </div>
+                <div class="form-group">
+                    <label>Oppure carica il modulo firmato (PDF)</label>
+                    <button type="button" class="btn-secondary" id="modalImportClientPdfBtn" style="width:100%;">📄 Carica PDF anagrafico</button>
+                </div>
                 <div class="form-group">
                     <label>Tipo cliente *</label>
                     <div class="client-type-toggle">
@@ -1108,7 +1118,14 @@
     </button>
 
     <script src="dm-mobile-nav.js?v=1.0"></script>
-    <script src="app.js?v=4.9"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
+    <script src="parse-anagrafica.js?v=1"></script>
+    <script src="app.js?v=5.0"></script>
 </body>
 </html>
 

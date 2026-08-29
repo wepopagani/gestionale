@@ -4,7 +4,7 @@
 // frammenti da migrazione parziale): riconciliazione automatica con merge
 // dei nodi fantasma per evitare perdite di ordini.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.33';
+const CACHE_NAME = '3dmakes-gestionale-v3.34';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -25,6 +25,7 @@ const NETWORK_ONLY_PATTERNS = [
   'firebase-config.js',
   'auth-staff.js',
   'app.js',
+  'parse-anagrafica.js',
   'firestore-init.js',
   'staff-auth.css'
 ];
