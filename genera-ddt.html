@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>Bolla di consegna (DDT) - 3DMAKES</title>
+    <meta name="theme-color" content="#003b5c">
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="3DMAKES">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="3dmakes-theme.css?v=3">
+    <link rel="stylesheet" href="staff-auth.css?v=3">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="firebase-config.js?v=4"></script>
+    <script src="firestore-init.js"></script>
+    <script src="auth-staff.js?v=7"></script>
+</head>
+<body class="dm-page">
+    <header class="dm-header" role="banner">
+        <a href="index.html" class="dm-logo"><span class="dm-logo__d">3D</span><span class="dm-logo__m">MAKES</span></a>
+        <nav class="dm-nav" aria-label="Strumenti">
+            <a href="index.html#dashboard">Dashboard</a>
+            <a href="index.html#clients">Clienti</a>
+            <a href="index.html#report">Report</a>
+            <a href="calcolatore.html">Calcolatore</a>
+            <a href="genera-preventivo.html">Preventivo</a>
+            <a href="genera-ddt.html" aria-current="page">DDT</a>
+            <a href="storico-preventivi.html">Storico</a>
+        </nav>
+        <div class="dm-header__actions">
+            <a href="genera-ddt.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo DDT</a>
+            <div class="staff-header-auth">
+                <span id="staffUserLabel" class="staff-user-pill"></span>
+                <button type="button" id="staffLogoutBtn" class="staff-logout-btn" data-staff-logout>Esci</button>
+            </div>
+            <a href="index.html" class="dm-btn dm-btn--navy dm-btn--sm">Area clienti</a>
+        </div>
+    </header>
+    <div class="dm-preventivo-wrap">
+        <aside class="dm-sidebar dm-card dm-form">
+            <h2>Editor bolla di consegna</h2>
+            <div class="dm-section-title">Info documento</div>
+            <div class="form-group">
+                <label>Numero bollettino:</label>
+                <input type="text" id="numeroBollettino" value="Caricamento..." oninput="aggiorna()" readonly>
+                <small id="infoNumeroBollettino" class="dm-muted-inline">Numero generato automaticamente e sequenziale</small>
+            </div>
+            <div class="form-group">
+                <label>Data:</label>
+                <input type="date" id="dataDoc" oninput="aggiorna()" onchange="aggiorna()">
+            </div>
+            <div class="dm-section-title">Cliente (dal gestionale)</div>
+            <div class="form-group">
+                <label>Cerca cliente in rubrica:</label>
+                <input type="text" id="clienteRubricaSearch"
+                    placeholder="Filtra per nome, email, telefono..."
+                    autocomplete="off"
+                    oninput="filtraClientiRubrica(this.value)">
+            </div>
+            <div class="form-group">
+                <label>Seleziona cliente:</label>
+                <select id="clienteRubricaSelect" size="8"
+                    onchange="caricaClienteDaRubrica(this.value)"
+                    onclick="caricaClienteDaRubrica(this.value)">
+                    <option value="">Caricamento clienti...</option>
+                </select>
+                <small class="dm-muted-inline" id="clienteRubricaStatus">In attesa del cloud...</small>
+            </div>
+            <div class="form-group">
+                <label>Nome / ragione sociale:</label>
+                <input type="text" id="nomeCliente" value="" placeholder="Nome o ragione sociale" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Cognome:</label>
+                <input type="text" id="cognomeCliente" value="" placeholder="Cognome (facoltativo per aziende)" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Indirizzo:</label>
+                <input type="text" id="indirizzoCliente" value="" placeholder="Via e numero civico" oninput="aggiorna()">
+            </div>
+            <div class="dm-grid-2 dm-client-cap-luogo">
+                <div class="form-group">
+                    <label>CAP:</label>
+                    <input type="text" id="capCliente" value="" placeholder="es. 6900" oninput="aggiorna()">
+                </div>
+                <div class="form-group">
+                    <label>Luogo:</label>
+                    <input type="text" id="luogoCliente" value="" placeholder="es. Lugano" oninput="aggiorna()">
+                </div>
+            </div>
+            <div class="dm-section-title">Voci</div>
+            <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
+            <div id="righeEditor"></div>
+            <div class="dm-section-title">Vettore di consegna</div>
+            <div class="form-group">
+                <label>Vettore:</label>
+                <input type="text" id="vettoreConsegna" value="" placeholder="Es. Mittente, corriere, nome autista..." oninput="aggiorna()">
+                <small class="dm-muted-inline">Chi effettua il trasporto. Lo compili tu per ogni bolla.</small>
+            </div>
+            <div class="form-group">
+                <label>Nota (opzionale):</label>
+                <textarea id="note" oninput="aggiorna()" placeholder="Causale, riferimenti ordine, istruzioni di consegna…"></textarea>
+            </div>
+            <button type="button" class="dm-btn dm-btn--success dm-btn--block" id="btnSalva" onclick="salvaSuCloud()" style="display:none">Salva su cloud</button>
+            <button type="button" class="dm-btn dm-btn--cyan dm-btn--block" id="btnScaricaPDF" onclick="scaricaPDF(this)">Scarica PDF</button>
+            <a href="storico-ddt.html" class="dm-btn dm-btn--outline dm-btn--block">Storico DDT</a>
+        </aside>
+        <div class="dm-preview-shell dm-card">
+            <div class="dm-doc-pages" id="ddtPreview">
+                <div class="dm-doc-preview dm-doc-page dm-doc-page--first">
+                <div class="dm-doc-header">
+                    <div class="company-info">
+                        <img src="./logo.png" alt="3DMAKES Logo" class="company-logo" id="prev-logo" onerror="this.style.display='none';">
+                        <div class="company-details">
+                            <div style="white-space: pre-line;" id="prev-indirizzoAzienda"></div>
+                            <div style="white-space: pre-line; margin-top: 10px;" id="prev-contattiAzienda"></div>
+                        </div>
+                        <div class="dm-ddt-meta">
+                            <div><strong>Data:</strong> <span id="prev-data"></span></div>
+                            <div><strong>N. bollettino:</strong> <span id="prev-numeroBollettino"></span></div>
+                        </div>
+                    </div>
+                    <div class="client-info">
+                        <div style="font-size:12px; text-transform: uppercase; color:#5c6b7a;">Spett.le</div>
+                        <div class="client-name" id="prev-nomeCliente"></div>
+                        <div style="white-space: pre-line;" id="prev-indirizzoCliente"></div>
+                    </div>
+                </div>
+                <div class="dm-doc-title">Bolla di consegna</div>
+                <div class="dm-ddt-subtitle">DDT — Documento di trasporto</div>
+                <table class="dm-items-table items-table" id="prev-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 46%;">Descrizione</th>
+                            <th style="width: 14%;">Quantità</th>
+                            <th style="width: 20%;">Prezzo unità<br>[CHF]</th>
+                            <th style="width: 20%;">Importo<br>[CHF]</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prev-tbody"></tbody>
+                </table>
+                <div class="dm-total-section total-section">
+                    <div class="total-row final">
+                        <strong>TOTALE:</strong>
+                        <span id="prev-totale">0.00 CHF</span>
+                    </div>
+                </div>
+                <div class="dm-ddt-vettore">
+                    <div class="dm-ddt-vettore__label">Vettore di consegna</div>
+                    <div class="dm-ddt-vettore__value" id="prev-vettore">—</div>
+                </div>
+                <div class="dm-ddt-note" id="prev-note-wrap" hidden>
+                    <strong>Note</strong>
+                    <div id="prev-note" style="white-space: pre-line;"></div>
+                </div>
+                <div class="dm-doc-footer footer">Bolla di consegna generata da 3DMAKES</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let db = null;
+        let firebaseInitialized = false;
+        let ddtInModifica = null;
+        let modalitaModifica = false;
+        let firebaseRtdb = null;
+        const RUBRICA_USER_ID = 'shared_gestionale';
+        let clientiRubrica = [];
+        let clienteRubricaFiltro = '';
+        let righe = [{ descrizione: '', quantita: 1, prezzoUnit: 0 }];
+
+        const authReady = (typeof initFirebaseStaffAuth === 'function')
+            ? initFirebaseStaffAuth().catch(function (err) {
+                console.error('Accesso staff fallito:', err);
+                throw err;
+            })
+            : Promise.reject(new Error('initFirebaseStaffAuth non disponibile'));
+
+        try {
+            db = typeof initFirestoreDb === 'function' ? initFirestoreDb() : null;
+            firebaseInitialized = !!db;
+        } catch (error) {
+            console.error('Errore inizializzazione Firebase:', error);
+        }
+
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined'
+                && firebase.database && firebaseConfig.databaseURL) {
+                firebaseRtdb = firebase.database();
+            }
+        } catch (error) {
+            console.error('Errore init Realtime DB:', error);
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatNumeroCh(valore, decimali) {
+            const n = Number(valore) || 0;
+            const dec = decimali === undefined ? 2 : decimali;
+            return new Intl.NumberFormat('de-CH', {
+                minimumFractionDigits: dec,
+                maximumFractionDigits: dec
+            }).format(n);
+        }
+
+        function formatChf(valore) {
+            return formatNumeroCh(valore, 2) + ' CHF';
+        }
+
+        function formatQuantita(valore) {
+            const n = Number(valore) || 0;
+            if (Math.abs(n - Math.round(n)) < 1e-9) {
+                return new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 }).format(Math.round(n));
+            }
+            return formatNumeroCh(n, 2);
+        }
+
+        function todayIso() {
+            const d = new Date();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return d.getFullYear() + '-' + m + '-' + day;
+        }
+
+        function normalizzaClientiRubrica(rawRoot) {
+            if (!rawRoot || typeof rawRoot !== 'object') return [];
+            const lista = Array.isArray(rawRoot)
+                ? rawRoot.filter(function (v) { return v !== null && v !== undefined; })
+                : Object.values(rawRoot);
+            return lista
+                .filter(function (c) { return c && typeof c === 'object' && c.id && c.name; })
+                .map(function (c) {
+                    return {
+                        id: String(c.id),
+                        name: String(c.name || '').trim(),
+                        email: c.email || '',
+                        phone: c.phone || '',
+                        address: c.address || '',
+                        postalCode: c.postalCode || '',
+                        city: c.city || '',
+                        country: c.country || '',
+                        vat: c.vat || ''
+                    };
+                })
+                .sort(function (a, b) { return a.name.localeCompare(b.name, 'it', { sensitivity: 'base' }); });
+        }
+
+        function aggiornaSelectClientiRubrica() {
+            const sel = document.getElementById('clienteRubricaSelect');
+            const status = document.getElementById('clienteRubricaStatus');
+            if (!sel) return;
+            const filtro = (clienteRubricaFiltro || '').trim().toLowerCase();
+            const lista = filtro
+                ? clientiRubrica.filter(function (c) {
+                    return (c.name && c.name.toLowerCase().includes(filtro))
+                        || (c.email && c.email.toLowerCase().includes(filtro))
+                        || (c.phone && c.phone.toLowerCase().includes(filtro))
+                        || (c.city && c.city.toLowerCase().includes(filtro))
+                        || (c.vat && c.vat.toLowerCase().includes(filtro));
+                })
+                : clientiRubrica.slice();
+            sel.innerHTML = '';
+            if (lista.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = clientiRubrica.length === 0
+                    ? 'Nessun cliente in rubrica'
+                    : 'Nessun risultato per il filtro';
+                opt.disabled = true;
+                sel.appendChild(opt);
+            } else {
+                lista.forEach(function (c) {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    const meta = c.email || c.phone || c.city || '';
+                    opt.textContent = meta ? (c.name + ' — ' + meta) : c.name;
+                    sel.appendChild(opt);
+                });
+            }
+            if (status) {
+                if (clientiRubrica.length === 0) {
+                    status.textContent = 'Rubrica vuota: aggiungi i clienti dal gestionale.';
+                } else if (filtro) {
+                    status.textContent = lista.length + ' di ' + clientiRubrica.length + ' clienti corrispondono al filtro.';
+                } else {
+                    status.textContent = clientiRubrica.length + ' clienti disponibili. Selezionane uno.';
+                }
+            }
+        }
+
+        function filtraClientiRubrica(testo) {
+            clienteRubricaFiltro = testo || '';
+            aggiornaSelectClientiRubrica();
+        }
+
+        const ADDRESS_WORDS_LOWERCASE = new Set([
+            'a', 'al', 'alla', 'alle', 'allo', 'ai', 'agli', 'all',
+            'di', 'da', 'de', 'del', 'della', 'dei', 'delle', 'dello',
+            'in', 'su', 'sul', 'sulla', 'sui', 'sulle',
+            'e', 'o', 'per', 'con', 'tra', 'fra'
+        ]);
+
+        function normalizePostalCode(value) {
+            if (!value) return '';
+            const raw = String(value).trim();
+            const digits = raw.replace(/^CH[-\s]?/i, '').trim();
+            if (/^\d{4,5}$/.test(digits)) return digits;
+            return raw;
+        }
+
+        function formatAddressTitleCase(text, kind) {
+            if (!text || !String(text).trim()) return '';
+            if (kind === 'country') {
+                const lower = String(text).trim().toLowerCase();
+                if (lower === 'svizzera' || lower === 'switzerland' || lower === 'ch') return 'Svizzera';
+                if (lower === 'italia' || lower === 'italy' || lower === 'it') return 'Italia';
+            }
+            return String(text).trim().split(/\s+/).map(function (word, index) {
+                if (/^\d+[a-zA-Z]?$/.test(word)) return word;
+                if (/^CH[-\s]?\d{4,5}$/i.test(word)) return normalizePostalCode(word);
+                const lower = word.toLowerCase();
+                if (index > 0 && ADDRESS_WORDS_LOWERCASE.has(lower)) return lower;
+                return lower.charAt(0).toUpperCase() + lower.slice(1);
+            }).join(' ');
+        }
+
+        function addressLooksCombined(text) {
+            if (!text) return false;
+            return /,\s*(?:CH[-\s]?)?\d{4,5}\s/i.test(text)
+                || /\s[-–—]\s*(?:CH[-\s]?)?\d{4,5}\s/i.test(text)
+                || /\s(?:CH[-\s]?)?\d{4,5}\s+[A-Za-zÀ-ÿ]/i.test(text);
+        }
+
+        function tryParseCombinedAddress(text) {
+            if (!text) return null;
+            const t = String(text).trim();
+            const patterns = [
+                /^(.+?),\s*(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i,
+                /^(.+?)\s*[-–—]\s*(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i,
+                /^(.+?)\s+(?:CH[-\s]?)?(\d{4,5})\s+(.+)$/i
+            ];
+            for (let i = 0; i < patterns.length; i++) {
+                const match = t.match(patterns[i]);
+                if (match) {
+                    return { street: match[1].trim(), postalCode: match[2].trim(), city: match[3].trim() };
+                }
+            }
+            return null;
+        }
+
+        function parseClientAddressParts(client) {
+            let street = (client && client.address ? String(client.address) : '').trim();
+            let postalCode = (client && client.postalCode ? String(client.postalCode) : '').trim();
+            let city = (client && client.city ? String(client.city) : '').trim();
+            let country = (client && client.country ? String(client.country) : '').trim();
+            if (street && (!postalCode || !city || addressLooksCombined(street))) {
+                const split = tryParseCombinedAddress(street);
+                if (split) {
+                    street = split.street;
+                    if (!postalCode || addressLooksCombined(client.address || '')) postalCode = split.postalCode;
+                    if (!city || addressLooksCombined(client.address || '')) city = split.city;
+                }
+            }
+            return {
+                street: formatAddressTitleCase(street, 'street'),
+                postalCode: normalizePostalCode(postalCode),
+                city: formatAddressTitleCase(city, 'city'),
+                country: formatAddressTitleCase(country, 'country')
+            };
+        }
+
+        function formatCapDisplay(cap) {
+            if (!cap) return '';
+            const c = String(cap).trim();
+            if (/^CH[-\s]?/i.test(c)) return c.replace(/^CH[\s-]*/i, 'CH-');
+            if (/^\d{4,5}$/.test(c)) return 'CH-' + c;
+            return c;
+        }
+
+        function splitNomeCognome(name) {
+            const s = String(name || '').trim();
+            if (!s) return { nome: '', cognome: '' };
+            const i = s.indexOf(' ');
+            if (i < 0) return { nome: s, cognome: '' };
+            return { nome: s.slice(0, i), cognome: s.slice(i + 1).trim() };
+        }
+
+        function composeClienteNomeDisplay(nome, cognome) {
+            return [nome, cognome].map(function (s) { return String(s || '').trim(); }).filter(Boolean).join(' ');
+        }
+
+        function composeClienteIndirizzoDisplay(indirizzo, cap, luogo) {
+            const lines = [];
+            const street = String(indirizzo || '').trim();
+            if (street) lines.push(street);
+            const capCity = [formatCapDisplay(cap), String(luogo || '').trim()].filter(Boolean).join(' ');
+            if (capCity) lines.push(capCity);
+            return lines.join('\n');
+        }
+
+        function caricaClienteDaRubrica(idCliente) {
+            if (!idCliente) return;
+            const cliente = clientiRubrica.find(function (c) { return c.id === idCliente; });
+            if (!cliente) return;
+            const partiNome = splitNomeCognome(cliente.name);
+            const partiInd = parseClientAddressParts(cliente);
+            document.getElementById('nomeCliente').value = partiNome.nome;
+            document.getElementById('cognomeCliente').value = partiNome.cognome;
+            document.getElementById('indirizzoCliente').value = partiInd.street;
+            document.getElementById('capCliente').value = partiInd.postalCode;
+            document.getElementById('luogoCliente').value = partiInd.city;
+            aggiorna();
+            const status = document.getElementById('clienteRubricaStatus');
+            if (status) {
+                status.innerHTML = '<strong style="color:#00aeef;">Caricato:</strong> ' + escapeHtml(cliente.name || '');
+            }
+        }
+
+        function caricaClientiRubrica() {
+            const status = document.getElementById('clienteRubricaStatus');
+            if (!firebaseRtdb) {
+                if (status) status.textContent = 'Rubrica non disponibile (Realtime DB non configurato).';
+                return;
+            }
+            if (status) status.textContent = 'Autenticazione in corso...';
+            authReady
+                .then(function () {
+                    if (status) status.textContent = 'Caricamento clienti dal cloud...';
+                    return firebaseRtdb.ref('clients/' + RUBRICA_USER_ID).once('value');
+                })
+                .then(function (snap) {
+                    clientiRubrica = normalizzaClientiRubrica(snap.val());
+                    aggiornaSelectClientiRubrica();
+                })
+                .catch(function (err) {
+                    console.error('Errore caricamento rubrica clienti:', err);
+                    if (status) status.textContent = 'Errore durante il caricamento della rubrica.';
+                });
+        }
+
+        async function ottieniProssimoNumeroDdt() {
+            if (!firebaseInitialized) {
+                return document.getElementById('numeroBollettino').value;
+            }
+            await authReady;
+            const anno = new Date().getFullYear();
+            const counterRef = db.collection('counters').doc('ddt');
+            return db.runTransaction(async function (transaction) {
+                const counterDoc = await transaction.get(counterRef);
+                let counter = 1;
+                let currentYear = anno;
+                if (counterDoc.exists) {
+                    const data = counterDoc.data();
+                    currentYear = data.year || anno;
+                    if (currentYear !== anno) {
+                        counter = 1;
+                        currentYear = anno;
+                    } else {
+                        counter = (data.counter || 0) + 1;
+                    }
+                }
+                transaction.set(counterRef, {
+                    counter: counter,
+                    year: currentYear,
+                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return anno + '/' + String(counter).padStart(3, '0');
+            });
+        }
+
+        async function salvaDdtFirestore(dati, idEsistente) {
+            if (!firebaseInitialized) return null;
+            await authReady;
+            if (idEsistente) {
+                await db.collection('ddt').doc(idEsistente).update(Object.assign({}, dati, {
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }));
+                return idEsistente;
+            }
+            const docRef = await db.collection('ddt').add(Object.assign({}, dati, {
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }));
+            return docRef.id;
+        }
+
+        async function caricaDdtEsistente(id) {
+            if (!firebaseInitialized) return null;
+            await authReady;
+            const doc = await db.collection('ddt').doc(id).get();
+            if (!doc.exists) return null;
+            return Object.assign({ id: doc.id }, doc.data());
+        }
+
+        function calcolaTotale() {
+            let totale = 0;
+            righe.forEach(function (riga) {
+                totale += (Number(riga.quantita) || 0) * (Number(riga.prezzoUnit) || 0);
+            });
+            return totale;
+        }
+
+        function aggiungiRiga() {
+            righe.push({ descrizione: '', quantita: 1, prezzoUnit: 0 });
+            renderEditor();
+            aggiorna();
+        }
+
+        function rimuoviRiga(index) {
+            if (righe.length > 1) {
+                righe.splice(index, 1);
+                renderEditor();
+                aggiorna();
+            } else {
+                alert('Devi mantenere almeno una riga.');
+            }
+        }
+
+        function aggiornaRiga(index, campo, valore) {
+            righe[index][campo] = valore;
+            aggiorna();
+        }
+
+        function renderEditor() {
+            const container = document.getElementById('righeEditor');
+            container.innerHTML = '';
+            righe.forEach(function (riga, index) {
+                const rigaDiv = document.createElement('div');
+                rigaDiv.className = 'dm-riga-editor';
+                rigaDiv.innerHTML =
+                    '<div class="dm-riga-editor__head">' +
+                    '<strong>Riga ' + (index + 1) + '</strong>' +
+                    '<button type="button" class="dm-btn dm-btn--danger dm-btn--fit" onclick="rimuoviRiga(' + index + ')">Elimina</button>' +
+                    '</div>' +
+                    '<div class="form-group"><label>Descrizione:</label>' +
+                    '<textarea oninput="aggiornaRiga(' + index + ', \'descrizione\', this.value)">' + escapeHtml(riga.descrizione) + '</textarea></div>' +
+                    '<div class="dm-grid-2 dm-grid-2--qty-price">' +
+                    '<div class="form-group"><label>Quantità:</label>' +
+                    '<input type="number" value="' + (riga.quantita || 0) + '" min="0" step="0.01" ' +
+                    'onchange="aggiornaRiga(' + index + ', \'quantita\', parseFloat(this.value) || 0)"></div>' +
+                    '<div class="form-group"><label>Prezzo unità (CHF):</label>' +
+                    '<input type="number" value="' + (riga.prezzoUnit || 0) + '" min="0" step="0.01" ' +
+                    'onchange="aggiornaRiga(' + index + ', \'prezzoUnit\', parseFloat(this.value) || 0)"></div>' +
+                    '</div>';
+                container.appendChild(rigaDiv);
+            });
+        }
+
+        function aggiorna() {
+            document.getElementById('prev-indirizzoAzienda').textContent = 'Via Cantonale 15\nCH-6918 Lugano';
+            document.getElementById('prev-contattiAzienda').textContent = 'Tel: 076 266 03 96\nEmail: info@3dmakes.ch\nWeb: www.3dmakes.ch';
+            const nome = composeClienteNomeDisplay(
+                document.getElementById('nomeCliente').value,
+                document.getElementById('cognomeCliente').value
+            );
+            document.getElementById('prev-nomeCliente').textContent = nome || '—';
+            document.getElementById('prev-indirizzoCliente').textContent = composeClienteIndirizzoDisplay(
+                document.getElementById('indirizzoCliente').value,
+                document.getElementById('capCliente').value,
+                document.getElementById('luogoCliente').value
+            );
+            document.getElementById('prev-numeroBollettino').textContent = document.getElementById('numeroBollettino').value;
+            const data = new Date(document.getElementById('dataDoc').value);
+            document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-CH');
+            const vettore = String(document.getElementById('vettoreConsegna').value || '').trim();
+            document.getElementById('prev-vettore').textContent = vettore || '—';
+            const note = String(document.getElementById('note').value || '').trim();
+            const noteWrap = document.getElementById('prev-note-wrap');
+            if (note) {
+                noteWrap.hidden = false;
+                document.getElementById('prev-note').textContent = note;
+            } else {
+                noteWrap.hidden = true;
+                document.getElementById('prev-note').textContent = '';
+            }
+            const tbody = document.getElementById('prev-tbody');
+            tbody.innerHTML = '';
+            let totale = 0;
+            righe.forEach(function (riga) {
+                const importo = (Number(riga.quantita) || 0) * (Number(riga.prezzoUnit) || 0);
+                totale += importo;
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td style="white-space: pre-line;">' + escapeHtml(riga.descrizione) + '</td>' +
+                    '<td class="dm-num">' + formatQuantita(riga.quantita) + '</td>' +
+                    '<td class="dm-num">' + formatChf(riga.prezzoUnit) + '</td>' +
+                    '<td class="dm-num"><strong>' + formatChf(importo) + '</strong></td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('prev-totale').textContent = formatChf(totale);
+        }
+
+        function preparaDatiDdt() {
+            return {
+                numeroBollettino: document.getElementById('numeroBollettino').value,
+                data: document.getElementById('dataDoc').value,
+                cliente: {
+                    nome: document.getElementById('nomeCliente').value.trim(),
+                    cognome: document.getElementById('cognomeCliente').value.trim(),
+                    indirizzo: document.getElementById('indirizzoCliente').value.trim(),
+                    cap: document.getElementById('capCliente').value.trim(),
+                    luogo: document.getElementById('luogoCliente').value.trim()
+                },
+                righe: righe.map(function (riga) {
+                    const q = Number(riga.quantita) || 0;
+                    const p = Number(riga.prezzoUnit) || 0;
+                    return {
+                        descrizione: riga.descrizione,
+                        quantita: q,
+                        prezzoUnit: p,
+                        importo: q * p
+                    };
+                }),
+                vettoreConsegna: document.getElementById('vettoreConsegna').value.trim(),
+                note: document.getElementById('note').value.trim(),
+                totale: calcolaTotale(),
+                valuta: 'CHF'
+            };
+        }
+
+        function applicaDatiDdt(doc) {
+            document.getElementById('numeroBollettino').value = doc.numeroBollettino || '';
+            document.getElementById('dataDoc').value = doc.data || todayIso();
+            const c = doc.cliente || {};
+            document.getElementById('nomeCliente').value = c.nome || '';
+            document.getElementById('cognomeCliente').value = c.cognome || '';
+            document.getElementById('indirizzoCliente').value = c.indirizzo || '';
+            document.getElementById('capCliente').value = c.cap || '';
+            document.getElementById('luogoCliente').value = c.luogo || '';
+            document.getElementById('vettoreConsegna').value = doc.vettoreConsegna || '';
+            document.getElementById('note').value = doc.note || '';
+            if (Array.isArray(doc.righe) && doc.righe.length) {
+                righe = doc.righe.map(function (r) {
+                    return {
+                        descrizione: r.descrizione || '',
+                        quantita: Number(r.quantita) || 0,
+                        prezzoUnit: Number(r.prezzoUnit) || 0
+                    };
+                });
+            }
+            renderEditor();
+            aggiorna();
+        }
+
+        async function caricaProssimoNumero() {
+            try {
+                const n = await ottieniProssimoNumeroDdt();
+                document.getElementById('numeroBollettino').value = n;
+                aggiorna();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('numeroBollettino').value = new Date().getFullYear() + '/001';
+                document.getElementById('infoNumeroBollettino').textContent = 'Numero provvisorio (cloud non disponibile).';
+                aggiorna();
+            }
+        }
+
+        async function caricaDatiDdt(id) {
+            try {
+                const doc = await caricaDdtEsistente(id);
+                if (!doc) {
+                    alert('DDT non trovato.');
+                    window.location.href = 'genera-ddt.html';
+                    return;
+                }
+                ddtInModifica = id;
+                modalitaModifica = true;
+                document.getElementById('infoNumeroBollettino').innerHTML =
+                    '<strong style="color:#00aeef;">Modifica documento esistente</strong>';
+                applicaDatiDdt(doc);
+            } catch (e) {
+                console.error(e);
+                alert('Errore nel caricamento del DDT.');
+                window.location.href = 'genera-ddt.html';
+            }
+        }
+
+        function verificaModalitaModifica() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const editId = urlParams.get('edit');
+            if (firebaseInitialized) document.getElementById('btnSalva').style.display = 'block';
+            if (editId) caricaDatiDdt(editId);
+            else caricaProssimoNumero();
+        }
+
+        async function salvaSuCloud() {
+            if (!firebaseInitialized) {
+                alert('Firebase non configurato: impossibile salvare su cloud.');
+                return;
+            }
+            const btnSalva = document.getElementById('btnSalva');
+            const textOriginale = btnSalva.textContent;
+            btnSalva.textContent = 'Salvataggio...';
+            btnSalva.disabled = true;
+            try {
+                const dati = preparaDatiDdt();
+                if (modalitaModifica && ddtInModifica) {
+                    await salvaDdtFirestore(dati, ddtInModifica);
+                } else {
+                    const docId = await salvaDdtFirestore(dati);
+                    if (docId) {
+                        ddtInModifica = docId;
+                        modalitaModifica = true;
+                        history.replaceState(null, '', 'genera-ddt.html?edit=' + encodeURIComponent(docId));
+                        document.getElementById('infoNumeroBollettino').innerHTML =
+                            '<strong style="color:#00aeef;">Salvato su cloud</strong> — puoi continuare a modificare';
+                    }
+                }
+                btnSalva.textContent = 'Salvato';
+                setTimeout(function () {
+                    btnSalva.textContent = textOriginale;
+                    btnSalva.disabled = false;
+                    if (confirm('Bolla salvata. Aprire lo storico DDT?')) {
+                        window.location.href = 'storico-ddt.html';
+                    }
+                }, 1000);
+            } catch (error) {
+                console.error('Errore salvataggio:', error);
+                alert('Errore durante il salvataggio: ' + (error.message || error) +
+                    '\n\nSe Firestore rifiuta la scrittura, nelle regole aggiungi la collezione «ddt» come per i preventivi.');
+                btnSalva.textContent = textOriginale;
+                btnSalva.disabled = false;
+            }
+        }
+
+        function scaricaPdfBlob(pdf, nomeFile) {
+            const blob = pdf.output('blob');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nomeFile;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
+        }
+
+        async function scaricaPDF(btnPDF) {
+            const root = document.getElementById('ddtPreview');
+            const textOriginale = btnPDF.textContent;
+            btnPDF.textContent = 'Generazione PDF...';
+            btnPDF.disabled = true;
+            const isFile = window.location.protocol === 'file:';
+            document.body.classList.add('dm-pdf-export');
+            await new Promise(function (resolve) {
+                requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+            });
+            try {
+                if (typeof html2canvas === 'undefined') throw new Error('html2canvas non è caricato.');
+                let jsPDF;
+                if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+                else if (window.jsPDF) jsPDF = window.jsPDF;
+                else throw new Error('jsPDF non è caricato.');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pages = root.querySelectorAll('.dm-doc-page');
+                for (let i = 0; i < pages.length; i++) {
+                    const canvas = await html2canvas(pages[i], {
+                        scale: 3,
+                        useCORS: true,
+                        allowTaint: false,
+                        logging: false,
+                        backgroundColor: '#ffffff',
+                        foreignObjectRendering: false,
+                        onclone: function (doc) {
+                            doc.body.classList.add('dm-pdf-export');
+                            var shell = doc.querySelector('.dm-preview-shell');
+                            if (shell) {
+                                shell.style.border = 'none';
+                                shell.style.boxShadow = 'none';
+                                shell.style.padding = '0';
+                                shell.style.borderRadius = '0';
+                            }
+                            doc.querySelectorAll('.dm-doc-preview, .dm-doc-page').forEach(function (el) {
+                                el.style.border = 'none';
+                                el.style.boxShadow = 'none';
+                                el.style.borderRadius = '0';
+                            });
+                            if (isFile) {
+                                var logo = doc.getElementById('prev-logo');
+                                if (logo) logo.style.display = 'none';
+                            }
+                        }
+                    });
+                    const imgData = canvas.toDataURL('image/png');
+                    if (i > 0) pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+                }
+                const num = document.getElementById('numeroBollettino').value.replace(/\//g, '-');
+                const cliente = composeClienteNomeDisplay(
+                    document.getElementById('nomeCliente').value,
+                    document.getElementById('cognomeCliente').value
+                ).replace(/[^\wÀ-ÿ]+/g, '_').replace(/^_|_$/g, '');
+                const nomeFile = 'DDT_' + num + (cliente ? '_' + cliente : '') + '.pdf';
+                scaricaPdfBlob(pdf, nomeFile);
+                btnPDF.textContent = 'PDF pronto';
+                setTimeout(function () {
+                    btnPDF.textContent = textOriginale;
+                    btnPDF.disabled = false;
+                }, 2000);
+            } catch (error) {
+                console.error('Errore generazione PDF:', error);
+                alert('Errore durante la generazione del PDF: ' + (error.message || error));
+                btnPDF.textContent = textOriginale;
+                btnPDF.disabled = false;
+            } finally {
+                document.body.classList.remove('dm-pdf-export');
+            }
+        }
+
+        function syncHeaderHeight() {
+            const header = document.querySelector('.dm-header');
+            if (!header) return;
+            const h = Math.round(header.getBoundingClientRect().height);
+            document.documentElement.style.setProperty('--dm-header-h', h + 'px');
+        }
+        window.addEventListener('load', syncHeaderHeight);
+        window.addEventListener('resize', syncHeaderHeight);
+        if (window.ResizeObserver) {
+            const headerEl = document.querySelector('.dm-header');
+            if (headerEl) new ResizeObserver(syncHeaderHeight).observe(headerEl);
+        }
+
+        document.getElementById('dataDoc').value = todayIso();
+        window.addEventListener('load', function () {
+            verificaModalitaModifica();
+            caricaClientiRubrica();
+        });
+        renderEditor();
+        aggiorna();
+    </script>
+    <script src="dm-mobile-nav.js?v=1.1"></script>
+</body>
+</html>

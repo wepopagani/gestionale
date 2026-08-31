@@ -49,7 +49,7 @@ function formatFirestoreError(e) {
     if (code === 'permission-denied' && /Missing or insufficient permissions/i.test(msg)) {
         return (
             '[permission-denied] Regole Firestore troppo restrittive.\n\n' +
-            'In Firebase → Firestore → Regole, per test consenti lettura/scrittura su preventivi (poi restringi in produzione).'
+            'In Firebase → Firestore → Regole, per test consenti lettura/scrittura su preventivi e ddt (poi restringi in produzione).'
         );
     }
 

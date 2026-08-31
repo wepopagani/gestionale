@@ -972,6 +972,67 @@ html, body.dm-page {
   color: var(--dm-text);
 }
 
+.dm-ddt-meta {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dm-text);
+}
+
+.dm-ddt-subtitle {
+  text-align: center;
+  margin: -18px 0 22px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--dm-text-muted);
+  text-transform: uppercase;
+}
+
+.dm-items-table td.dm-num,
+.dm-items-table th.dm-num {
+  text-align: right;
+}
+
+.dm-ddt-vettore {
+  margin-top: 28px;
+  padding: 16px 18px;
+  border: 1px solid var(--dm-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.dm-ddt-vettore__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dm-navy);
+  margin-bottom: 6px;
+}
+
+.dm-ddt-vettore__value {
+  font-size: 14px;
+  min-height: 1.4em;
+  color: var(--dm-text);
+}
+
+.dm-ddt-note {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--dm-cream);
+  border-left: 4px solid var(--dm-cyan);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dm-ddt-note strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--dm-navy);
+  font-size: 12px;
+}
+
 .dm-total-section {
   margin-top: 20px;
   text-align: right;

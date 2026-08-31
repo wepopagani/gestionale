@@ -51,6 +51,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /preventivi/{id} { allow read, write: if true; }
+    match /ddt/{id} { allow read, write: if true; }
     match /counters/{id} { allow read, write: if true; }
     match /client_intake_links/{id} { allow read, write: if true; }
   }
