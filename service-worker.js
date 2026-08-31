@@ -4,7 +4,7 @@
 // frammenti da migrazione parziale): riconciliazione automatica con merge
 // dei nodi fantasma per evitare perdite di ordini.
 
-const CACHE_NAME = '3dmakes-gestionale-v3.34';
+const CACHE_NAME = '3dmakes-gestionale-v3.35';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -17,7 +17,8 @@ const urlsToCache = [
   '/migrazione-preventivi.html',
   '/recupero.html',
   '/style.css',
-  '/logo.png'
+  '/logo.png',
+  '/manifest.json'
 ];
 
 // File che cambiano spesso (auth, config): non metterli in cache install.

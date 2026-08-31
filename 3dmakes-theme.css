@@ -20,6 +20,18 @@
 }
 
 /* ========== Base pagina strumento ========== */
+html {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  width: 100%;
+  max-width: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+html, body.dm-page {
+  touch-action: pan-y pinch-zoom;
+}
+
 .dm-page {
   font-family: var(--dm-font);
   background: var(--dm-cream);
@@ -29,6 +41,10 @@
   margin: 0;
   padding: 0 max(0px, env(safe-area-inset-right)) 48px max(0px, env(safe-area-inset-left));
   -webkit-font-smoothing: antialiased;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 /* Sulla pagina del generatore preventivi le due colonne riempiono il viewport
@@ -180,7 +196,7 @@
   justify-content: center;
   gap: 8px 20px;
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
 }
 
 .dm-nav a {
@@ -590,7 +606,9 @@
   .dm-sidebar,
   .dm-preview-shell {
     height: auto;
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
   }
 }
 
@@ -1000,6 +1018,9 @@
 /* ========== Storico tabella ========== */
 .dm-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .dm-table {

@@ -2,13 +2,14 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>3DMAKES - Gestionale Clienti</title>
     
     <!-- PWA Meta Tags -->
     <meta name="description" content="Gestionale clienti per 3DMAKES con ordini, documenti e report">
     <meta name="theme-color" content="#003b5c">
     <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
     
     <!-- iOS Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=4.2">
+    <link rel="stylesheet" href="style.css?v=4.4">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     
     <!-- Firebase -->
@@ -1117,7 +1118,7 @@
         <span class="fab-action__label" id="fabActionLabel">Aggiungi</span>
     </button>
 
-    <script src="dm-mobile-nav.js?v=1.0"></script>
+    <script src="dm-mobile-nav.js?v=1.1"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
         if (typeof pdfjsLib !== 'undefined') {
