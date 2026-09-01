@@ -10,6 +10,37 @@
     let pendingResolve = null;
     let pendingReject = null;
 
+    function formatStaffAuthError(err) {
+        const code = err && err.code ? String(err.code) : '';
+        const msg = err && err.message ? String(err.message) : '';
+        const host = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
+        if (code === 'auth/unauthorized-domain' || /unauthorized domain/i.test(msg)) {
+            return 'Questo indirizzo (' + host + ') non è autorizzato da Firebase. Apri https://clienti.3dmakes.ch e accedi da lì.';
+        }
+        if (code === 'auth/operation-not-allowed' || /anonymous.*disabled|operation-not-allowed/i.test(msg)) {
+            return 'Accesso Firebase non abilitato. In Console → Authentication → Sign-in method, attiva «Anonymous».';
+        }
+        if (code === 'auth/network-request-failed' || /network/i.test(msg)) {
+            return 'Nessuna connessione a Firebase. Controlla rete, VPN o ad-blocker e riprova.';
+        }
+        if (/Timeout autenticazione/i.test(msg)) {
+            return msg + ' Se sei su gestionale3dmakes.netlify.app, usa https://clienti.3dmakes.ch';
+        }
+        return msg || 'Accesso cloud non riuscito. Riprova.';
+    }
+
+    function redirectToCanonicalHost() {
+        try {
+            const canonical = String(window.gestionalePublicUrl || 'https://clienti.3dmakes.ch').replace(/\/$/, '');
+            const host = location.hostname;
+            if (host === 'gestionale3dmakes.netlify.app' || host === 'www.gestionale3dmakes.netlify.app') {
+                location.replace(canonical + location.pathname + location.search + location.hash);
+                return true;
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
     function ensureFirebaseApp() {
         if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') {
             throw new Error('Firebase non configurato.');
@@ -82,14 +113,16 @@
             const btn = document.getElementById('staffLoginSubmitBtn');
             const password = (input && input.value) || '';
             btn.disabled = true;
+            btn.textContent = 'Accesso in corso…';
             setStaffLoginMessage('');
             signInWithPasswordStaff(password)
                 .catch(function (err) {
-                    setStaffLoginMessage(err.message || 'Password non corretta.');
+                    setStaffLoginMessage(formatStaffAuthError(err));
                     if (input) input.select();
                 })
                 .finally(function () {
                     btn.disabled = false;
+                    btn.textContent = 'Accedi';
                 });
         });
     }
@@ -155,8 +188,10 @@
         if (String(password) !== String(expected)) {
             return Promise.reject(new Error('Password non corretta.'));
         }
-        saveStaffSession();
-        return signInFirebaseAnon().then(completeStaffLogin);
+        return signInFirebaseAnon().then(function (user) {
+            saveStaffSession();
+            return completeStaffLogin(user);
+        });
     }
 
     function signOutStaff() {
@@ -192,7 +227,7 @@
                         })
                         .catch(function (err) {
                             clearStaffSession();
-                            showStaffLoginScreen('Sessione scaduta. Reinserisci la password.');
+                            showStaffLoginScreen(formatStaffAuthError(err));
                             pendingResolve = resolve;
                             pendingReject = reject;
                         });
@@ -227,9 +262,10 @@
 
     function bootStaffAuthUi() {
         if (!document.body || document.body.dataset.staffPublic === 'true') return;
+        if (redirectToCanonicalHost()) return;
         initFirebaseStaffAuth().catch(function (err) {
             console.error('Staff auth:', err);
-            showStaffLoginScreen('Errore accesso. Ricarica la pagina.');
+            showStaffLoginScreen(formatStaffAuthError(err) || 'Errore accesso. Ricarica la pagina.');
         });
     }
 

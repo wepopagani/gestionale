@@ -5,10 +5,16 @@
 function applyFirestoreConnectionSettings(db) {
     if (!db) return;
     try {
-        db.settings({ experimentalAutoDetectLongPolling: true });
+        db.settings({
+            merge: true,
+            experimentalAutoDetectLongPolling: true
+        });
     } catch (e) {
         try {
-            db.settings({ experimentalForceLongPolling: true });
+            db.settings({
+                merge: true,
+                experimentalForceLongPolling: true
+            });
         } catch (e2) { /* già applicato o SDK non supporta */ }
     }
 }
