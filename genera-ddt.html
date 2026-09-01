@@ -36,7 +36,8 @@
             <a href="calcolatore.html">Calcolatore</a>
             <a href="genera-preventivo.html">Preventivo</a>
             <a href="genera-ddt.html" aria-current="page">DDT</a>
-            <a href="storico-preventivi.html">Storico</a>
+            <a href="storico-preventivi.html">Storico prev.</a>
+            <a href="storico-ddt.html">Storico DDT</a>
         </nav>
         <div class="dm-header__actions">
             <a href="genera-ddt.html" class="dm-btn dm-btn--outline dm-btn--sm">Nuovo DDT</a>
@@ -609,6 +610,7 @@
 
         function preparaDatiDdt() {
             return {
+                tipo: 'ddt',
                 numeroBollettino: document.getElementById('numeroBollettino').value,
                 data: document.getElementById('dataDoc').value,
                 cliente: {

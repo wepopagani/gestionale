@@ -43,20 +43,10 @@ if (typeof window !== 'undefined') {
 // ⚠️ ATTENZIONE: Queste regole sono aperte per test!
 // Per produzione, configura regole più sicure con autenticazione
 
-// ===== FIRESTORE (preventivi) =====
-// Per «Genera Preventivo», link registrazione clienti e «Storico Preventivi»: nella Firebase Console abilita
-// Firestore Database (stesso progetto gestionale-a0cb6). Esempio regole di test:
-/*
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /preventivi/{id} { allow read, write: if true; }
-    match /ddt/{id} { allow read, write: if true; }
-    match /counters/{id} { allow read, write: if true; }
-    match /client_intake_links/{id} { allow read, write: if true; }
-  }
-}
-*/
+// ===== FIRESTORE =====
+// Regole complete (preventivi + ddt + counters + link) in firestore.rules.
+// In Console: Firestore → Regole → incolla quel file → Pubblica.
+// Non mischiare DDT e preventivi: sono due collezioni diverse.
 
 // ===== AUTENTICAZIONE ANONIMA =====
 // Staff: password in auth-staff.js → poi login anonimo Firebase.
