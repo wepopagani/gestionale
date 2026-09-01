@@ -1735,6 +1735,25 @@ body.sidebar-collapsed .btn-toggle-sidebar {
     border-bottom: 1px solid var(--border);
 }
 
+.report-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.report-empty-hint {
+    margin: 0 0 20px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    color: #9a3412;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
 .report-header h2 {
     font-size: 32px;
     font-weight: 700;

@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=4.4">
+    <link rel="stylesheet" href="style.css?v=4.5">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     
     <!-- Firebase -->
@@ -347,9 +347,12 @@
                     <div>
                         <h2>📊 Report Completo</h2>
                         <p>Analisi ordini e clienti acquisiti per periodo</p>
-                        <p class="report-hint">Filtri salvati per questa sessione. Da un cliente aperto dal report usa «Torna al report» per ritrovare periodo e filtri.</p>
+                        <p class="report-hint">All’apertura: questo mese, tutti i clienti, tutti gli stati e tutte le categorie. Se il mese corrente non ha ancora ordini, vedi automaticamente il mese scorso.</p>
                     </div>
-                    <button class="btn-secondary" id="closeReportBtn">✕ Chiudi</button>
+                    <div class="report-header-actions">
+                        <button type="button" class="btn-secondary" id="resetReportFiltersBtn">Azzera filtri</button>
+                        <button class="btn-secondary" id="closeReportBtn">✕ Chiudi</button>
+                    </div>
                 </div>
 
                 <div class="report-filters">
@@ -403,6 +406,8 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="report-empty-hint" id="reportEmptyHint" hidden></div>
 
                 <!-- Report Summary -->
                 <div class="report-summary" id="reportSummary">
@@ -1127,7 +1132,7 @@
         }
     </script>
     <script src="parse-anagrafica.js?v=1"></script>
-    <script src="app.js?v=5.0"></script>
+    <script src="app.js?v=5.3"></script>
 </body>
 </html>
 

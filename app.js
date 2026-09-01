@@ -299,6 +299,26 @@ function restoreReportFiltersFromStorage() {
     }
 }
 
+function applyDefaultReportFilters() {
+    const periodEl = document.getElementById('reportPeriod');
+    const statusEl = document.getElementById('reportStatus');
+    const categoryEl = document.getElementById('reportCategory');
+    const clientEl = document.getElementById('reportClient');
+    const customDates = document.getElementById('customDates');
+    const dateFrom = document.getElementById('reportDateFrom');
+    const dateTo = document.getElementById('reportDateTo');
+    if (periodEl) periodEl.value = 'month';
+    if (statusEl) statusEl.value = 'all';
+    if (categoryEl) categoryEl.value = 'all';
+    if (clientEl) clientEl.value = 'all';
+    if (customDates) customDates.style.display = 'none';
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    try {
+        sessionStorage.removeItem(REPORT_FILTERS_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+}
+
 function populateReportClientDropdown() {
     const clientSelect = document.getElementById('reportClient');
     clientSelect.innerHTML = '<option value="all">Tutti i Clienti</option>';
@@ -1074,6 +1094,7 @@ function setupCloudSync() {
                 migrateAllClientAddresses({ pushCloud: true });
                 migrateOrderCategories({ pushCloud: true });
                 renderClients();
+                refreshVisibleAnalytics();
 
                 if (state.currentClientId) {
                     const client = state.clients.find(c => c.id === state.currentClientId);
@@ -1132,12 +1153,14 @@ function attachGranularListeners(rootRef) {
             }
             saveToLocalOnly();
             renderClients();
+            refreshVisibleAnalytics();
         } else {
             const merged = mergeClientRecord(state.clients[idx], c);
             if (JSON.stringify(state.clients[idx]) !== JSON.stringify(merged)) {
                 state.clients[idx] = merged;
                 saveToLocalOnly();
                 renderClients();
+                refreshVisibleAnalytics();
                 if (state.currentClientId === c.id) selectClient(c.id);
             }
         }
@@ -1156,6 +1179,7 @@ function attachGranularListeners(rootRef) {
         }
         saveToLocalOnly();
         renderClients();
+        refreshVisibleAnalytics();
         if (state.currentClientId === c.id) selectClient(c.id);
     });
 
@@ -1166,6 +1190,7 @@ function attachGranularListeners(rootRef) {
         if (state.clients.length !== before) {
             saveToLocalOnly();
             renderClients();
+            refreshVisibleAnalytics();
             if (state.currentClientId === id) {
                 state.currentClientId = null;
                 if (state.clients.length > 0) {
@@ -2027,8 +2052,84 @@ function handleCopyIntakeLink() {
 // ===== UTILITIES =====
 function formatDate(date) {
     if (!date) return '';
-    const d = new Date(date);
+    const d = parseOrderDateValue(date) || new Date(date);
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/** Data ordine in locale (YYYY-MM-DD non va interpretato come UTC). */
+function parseOrderDateValue(raw) {
+    if (!raw) return null;
+    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const parts = raw.split('-');
+        return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 12, 0, 0, 0);
+    }
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    d.setHours(12, 0, 0, 0);
+    return d;
+}
+
+function getOrderDateValue(order) {
+    if (!order) return null;
+    return parseOrderDateValue(order.date) || parseOrderDateValue(order.createdAt);
+}
+
+function countOrdersInDateRange(dateRange) {
+    let n = 0;
+    state.clients.forEach(function (client) {
+        (client.orders || []).forEach(function (order) {
+            const orderDate = getOrderDateValue(order);
+            if (!orderDate) return;
+            if (orderDate >= dateRange.from && orderDate <= dateRange.to) n++;
+        });
+    });
+    return n;
+}
+
+function isViewDisplayed(id) {
+    const el = document.getElementById(id);
+    return !!(el && el.style.display === 'block');
+}
+
+function refreshVisibleAnalytics() {
+    if (isViewDisplayed('reportView')) {
+        const clientSel = document.getElementById('reportClient');
+        const prevClient = clientSel ? clientSel.value : 'all';
+        populateReportClientDropdown();
+        if (clientSel) {
+            let found = false;
+            for (let i = 0; i < clientSel.options.length; i++) {
+                if (clientSel.options[i].value === prevClient) {
+                    found = true;
+                    break;
+                }
+            }
+            clientSel.value = found ? prevClient : 'all';
+        }
+        generateReport();
+        fallbackReportPeriodIfCurrentMonthEmpty();
+        return;
+    }
+    if (isViewDisplayed('dashboardView') && typeof renderDashboard === 'function') {
+        renderDashboard();
+    }
+}
+
+/** Se "Questo Mese" è vuoto, mostra il mese scorso (o tutti i periodi) così le cifre restano visibili. */
+function fallbackReportPeriodIfCurrentMonthEmpty() {
+    const periodEl = document.getElementById('reportPeriod');
+    if (!periodEl || periodEl.value !== 'month') return;
+    if (countOrdersInDateRange(getDateRange('month')) > 0) return;
+    if (countOrdersInDateRange(getDateRange('last_month')) > 0) {
+        periodEl.value = 'last_month';
+        generateReport();
+        return;
+    }
+    if (countOrdersInDateRange(getDateRange('all')) > 0) {
+        periodEl.value = 'all';
+        generateReport();
+    }
 }
 
 function formatCurrency(amount) {
@@ -2204,6 +2305,8 @@ function setupEventListeners() {
 
     // Report (chiusura)
     document.getElementById('closeReportBtn').addEventListener('click', closeReportView);
+    const resetReportFiltersBtn = document.getElementById('resetReportFiltersBtn');
+    if (resetReportFiltersBtn) resetReportFiltersBtn.addEventListener('click', resetReportFilters);
     document.getElementById('reportPeriod').addEventListener('change', handlePeriodChange);
     document.getElementById('exportCSVBtn').addEventListener('click', exportToCSV);
     document.getElementById('printReportBtn').addEventListener('click', printReport);
@@ -2788,7 +2891,7 @@ function backToClientList() {
         renderClients(document.getElementById('searchInput').value);
         const backBtn = document.getElementById('backToListBtn');
         if (backBtn) backBtn.textContent = '← Torna alla lista';
-        openReportView();
+        openReportView({ keepFilters: true });
         return;
     }
 
@@ -5211,7 +5314,7 @@ function renderDashboardRecentClients(clients) {
 }
 
 // ===== REPORT SYSTEM =====
-function openReportView() {
+function openReportView(options) {
     hideClientPickHint();
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('clientDetail').style.display = 'none';
@@ -5224,20 +5327,18 @@ function openReportView() {
     applyMobileShellLayout('fullscreen-view');
 
     populateReportClientDropdown();
-    
-    const hadSaved = restoreReportFiltersFromStorage();
-    if (!hadSaved) {
-        document.getElementById('reportPeriod').value = 'month';
-        document.getElementById('reportStatus').value = 'all';
-        if (document.getElementById('reportCategory')) document.getElementById('reportCategory').value = 'all';
-        document.getElementById('reportClient').value = 'all';
-        document.getElementById('customDates').style.display = 'none';
-    } else {
+
+    if (options && options.keepFilters && restoreReportFiltersFromStorage()) {
         const period = document.getElementById('reportPeriod').value;
         document.getElementById('customDates').style.display = period === 'custom' ? 'grid' : 'none';
+    } else {
+        applyDefaultReportFilters();
     }
-    
+
     generateReport();
+    if (!(options && options.keepFilters)) {
+        fallbackReportPeriodIfCurrentMonthEmpty();
+    }
 
     // Aggiorna stato mobile nav
     if (typeof setMobileView === 'function') setMobileView('report');
@@ -5260,6 +5361,11 @@ function closeReportView() {
         // Torna alla dashboard
         showDashboard();
     }
+}
+
+function resetReportFilters() {
+    applyDefaultReportFilters();
+    generateReport();
 }
 
 function handlePeriodChange() {
@@ -5460,11 +5566,9 @@ function generateReport() {
         if (clientFilter !== 'all' && client.id !== clientFilter) return;
         
         client.orders.forEach(order => {
-            if (!order.date) return;
-            
-            const orderDate = new Date(order.date);
-            orderDate.setHours(12, 0, 0, 0); // Normalizza a mezzogiorno per evitare problemi timezone
-            
+            const orderDate = getOrderDateValue(order);
+            if (!orderDate) return;
+
             // Filtra per periodo
             if (orderDate >= dateRange.from && orderDate <= dateRange.to) {
                 allOrdersForStats.push({
@@ -5661,6 +5765,23 @@ function generateReport() {
     // Aggiorna classi active sulle card
     updateStatusCardsActive(statusFilter);
     updateCategoryCardsActive(categoryFilter);
+
+    const hint = document.getElementById('reportEmptyHint');
+    if (hint) {
+        const ordersInSystem = state.clients.reduce(function (n, c) {
+            return n + (c.orders && c.orders.length ? c.orders.length : 0);
+        }, 0);
+        if (allOrdersForStats.length === 0 && ordersInSystem > 0) {
+            hint.hidden = false;
+            hint.innerHTML = 'Nessun ordine in <strong>questo periodo</strong>. I clienti a sinistra hanno ordini in altre date: imposta Periodo su <strong>Mese Scorso</strong> o <strong>Tutti i Periodi</strong>, oppure usa <strong>Azzera filtri</strong>.';
+        } else if (filteredOrders.length === 0 && allOrdersForStats.length > 0) {
+            hint.hidden = false;
+            hint.innerHTML = 'Nessun ordine con i filtri attivi (stato/categoria). Imposta <strong>Tutti gli Stati</strong> e <strong>Tutte le Categorie</strong>, oppure usa <strong>Azzera filtri</strong>.';
+        } else {
+            hint.hidden = true;
+            hint.textContent = '';
+        }
+    }
     
     saveReportFiltersToStorage();
 }
