@@ -1041,6 +1041,11 @@ html, body.dm-page {
   min-height: 1.3em;
 }
 
+.dm-ddt-trasporto__v--blank {
+  min-height: 1.45em;
+  border-bottom: 1px solid var(--dm-navy);
+}
+
 .dm-ddt-firma-canvas {
   display: block;
   width: 100%;
