@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="3dmakes-theme.css?v=3">
+    <link rel="stylesheet" href="3dmakes-theme.css?v=4">
     <link rel="stylesheet" href="staff-auth.css?v=3">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -103,11 +103,36 @@
             <div class="dm-section-title">Voci</div>
             <button type="button" class="dm-btn dm-btn--cyan dm-btn--fit" onclick="aggiungiRiga()">+ Aggiungi riga</button>
             <div id="righeEditor"></div>
-            <div class="dm-section-title">Vettore di consegna</div>
+            <div class="dm-section-title">Vettore e trasporto</div>
             <div class="form-group">
                 <label>Vettore:</label>
-                <input type="text" id="vettoreConsegna" value="" placeholder="Es. Mittente, corriere, nome autista..." oninput="aggiorna()">
-                <small class="dm-muted-inline">Chi effettua il trasporto. Lo compili tu per ogni bolla.</small>
+                <input type="text" id="vettoreConsegna" value="" placeholder="Es. Planzer, mittente, corriere…" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Targa:</label>
+                <input type="text" id="targaMezzo" value="" placeholder="Es. TI 123456" oninput="aggiorna()" autocomplete="off">
+            </div>
+            <div class="dm-grid-2">
+                <div class="form-group">
+                    <label>Nome autista:</label>
+                    <input type="text" id="nomeAutista" value="" placeholder="Nome" oninput="aggiorna()">
+                </div>
+                <div class="form-group">
+                    <label>Cognome autista:</label>
+                    <input type="text" id="cognomeAutista" value="" placeholder="Cognome" oninput="aggiorna()">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Numero colli:</label>
+                <input type="number" id="numeroColli" value="" min="0" step="1" placeholder="Es. 4" oninput="aggiorna()">
+            </div>
+            <div class="form-group">
+                <label>Firma autista:</label>
+                <canvas id="firmaAutistaCanvas" class="dm-ddt-firma-canvas" width="520" height="150" aria-label="Disegna la firma dell'autista"></canvas>
+                <div class="dm-ddt-firma-actions">
+                    <button type="button" class="dm-btn dm-btn--outline dm-btn--fit" onclick="pulisciFirmaAutista()">Cancella firma</button>
+                    <small class="dm-muted-inline">Disegna con il mouse o il dito. Se la lasci vuota, sul PDF resta lo spazio per firmare a mano.</small>
+                </div>
             </div>
             <div class="form-group">
                 <label>Nota (opzionale):</label>
@@ -158,12 +183,36 @@
                     </div>
                 </div>
                 <div class="dm-ddt-vettore">
-                    <div class="dm-ddt-vettore__label">Vettore di consegna</div>
-                    <div class="dm-ddt-vettore__value" id="prev-vettore">—</div>
+                    <div class="dm-ddt-vettore__label">Trasporto</div>
+                    <div class="dm-ddt-trasporto">
+                        <div>
+                            <span class="dm-ddt-trasporto__k">Vettore</span>
+                            <span class="dm-ddt-trasporto__v" id="prev-vettore">—</span>
+                        </div>
+                        <div>
+                            <span class="dm-ddt-trasporto__k">Targa</span>
+                            <span class="dm-ddt-trasporto__v" id="prev-targa">—</span>
+                        </div>
+                        <div>
+                            <span class="dm-ddt-trasporto__k">Autista</span>
+                            <span class="dm-ddt-trasporto__v" id="prev-autista">—</span>
+                        </div>
+                        <div>
+                            <span class="dm-ddt-trasporto__k">N. colli</span>
+                            <span class="dm-ddt-trasporto__v" id="prev-colli">—</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="dm-ddt-note" id="prev-note-wrap" hidden>
                     <strong>Note</strong>
                     <div id="prev-note" style="white-space: pre-line;"></div>
+                </div>
+                <div class="dm-ddt-firme">
+                    <div class="dm-ddt-firma-box">
+                        <div class="dm-ddt-firma-box__label">Firma autista</div>
+                        <img id="prev-firmaAutista" class="dm-ddt-firma-box__img" alt="" hidden>
+                        <div class="dm-ddt-firma-box__line" id="prev-firmaAutistaLine"></div>
+                    </div>
                 </div>
                 <div class="dm-doc-footer footer">Bolla di consegna generata da 3DMAKES</div>
                 </div>
@@ -231,6 +280,110 @@
                 return new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 }).format(Math.round(n));
             }
             return formatNumeroCh(n, 2);
+        }
+
+        let firmaAutistaDrawing = false;
+        let firmaAutistaLast = null;
+
+        function getFirmaAutistaCanvas() {
+            return document.getElementById('firmaAutistaCanvas');
+        }
+
+        function getFirmaAutistaCtx() {
+            const canvas = getFirmaAutistaCanvas();
+            if (!canvas) return null;
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = 2.2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#003b5c';
+            return ctx;
+        }
+
+        function firmaAutistaPoint(ev, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const src = (ev.touches && ev.touches[0]) || ev;
+            return {
+                x: (src.clientX - rect.left) * (canvas.width / Math.max(rect.width, 1)),
+                y: (src.clientY - rect.top) * (canvas.height / Math.max(rect.height, 1))
+            };
+        }
+
+        function canvasHasInk(canvas) {
+            if (!canvas) return false;
+            const ctx = canvas.getContext('2d');
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] > 12) return true;
+            }
+            return false;
+        }
+
+        function getFirmaAutistaDataUrl() {
+            const canvas = getFirmaAutistaCanvas();
+            if (!canvas || !canvasHasInk(canvas)) return '';
+            return canvas.toDataURL('image/png');
+        }
+
+        function pulisciFirmaAutista() {
+            const canvas = getFirmaAutistaCanvas();
+            const ctx = getFirmaAutistaCtx();
+            if (!canvas || !ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            aggiorna();
+        }
+
+        function caricaFirmaAutistaDaUrl(dataUrl) {
+            const canvas = getFirmaAutistaCanvas();
+            const ctx = getFirmaAutistaCtx();
+            if (!canvas || !ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!dataUrl) {
+                aggiorna();
+                return;
+            }
+            const img = new Image();
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                aggiorna();
+            };
+            img.src = dataUrl;
+        }
+
+        function setupFirmaAutistaCanvas() {
+            const canvas = getFirmaAutistaCanvas();
+            if (!canvas || canvas.dataset.bound === '1') return;
+            canvas.dataset.bound = '1';
+            const ctx = getFirmaAutistaCtx();
+
+            function start(ev) {
+                ev.preventDefault();
+                firmaAutistaDrawing = true;
+                firmaAutistaLast = firmaAutistaPoint(ev, canvas);
+                if (canvas.setPointerCapture && ev.pointerId != null) {
+                    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+                }
+            }
+            function move(ev) {
+                if (!firmaAutistaDrawing || !ctx) return;
+                ev.preventDefault();
+                const p = firmaAutistaPoint(ev, canvas);
+                ctx.beginPath();
+                ctx.moveTo(firmaAutistaLast.x, firmaAutistaLast.y);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+                firmaAutistaLast = p;
+            }
+            function end() {
+                if (!firmaAutistaDrawing) return;
+                firmaAutistaDrawing = false;
+                aggiorna();
+            }
+
+            canvas.addEventListener('pointerdown', start);
+            canvas.addEventListener('pointermove', move);
+            canvas.addEventListener('pointerup', end);
+            canvas.addEventListener('pointercancel', end);
         }
 
         function todayIso() {
@@ -582,6 +735,27 @@
             document.getElementById('prev-data').textContent = isNaN(data.getTime()) ? '' : data.toLocaleDateString('it-CH');
             const vettore = String(document.getElementById('vettoreConsegna').value || '').trim();
             document.getElementById('prev-vettore').textContent = vettore || '—';
+            const targa = String(document.getElementById('targaMezzo').value || '').trim();
+            document.getElementById('prev-targa').textContent = targa || '—';
+            const autista = composeClienteNomeDisplay(
+                document.getElementById('nomeAutista').value,
+                document.getElementById('cognomeAutista').value
+            );
+            document.getElementById('prev-autista').textContent = autista || '—';
+            const colliRaw = String(document.getElementById('numeroColli').value || '').trim();
+            document.getElementById('prev-colli').textContent = colliRaw === '' ? '—' : colliRaw;
+            const firmaUrl = getFirmaAutistaDataUrl();
+            const firmaImg = document.getElementById('prev-firmaAutista');
+            const firmaLine = document.getElementById('prev-firmaAutistaLine');
+            if (firmaUrl) {
+                firmaImg.src = firmaUrl;
+                firmaImg.hidden = false;
+                if (firmaLine) firmaLine.hidden = true;
+            } else {
+                firmaImg.removeAttribute('src');
+                firmaImg.hidden = true;
+                if (firmaLine) firmaLine.hidden = false;
+            }
             const note = String(document.getElementById('note').value || '').trim();
             const noteWrap = document.getElementById('prev-note-wrap');
             if (note) {
@@ -631,6 +805,16 @@
                     };
                 }),
                 vettoreConsegna: document.getElementById('vettoreConsegna').value.trim(),
+                targa: document.getElementById('targaMezzo').value.trim(),
+                nomeAutista: document.getElementById('nomeAutista').value.trim(),
+                cognomeAutista: document.getElementById('cognomeAutista').value.trim(),
+                numeroColli: (function () {
+                    const raw = String(document.getElementById('numeroColli').value || '').trim();
+                    if (raw === '') return null;
+                    const n = parseInt(raw, 10);
+                    return isFinite(n) ? n : null;
+                }()),
+                firmaAutista: getFirmaAutistaDataUrl(),
                 note: document.getElementById('note').value.trim(),
                 totale: calcolaTotale(),
                 valuta: 'CHF'
@@ -647,6 +831,12 @@
             document.getElementById('capCliente').value = c.cap || '';
             document.getElementById('luogoCliente').value = c.luogo || '';
             document.getElementById('vettoreConsegna').value = doc.vettoreConsegna || '';
+            document.getElementById('targaMezzo').value = doc.targa || '';
+            document.getElementById('nomeAutista').value = doc.nomeAutista || '';
+            document.getElementById('cognomeAutista').value = doc.cognomeAutista || '';
+            document.getElementById('numeroColli').value = (doc.numeroColli === 0 || doc.numeroColli)
+                ? String(doc.numeroColli)
+                : '';
             document.getElementById('note').value = doc.note || '';
             if (Array.isArray(doc.righe) && doc.righe.length) {
                 righe = doc.righe.map(function (r) {
@@ -658,6 +848,7 @@
                 });
             }
             renderEditor();
+            caricaFirmaAutistaDaUrl(doc.firmaAutista || '');
             aggiorna();
         }
 
@@ -841,6 +1032,7 @@
         }
 
         document.getElementById('dataDoc').value = todayIso();
+        setupFirmaAutistaCanvas();
         window.addEventListener('load', function () {
             verificaModalitaModifica();
             caricaClientiRubrica();
